@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="81px" height="81px" viewBox="0 0 81 81" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>编组 7</title>
+    <defs>
+        <circle id="path-1" cx="36.5" cy="36.5" r="36.5"></circle>
+        <filter x="-9.6%" y="-6.8%" width="119.2%" height="119.2%" filterUnits="objectBoundingBox" id="filter-2">
+            <feOffset dx="0" dy="2" in="SourceAlpha" result="shadowOffsetOuter1"></feOffset>
+            <feGaussianBlur stdDeviation="2" in="shadowOffsetOuter1" result="shadowBlurOuter1"></feGaussianBlur>
+            <feColorMatrix values="0 0 0 0 0.748046875   0 0 0 0 0.748046875   0 0 0 0 0.748046875  0 0 0 0.5 0" type="matrix" in="shadowBlurOuter1"></feColorMatrix>
+        </filter>
+    </defs>
+    <g id="空气污染概览" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g transform="translate(-972, -391)" id="编组-7">
+            <g transform="translate(976, 393)">
+                <g id="椭圆形">
+                    <use fill="black" fill-opacity="1" filter="url(#filter-2)" xlink:href="#path-1"></use>
+                    <use fill="#FFFFFF" fill-rule="evenodd" xlink:href="#path-1"></use>
+                </g>
+                <circle id="椭圆形备份-2" fill="#00C193" cx="36.5" cy="36.5" r="32"></circle>
+                <g id="dizhi-2" transform="translate(25, 22)" fill="#FFFFFF" fill-rule="nonzero">
+                    <path d="M12.0225,30 L12,30 C11.4768116,29.9994845 10.9764915,29.7854864 10.6147559,29.4075 C10.33125,29.11125 7.76024414,26.4 5.20274414,22.965 C1.75048828,18.33 0,14.6325 0,11.9797559 C0,5.37375 5.38350586,0 12,0 C18.6164941,0 24,5.37375 24,11.9789941 C24,13.5839941 23.38125,15.5504883 22.1617383,17.8222559 C20.985,20.0129883 19.2157617,22.5577441 16.9020117,25.3867383 L16.8832617,25.4092383 L13.44,29.3467383 C13.0834939,29.758292 12.566981,29.9963295 12.0225,30 Z M12,17.5867383 C15.0975,17.5867383 17.6175,15.07125 17.6175,11.9790234 C17.6175,8.88679687 15.0975,6.3712207 12,6.3712207 C8.9025,6.3712207 6.3825,8.88670898 6.3825,11.9789648 C6.3825,15.0712207 8.9025,17.5867383 12,17.5867383 Z" id="形状"></path>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

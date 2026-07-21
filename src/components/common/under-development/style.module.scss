@@ -1,0 +1,30 @@
+.pulseCircle {
+    position: absolute;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background-color: rgba(0, 201, 255, 0.08);
+    animation: pulse 2s infinite ease-in-out;
+}
+
+.icon {
+    font-size: 48px;
+    color: #00c9ff;
+    position: relative;
+    z-index: 2;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.15);
+        opacity: 0.3;
+    }
+    100% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+}

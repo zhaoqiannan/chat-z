@@ -1,0 +1,197 @@
+.navbar {
+  background-color: #ffffff;
+  border-right: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  padding: 0 !important;
+  transition: width 0.2s ease;
+  box-sizing: border-box;
+  position: relative;
+
+  .logoArea {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f0;
+    flex-shrink: 0;
+    overflow: hidden;
+
+    &.collapsed {
+      justify-content: center;
+      padding: 0;
+    }
+
+    .logoWrapper {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      position: relative;
+    }
+  }
+
+  .menuList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 8px;
+
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .menuGroup {
+    margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .groupHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+
+    &:hover {
+      background-color: #f8fafc;
+    }
+
+    .groupTitle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  }
+
+  .groupItems {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .menuItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #4a5568;
+    text-decoration: none;
+    transition: all 0.2s ease;
+
+    .menuIcon {
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 18px;
+      transition: color 0.2s ease;
+
+      svg {
+        width: 18px;
+        height: 18px;
+      }
+    }
+
+    .menuLabel {
+      color: #4a5568;
+      transition: color 0.2s ease;
+    }
+
+    &:hover {
+      background-color: rgba(0, 201, 255, 0.04);
+
+      .menuIcon,
+      .menuLabel {
+        color: #00c9ff;
+      }
+    }
+
+    &.active {
+      background-color: rgba(0, 201, 255, 0.08);
+
+      .menuIcon,
+      .menuLabel {
+        color: #00c9ff;
+        font-weight: 600;
+      }
+    }
+
+    &.collapsed {
+      padding: 10px 0;
+      justify-content: center;
+
+      .menuIcon {
+        font-size: 21px;
+
+        svg {
+          width: 21px;
+          height: 21px;
+        }
+      }
+    }
+  }
+
+  .badge {
+    background-color: #ff4d4f;
+    color: #ffffff;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    line-height: 1.2;
+  }
+
+  .collapseSection {
+    padding: 8px 16px;
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    position: absolute;
+    right: 0;
+    transform: translateX(50%);
+
+    &.collapsed {
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    .collapseBtn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #e2e8f0;
+      border-radius: 50%;
+      cursor: pointer;
+      color: #64748b;
+      background: #ffffff;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: #f1f5f9;
+        color: #00c9ff;
+        border-color: #00c9ff;
+      }
+    }
+  }
+
+  .user {
+    border-top: 1px solid #f1f5f9;
+    flex-shrink: 0;
+    background-color: #ffffff;
+  }
+}

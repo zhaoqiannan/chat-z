@@ -1,0 +1,76 @@
+.mantine-Button-root,
+.mantine-Checkbox-input {
+  &:focus,
+  &:active {
+    outline: none !important;
+  }
+}
+.mantine-focus-always:focus {
+  outline: none;
+}
+.mantine-Notification-icon {
+  margin-right: 2px !important;
+}
+
+.mantine-Notification-body {
+  padding-top: 2px;
+}
+
+.mantine-Tabs-tab.mantine-focus-always:focus {
+  outline: none;
+  outline-offset: 0;
+}
+
+.mantine-Grid-inner {
+  margin: 0;
+}
+
+.mantine-SegmentedControl-label {
+  outline: none !important;
+  padding: 0.08rem 0.36rem;
+  font-size: 0.16rem;
+  line-height: 0.22rem;
+  border-radius: 0.04rem;
+  font-weight: bold;
+}
+
+.mantine-Button-root {
+  height: max-content;
+  padding: 0.11rem 0.22rem;
+  border-radius: 0.04rem;
+}
+.mantine-Grid-inner {
+  width: 100%;
+}
+
+.mantine-TextInput-label {
+  margin-bottom: 0.08rem;
+  font-weight: 800;
+}
+
+.mantine-Checkbox-input {
+  border-color: #b7b7b7;
+}
+
+.mantine-Badge-label {
+  line-height: normal;
+}
+
+.mantine-SegmentedControl-control::before {
+  display: none;
+}
+
+.mantine-focus-always:focus {
+  outline: none;
+  outline-offset: 0;
+}
+
+.mantine-Select-option {
+  color: #333 !important;
+  &[data-hovered] {
+    background-color: transparent !important;
+  }
+  &[data-selected] {
+    background-color: rgba(0, 201, 255, 0.2) !important;
+  }
+}
