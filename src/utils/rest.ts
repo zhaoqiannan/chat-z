@@ -7,8 +7,6 @@ const DEFAULT_TIMEOUT = 30000;
 
 type RequestConfig = AxiosRequestConfig;
 
-console.log(process.env.NEXT_PUBLIC_API_BASE_URL, 'process.env.NEXT_PUBLIC_API_BASE_URL')
-
 interface UnifiedResponse<T = any> {
     success: boolean;
     message: string;
@@ -17,9 +15,7 @@ interface UnifiedResponse<T = any> {
 
 let accessToken = '';
 
-const getToken = () => {
-    return accessToken;
-};
+const getToken = () => accessToken;
 
 const updateSession = (data: any) => {
     const token = data.accessToken || '';
@@ -66,8 +62,6 @@ const refreshSession = async (): Promise<string> => {
         }
     );
     updateSession(response.data);
-    console.log('refresh-接口获取结果-->', response.data);
-
     const token = response.data.accessToken || '';
     return token;
 };
@@ -271,6 +265,145 @@ const del = (url: string, params?: any, config?: RequestConfig): Promise<Unified
     });
 };
 
+export type PostStream = (
+    url: string,
+    data: any,
+    onChunk: (text: string) => void,
+    signal?: AbortSignal
+) => Promise<void>;
+
+const postStream: PostStream = async (url, data, onChunk, signal) => {
+    const makeRequest = async (tokenToUse: string | null): Promise<Response> => {
+        const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+        const fullUrl = url.startsWith('/api') ? `${baseApi}${url}` : url;
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        if (tokenToUse) {
+            headers['Authorization'] = `Bearer ${tokenToUse}`;
+        }
+
+        return await fetch(fullUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(data),
+            signal,
+        });
+    };
+
+    let token = getToken();
+    let response = await makeRequest(token);
+
+    if (response.status === 401) {
+        if (isRefreshing) {
+            try {
+                const newToken = await new Promise<string | null>((resolve, reject) => {
+                    failedQueue.push({
+                        resolve: (t: string | null) => resolve(t),
+                        reject: (err: any) => reject(err)
+                    });
+                });
+                if (newToken) {
+                    response = await makeRequest(newToken);
+                } else {
+                    handleLogout();
+                    throw new Error("Unauthorized");
+                }
+            } catch (err) {
+                handleLogout();
+                throw err;
+            }
+        } else {
+            isRefreshing = true;
+            try {
+                const newAccessToken = await refreshSession();
+                if (newAccessToken) {
+                    processQueue(null, newAccessToken);
+                    response = await makeRequest(newAccessToken);
+                } else {
+                    handleLogout();
+                    throw new Error("Unauthorized");
+                }
+            } catch (refreshErr: any) {
+                processQueue(refreshErr, null);
+                handleLogout();
+                throw refreshErr;
+            } finally {
+                isRefreshing = false;
+            }
+        }
+    }
+
+    if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(errText || `Request failed with status ${response.status}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    if (!reader) {
+        throw new Error("Response body is not readable");
+    }
+
+    let isSSE = false;
+    let checkedSSE = false;
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+
+        if (!checkedSSE) {
+            checkedSSE = true;
+            if (chunk.includes('data:')) {
+                isSSE = true;
+            }
+        }
+
+        if (isSSE) {
+            buffer += chunk;
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                if (trimmed.startsWith('data:')) {
+                    const dataContent = trimmed.slice(5).trim();
+                    if (dataContent === '[DONE]') continue;
+                    try {
+                        const parsed = JSON.parse(dataContent);
+                        const text = parsed.text || parsed.content || parsed.response || parsed.result || '';
+                        if (text) onChunk(text);
+                    } catch (e) {
+                        onChunk(dataContent);
+                    }
+                }
+            }
+        } else {
+            onChunk(chunk);
+        }
+    }
+
+    if (isSSE && buffer) {
+        const trimmed = buffer.trim();
+        if (trimmed.startsWith('data:')) {
+            const dataContent = trimmed.slice(5).trim();
+            if (dataContent !== '[DONE]') {
+                try {
+                    const parsed = JSON.parse(dataContent);
+                    const text = parsed.text || parsed.content || parsed.response || parsed.result || '';
+                    if (text) onChunk(text);
+                } catch (e) {
+                    onChunk(dataContent);
+                }
+            }
+        }
+    }
+};
+
 export {
     get,
     post,
@@ -279,4 +412,5 @@ export {
     request,
     refreshSession,
     getToken,
+    postStream,
 };
