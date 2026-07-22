@@ -7,6 +7,8 @@ const DEFAULT_TIMEOUT = 30000;
 
 type RequestConfig = AxiosRequestConfig;
 
+console.log(process.env.NEXT_PUBLIC_API_BASE_URL, 'process.env.NEXT_PUBLIC_API_BASE_URL')
+
 interface UnifiedResponse<T = any> {
     success: boolean;
     message: string;

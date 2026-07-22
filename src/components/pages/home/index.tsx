@@ -21,7 +21,7 @@ export default function HomePage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
-    
+
     const viewportRef = useRef<HTMLDivElement>(null);
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -34,7 +34,6 @@ export default function HomePage() {
         }
     };
 
-    // Scroll to bottom when new messages are added or streaming content changes
     useEffect(() => {
         scrollToBottom();
     }, [messages.length, messages[messages.length - 1]?.content]);
@@ -116,51 +115,27 @@ export default function HomePage() {
             position: 'relative',
             overflow: 'hidden'
         }} p={16}>
-            
+
             {messages.length === 0 ? (
-                <ChatTemplates 
-                    userName={user.name} 
-                    onSelectPrompt={handleSend} 
+                <ChatTemplates
+                    userName={user.name}
+                    onSelectPrompt={handleSend}
                 />
             ) : (
-                <ChatMessageList 
-                    messages={messages} 
-                    userName={user.name} 
-                    viewportRef={viewportRef} 
+                <ChatMessageList
+                    messages={messages}
+                    userName={user.name}
+                    viewportRef={viewportRef}
                 />
             )}
 
-            <ChatInput 
-                input={input} 
-                setInput={setInput} 
-                loading={loading} 
-                onSend={() => handleSend()} 
-                onStop={handleStop} 
+            <ChatInput
+                input={input}
+                setInput={setInput}
+                loading={loading}
+                onSend={() => handleSend()}
+                onStop={handleStop}
             />
-
-            {/* Custom Animations Inline Styles */}
-            <style jsx global>{`
-                @keyframes pulse {
-                    0%, 100% {
-                        transform: scale(1);
-                        box-shadow: 0 8px 30px rgba(79, 70, 229, 0.25);
-                    }
-                    50% {
-                        transform: scale(1.03);
-                        box-shadow: 0 8px 35px rgba(79, 70, 229, 0.4);
-                    }
-                }
-                @keyframes fadeIn {
-                    from {
-                        opacity: 0;
-                        transform: translateY(8px);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateY(0);
-                    }
-                }
-            `}</style>
         </Box>
     );
 }
