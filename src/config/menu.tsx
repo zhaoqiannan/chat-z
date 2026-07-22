@@ -1,5 +1,6 @@
 import { ReactNode } from "react";
 import {
+  FiMessageSquare,
   FiMap,
   FiMapPin,
   FiAlertTriangle,
@@ -32,6 +33,12 @@ export const menuConfig: MenuGroup[] = [
         key: "risk-map-overview",
         label: "新对话",
         path: "/home",
+        icon: <FiMessageSquare />,
+      },
+      {
+        key: "test_case",
+        label: "测试用例生成",
+        path: "/test_case",
         icon: <FiMap />,
       },
     ],

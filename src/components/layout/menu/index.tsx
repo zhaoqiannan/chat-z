@@ -76,23 +76,28 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
                 <Box h={80} pl={16} pr={16} className={`${styles.logoArea} ${collapsed ? styles.collapsed : ""}`}>
                     {!collapsed ? (
                         <Box h={32} className={styles.logoWrapper}>
-                            <Image
-                                src="/images/logo.png"
-                                alt="YoujiVest Logo"
-                                width={120}
-                                height={28}
-                                style={{ objectFit: 'contain', height: '100%' }}
-                                priority
-                            />
+                            <Flex align="center" gap={8}>
+                                <Image
+                                    src="/images/logo-mini.svg"
+                                    alt="chat-z Logo"
+                                    width={28}
+                                    height={28}
+                                    style={{ objectFit: 'contain', borderRadius: '6px' }}
+                                    priority
+                                />
+                                <Text className={styles.logoText}>
+                                    chat<span>-z</span>
+                                </Text>
+                            </Flex>
                         </Box>
                     ) : (
                         <Flex justify="center" align="center" w="100%" h={32}>
                             <Image
                                 src="/images/logo-mini.svg"
-                                alt="YoujiVest Mini Logo"
-                                width={24}
-                                height={24}
-                                style={{ objectFit: 'contain', height: '100%' }}
+                                alt="chat-z Mini Logo"
+                                width={26}
+                                height={26}
+                                style={{ objectFit: 'contain', borderRadius: '6px' }}
                                 priority
                             />
                         </Flex>

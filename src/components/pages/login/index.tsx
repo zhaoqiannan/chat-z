@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Box, Text, Flex, TextInput, PasswordInput, Stack } from "@mantine/core";
+import Image from "next/image";
 import styles from './style.module.scss';
 import BG from "./bg";
 import { loginUser, registerUser } from "@/rest/user";
@@ -75,7 +76,19 @@ export default function LoginPage() {
         <Box className={styles.container}>
             <BG />
             <Box className={styles.loginCard}>
-                <Text className={styles.title}>{isLogin ? "欢迎登录" : "账号注册"}</Text>
+                <Flex align="center" gap={8} mb="6px" justify="center">
+                    <Image
+                        src="/images/logo-mini.svg"
+                        alt="chat-z"
+                        width={36}
+                        height={36}
+                        style={{ objectFit: 'contain', borderRadius: '8px' }}
+                    />
+                    <Text className={styles.logoText}>
+                        chat<span>-z</span>
+                    </Text>
+                </Flex>
+                <Text className={styles.title} style={{ marginBottom: '24px' }}>{isLogin ? "欢迎登录" : "创建您的账户"}</Text>
 
                 <Stack gap="16px" mb="24px" w="100%">
                     <TextInput

@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Box, Title, Text, SimpleGrid, Card, Group, Stack } from '@mantine/core';
-import { FiMessageSquare } from 'react-icons/fi';
+import Image from 'next/image';
 import { TEMPLATES, UI_TEXT } from './constants';
 import styles from './style.module.scss';
 
@@ -22,19 +22,27 @@ export default function ChatTemplates({ userName, onSelectPrompt }: ChatTemplate
             padding: '24px'
         }}>
             {/* Greeting / Brand Section */}
-            <Stack align="center" gap={8} mb={40} style={{ textAlign: 'center' }}>
+            <Stack align="center" gap={12} mb={40} style={{ textAlign: 'center' }}>
                 <Box style={{
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '16px',
-                    background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                    position: 'relative',
+                    width: '64px',
+                    height: '64px',
+                    borderRadius: '18px',
+                    boxShadow: '0 8px 30px rgba(0, 201, 255, 0.25)',
+                    animation: 'pulse 3s infinite ease-in-out',
+                    overflow: 'hidden',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 30px rgba(79, 70, 229, 0.25)',
-                    animation: 'pulse 3s infinite ease-in-out'
+                    justifyContent: 'center'
                 }}>
-                    <FiMessageSquare size={30} color="#fff" />
+                    <Image
+                        src="/images/logo-mini.svg"
+                        alt="chat-z Logo"
+                        width={64}
+                        height={64}
+                        style={{ objectFit: 'contain' }}
+                        priority
+                    />
                 </Box>
                 <Title order={2} style={{ 
                     background: 'linear-gradient(135deg, #1e293b 0%, #475569 100%)',

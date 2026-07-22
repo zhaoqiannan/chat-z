@@ -66,7 +66,7 @@
   width: 100%;
   height: 48px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #00c9ff 0%, #0087d3 100%);
+  background: linear-gradient(135deg, #00c9ff 0%, #0084ff 100%);
   border: none;
   font-size: 15px;
   font-weight: 600;
@@ -77,11 +77,11 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 14px rgba(0, 201, 255, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 201, 255, 0.25);
 
   &:hover:not(:disabled) {
     opacity: 0.96;
-    box-shadow: 0 6px 20px rgba(0, 201, 255, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 201, 255, 0.35);
     transform: translateY(-1px);
   }
 
@@ -101,5 +101,23 @@
   }
   100% {
     transform: rotate(360deg);
+  }
+}
+
+.logoText {
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: -0.8px;
+  background: linear-gradient(135deg, #0055ff 0%, #00c9ff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-family: "Outfit", "Inter", sans-serif;
+  display: inline-block;
+  line-height: 1;
+
+  span {
+    color: #00c9ff;
+    -webkit-text-fill-color: #00c9ff;
   }
 }

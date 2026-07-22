@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Box, ScrollArea, Stack, Paper, Text } from '@mantine/core';
-import { FiCpu } from 'react-icons/fi';
+import Image from 'next/image';
 import AvatarCircle from '@/components/common/avatar-circle';
 import { UI_TEXT } from './constants';
 
@@ -48,16 +48,24 @@ export default function ChatMessageList({ messages, userName, viewportRef }: Cha
                                 />
                             ) : (
                                 <Box style={{
+                                    position: 'relative',
                                     width: '38px',
                                     height: '38px',
                                     borderRadius: '50%',
-                                    background: 'linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%)',
+                                    boxShadow: '0 2px 8px rgba(0, 201, 255, 0.15)',
+                                    overflow: 'hidden',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.15)'
+                                    backgroundColor: '#1e293b'
                                 }}>
-                                    <FiCpu size={18} color="#fff" />
+                                    <Image
+                                        src="/images/logo-mini.svg"
+                                        alt="chat-z"
+                                        width={38}
+                                        height={38}
+                                        style={{ objectFit: 'contain' }}
+                                    />
                                 </Box>
                             )}
                         </Box>
@@ -69,10 +77,10 @@ export default function ChatMessageList({ messages, userName, viewportRef }: Cha
                             py="sm"
                             style={{
                                 maxWidth: '78%',
-                                backgroundColor: msg.role === 'user' ? '#4f46e5' : '#ffffff',
-                                border: msg.role === 'user' ? 'none' : '1px solid #e2e8f0',
+                                backgroundColor: msg.role === 'user' ? '#00c9ff' : '#ffffff',
+                                border: msg.role === 'user' ? 'none' : '1px solid #f1f5f9',
                                 color: msg.role === 'user' ? '#ffffff' : '#1e293b',
-                                boxShadow: msg.role === 'user' ? 'none' : '0 2px 8px rgba(0, 0, 0, 0.02)',
+                                boxShadow: msg.role === 'user' ? '0 4px 12px rgba(0, 201, 255, 0.2)' : '0 4px 12px rgba(0, 0, 0, 0.02)',
                                 borderRadius: msg.role === 'user'
                                     ? '16px 4px 16px 16px'
                                     : '4px 16px 16px 16px'

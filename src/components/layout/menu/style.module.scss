@@ -194,4 +194,22 @@
     flex-shrink: 0;
     background-color: #ffffff;
   }
+
+  .logoText {
+    font-weight: 850;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #0055ff 0%, #00c9ff 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-family: "Outfit", "Inter", sans-serif;
+    display: inline-block;
+    line-height: 1;
+
+    span {
+      color: #00c9ff;
+      -webkit-text-fill-color: #00c9ff;
+    }
+  }
 }

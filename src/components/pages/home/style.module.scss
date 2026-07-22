@@ -1,24 +1,26 @@
 .paperContainer {
   background-color: #ffffff;
-  border-color: #cbd5e1;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  border-color: #e2e8f0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
   overflow: hidden;
-  transition: border-color 0.2s ease;
+  transition: all 0.25s ease;
 
   &:focus-within {
-    border-color: #4f46e5;
+    border-color: #00c9ff;
+    box-shadow: 0 8px 30px rgba(0, 201, 255, 0.08), 0 0 0 1px rgba(0, 201, 255, 0.08);
   }
 }
 
 .templateCard {
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   background-color: #ffffff;
   border-color: #e2e8f0;
+  border-radius: 12px !important;
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.05);
-    border-color: #cbd5e1;
+    transform: translateY(-4px);
+    box-shadow: 0 12px 28px rgba(0, 201, 255, 0.05), 0 4px 10px rgba(0, 0, 0, 0.01);
+    border-color: rgba(0, 201, 255, 0.4);
   }
 }

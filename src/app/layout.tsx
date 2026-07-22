@@ -15,8 +15,8 @@ import "@/static/mantine.scss";
 import theme from "@/static/theme";
 
 export const metadata: Metadata = {
-    title: "YoujiVest",
-    description: "YoujiVest",
+    title: "chat-z",
+    description: "chat-z: 您的智能 AI 助手",
 };
 
 interface RootLayoutProps {

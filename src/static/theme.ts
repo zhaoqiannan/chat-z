@@ -4,20 +4,20 @@ const theme = createTheme({
   focusRing: 'always',
   scale: 0.16,
   colors: {
-    deepBlue: [
-      'rgba(0, 201, 255, 0)',
-      'rgba(0, 201, 255, 0.17)',
-      'rgba(0, 201, 255, 0.33)',
-      'rgba(0, 201, 255, 0.50)',
-      'rgba(0, 201, 255, 0.67)',
-      'rgba(0, 201, 255, 0.83)',
-      'rgba(0, 201, 255, 1)',
-      'rgba(0, 201, 255, 1)',
-      'rgba(0, 201, 255, 1)',
-      'rgba(0, 201, 255, 1)'
+    brandCyan: [
+      '#e0f7fc',
+      '#b3effc',
+      '#80e5fa',
+      '#4ddbf7',
+      '#1ad0f5',
+      '#00bce5',
+      '#00c9ff',
+      '#00b2e0',
+      '#0096bd',
+      '#006c87'
     ],
   },
-  primaryColor: 'deepBlue',
+  primaryColor: 'brandCyan',
   components: {
     Text: {
       defaultProps: { size: 'sm' },
