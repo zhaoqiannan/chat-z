@@ -211,7 +211,6 @@ rest.interceptors.response.use(
             return Promise.reject(formatError(error));
         }
 
-        console.error(`API Call Error:`, error.message || error);
         return Promise.reject(formatError(error));
     }
 );
