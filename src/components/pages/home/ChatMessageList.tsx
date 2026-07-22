@@ -47,10 +47,8 @@ export default function ChatMessageList({ messages, userName, viewportRef }: Cha
                                     textSize="14px"
                                 />
                             ) : (
-                                <Box style={{
+                                <Box w={38} h={38} style={{
                                     position: 'relative',
-                                    width: '38px',
-                                    height: '38px',
                                     borderRadius: '50%',
                                     boxShadow: '0 2px 8px rgba(0, 201, 255, 0.15)',
                                     overflow: 'hidden',
@@ -89,14 +87,11 @@ export default function ChatMessageList({ messages, userName, viewportRef }: Cha
                             <Box
                                 lh={1.6}
                                 style={{
-                                    whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-word'
                                 }}
                             >
                                 {msg.content || (
-                                    <Text size="xs" c="dimmed" style={{ fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                                        {UI_TEXT.thinkingText}
-                                    </Text>
+                                    <Text size="xs" c="dimmed" style={{ fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>{UI_TEXT.thinkingText} </Text>
                                 )}
                             </Box>
                         </Paper>
