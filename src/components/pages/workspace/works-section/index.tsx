@@ -23,7 +23,7 @@ export interface WorkItem {
   chapterCount: number;
   progress: number;
   lastEditTime: string;
-  expectedWords?: string;
+  expectedWords?: number | string;
 }
 
 interface WorksSectionProps {
@@ -121,21 +121,40 @@ export default function WorksSection({
                 </Flex>
               </Flex>
 
-              <Text fz={13} c="#64748b" my={12}>
-                {work.wordCount}字 · {work.chapterCount}章
-              </Text>
+              <Flex justify="space-between" align="center" my={12}>
+                <Text fz={13} c="#64748b">
+                  <b>{Number(work.wordCount || 0).toLocaleString()}</b> 字
+                </Text>
+                <Text fz={12} c="#94a3b8">
+                  目标: <b>{work.expectedWords || 50}</b> 万字
+                </Text>
+              </Flex>
 
               <Box>
                 <Flex justify="space-between" align="center" mb={6}>
                   <Text fz={12} c="#94a3b8">
-                    总大纲进度
+                    创作字数进度
                   </Text>
                   <Text fz={12} fw={600} c="#64748b">
-                    {work.progress}%
+                    {Math.min(
+                      100,
+                      Math.round(
+                        ((Number(work.wordCount) || 0) /
+                          ((Number(work.expectedWords) || 50) * 10000)) *
+                          100
+                      )
+                    )}%
                   </Text>
                 </Flex>
                 <Progress
-                  value={work.progress}
+                  value={Math.min(
+                    100,
+                    Math.round(
+                      ((Number(work.wordCount) || 0) /
+                        ((Number(work.expectedWords) || 50) * 10000)) *
+                        100
+                    )
+                  )}
                   color="#00c9ff"
                   size={6}
                   radius="xl"

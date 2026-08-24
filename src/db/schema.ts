@@ -1,10 +1,10 @@
 /**
  * @file schema.ts
  * @description Drizzle ORM 数据库表结构定义（针对 Cloudflare D1 / SQLite）
- * 包含用户表 (users)、小说作品表 (works)、章节表 (chapters) 及其对应的 TypeScript 类型定义。
+ * 包含用户表 (users)、小说作品表 (works)、章节表 (chapters)、故事大纲表 (outlines) 及其 TypeScript 类型。
  */
 
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
 // ============================================================================
 // 1. 用户表 (users)
@@ -38,8 +38,8 @@ export const works = sqliteTable('works', {
   title: text('title').notNull(),
   /** 作品分类标签（如：科幻、悬疑、都市、奇幻等） */
   tag: text('tag').notNull(),
-  /** 预计字数目标（默认：50,000） */
-  expectedWords: text('expected_words').default('50,000'),
+  /** 预计目标字数（单位：万字，浮点数，默认：50.0 万字） */
+  expectedWords: real('expected_words').default(50.0),
   /** 当前作品实际总字数 */
   wordCount: integer('word_count').default(0),
   /** 创作状态：'ongoing'（连载中）/ 'completed'（已完结）/ 'draft'（草稿） */
@@ -62,14 +62,22 @@ export const chapters = sqliteTable('chapters', {
   id: text('id').primaryKey(),
   /** 所属作品 ID (对应 works.id) */
   workId: text('work_id').notNull(),
-  /** 章节标题（如：第一章 启程） */
+  /** 所属卷 ID（为空表示根卷/默认卷） */
+  volumeId: text('volume_id'),
+  /** 是否是卷（1=卷文件夹，0=具体正文章节） */
+  isVolume: integer('is_volume').default(0),
+  /** 章节/卷 标题（如：第一卷 崛起之路 / 第一章 少年与剑） */
   title: text('title').notNull(),
   /** 章节正文内容 */
   content: text('content'),
   /** 本章节实际字数统计 */
   wordCount: integer('word_count').default(0),
-  /** 章节序号（用于按顺序排列章节：1, 2, 3...） */
+  /** 章节序号（用于自动递增与排序：1, 2, 3...） */
   chapterNumber: integer('chapter_number').default(1),
+  /** 创作状态: 'not_started'(未开始) | 'revising'(修改中) | 'completed'(已完成) */
+  status: text('status').default('not_started'),
+  /** 章节剧情摘要 / 写作备忘 */
+  summary: text('summary'),
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后修改时间 */
@@ -77,20 +85,55 @@ export const chapters = sqliteTable('chapters', {
 });
 
 // ============================================================================
-// 4. TypeScript 类型导出 (用于业务代码中的强类型提示)
+// 4. 故事大纲树结构表 (outlines)
+// ============================================================================
+export const outlines = sqliteTable('outlines', {
+  /** 节点唯一标识 (UUID) */
+  id: text('id').primaryKey(),
+  /** 所属小说作品 ID (对应 works.id) */
+  workId: text('work_id').notNull(),
+  /** 父级节点 ID（为空表示根节点） */
+  parentId: text('parent_id'),
+  /** 节点类型: 'volume'(卷/篇章) | 'act'(幕/阶段) | 'scene'(情景点) | 'event'(事件) */
+  type: text('type').notNull(),
+  /** 节点标题/名称 */
+  title: text('title').notNull(),
+  /** 同级排序索引 */
+  orderIndex: integer('order_index').default(0),
+  /** 节点目标 (*必填项) */
+  goal: text('goal').notNull(),
+  /** 冲突点 / 危机与阻碍 */
+  conflict: text('conflict'),
+  /** 涉及角色（多个角色可用逗号分隔或 JSON） */
+  characters: text('characters'),
+  /** 涉及地点 / 场景 */
+  locations: text('locations'),
+  /** 预期结果 / 伏笔反转 */
+  expectedOutcome: text('expected_outcome'),
+  /** 关联章节（如：第 1~3 章） */
+  linkedChapters: text('linked_chapters'),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 最后修改时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 5. TypeScript 类型导出 (强类型提示)
 // ============================================================================
 
 /** 用户查询类型 (SELECT) */
 export type User = typeof users.$inferSelect;
-/** 用户新增插入类型 (INSERT) */
 export type NewUser = typeof users.$inferInsert;
 
 /** 作品查询类型 (SELECT) */
 export type Work = typeof works.$inferSelect;
-/** 作品新增插入类型 (INSERT) */
 export type NewWork = typeof works.$inferInsert;
 
 /** 章节查询类型 (SELECT) */
 export type Chapter = typeof chapters.$inferSelect;
-/** 章节新增插入类型 (INSERT) */
 export type NewChapter = typeof chapters.$inferInsert;
+
+/** 大纲节点查询类型 (SELECT) */
+export type Outline = typeof outlines.$inferSelect;
+export type NewOutline = typeof outlines.$inferInsert;

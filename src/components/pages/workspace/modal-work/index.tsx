@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Modal, TextInput, Button, Flex, Stack, Text } from "@mantine/core";
+import { Modal, TextInput, NumberInput, Button, Flex, Stack, Text } from "@mantine/core";
 import { FiBook, FiTag, FiFileText } from "react-icons/fi";
 import styles from "../style.module.scss";
 
@@ -9,7 +9,7 @@ export interface WorkFormData {
   id?: string | number;
   title: string;
   tag: string;
-  expectedWords: string;
+  expectedWords: number | string;
 }
 
 interface ModalWorkProps {
@@ -29,7 +29,7 @@ export default function ModalWork({
 }: ModalWorkProps) {
   const [title, setTitle] = useState("");
   const [tag, setTag] = useState("");
-  const [expectedWords, setExpectedWords] = useState("");
+  const [expectedWords, setExpectedWords] = useState<number | string>(50);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -37,11 +37,15 @@ export default function ModalWork({
       if (initialData) {
         setTitle(initialData.title || "");
         setTag(initialData.tag || "");
-        setExpectedWords(initialData.expectedWords || "");
+        setExpectedWords(
+          initialData.expectedWords !== undefined && initialData.expectedWords !== ""
+            ? Number(initialData.expectedWords) || 50
+            : 50
+        );
       } else {
         setTitle("");
         setTag("");
-        setExpectedWords("");
+        setExpectedWords(50);
       }
       setError("");
     }
@@ -57,11 +61,13 @@ export default function ModalWork({
       return;
     }
 
+    const numValue = typeof expectedWords === "number" ? expectedWords : parseFloat(String(expectedWords)) || 50;
+
     onSubmit({
       id: initialData?.id,
       title: title.trim(),
       tag: tag.trim(),
-      expectedWords: expectedWords.trim() || "50,000",
+      expectedWords: numValue,
     });
     onClose();
   };
@@ -116,11 +122,15 @@ export default function ModalWork({
           }}
         />
 
-        <TextInput
-          label="预计字数"
-          placeholder="如：50,000 或 10万字"
+        <NumberInput
+          label="预计字数 (默认单位: 万字，支持小数)"
+          placeholder="如：50 或 12.5"
           value={expectedWords}
-          onChange={(e) => setExpectedWords(e.currentTarget.value)}
+          onChange={(val) => setExpectedWords(val)}
+          min={0.1}
+          step={0.5}
+          decimalScale={2}
+          suffix=" 万字"
           leftSection={<FiFileText size={15} color="#94a3b8" />}
           styles={{
             label: { fontSize: "13px", fontWeight: 600, color: "#475569", marginBottom: 6 },

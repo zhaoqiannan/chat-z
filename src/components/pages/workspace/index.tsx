@@ -11,7 +11,7 @@ import AiSuggestions from "./ai-suggestions";
 import RecentActivities from "./recent-activities";
 import ModalWork, { WorkFormData } from "./modal-work";
 import ModalDeleteConfirm from "./modal-delete-confirm";
-import { getWorkList, createWork } from "@/rest/work";
+import { getWorkList, createWork, updateWork, deleteWork } from "@/rest/work";
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -97,18 +97,19 @@ export default function WorkspacePage() {
         console.error("新建作品失败:", err);
       }
     } else if (modalMode === "edit" && formData.id) {
-      setWorks((prev) =>
-        prev.map((item) =>
-          item.id === formData.id
-            ? {
-                ...item,
-                title: formData.title,
-                tag: formData.tag,
-                expectedWords: formData.expectedWords,
-              }
-            : item
-        )
-      );
+      try {
+        const res = await updateWork({
+          id: String(formData.id),
+          title: formData.title,
+          tag: formData.tag,
+          expectedWords: formData.expectedWords,
+        });
+        if (res && res.success) {
+          fetchWorks();
+        }
+      } catch (err) {
+        console.error("编辑作品失败:", err);
+      }
     }
   };
 
@@ -118,10 +119,19 @@ export default function WorkspacePage() {
     setDeleteModalOpened(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deletingWork) {
-      setWorks((prev) => prev.filter((item) => item.id !== deletingWork.id));
-      setDeletingWork(null);
+      try {
+        const res = await deleteWork(String(deletingWork.id));
+        if (res && res.success) {
+          fetchWorks();
+        }
+      } catch (err) {
+        console.error("删除作品失败:", err);
+      } finally {
+        setDeletingWork(null);
+        setDeleteModalOpened(false);
+      }
     }
   };
 

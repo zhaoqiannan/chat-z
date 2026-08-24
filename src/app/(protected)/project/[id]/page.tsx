@@ -1,9 +1,34 @@
-import Lazy from "@/components/layout/lazy";
+"use client";
 
-const ProjectDetailPage = () => (
-  <Lazy
-    imports={[{ component: () => import("@/components/pages/project/overview") }]}
-  />
+import React from "react";
+import dynamic from "next/dynamic";
+import { useSearchParams } from "next/navigation";
+import { Box, LoadingOverlay } from "@mantine/core";
+
+const ProjectOverview = dynamic(
+  () => import("@/components/pages/project/overview"),
+  { loading: () => <LoadingOverlay visible /> }
 );
 
-export default ProjectDetailPage;
+const StoryOutline = dynamic(
+  () => import("@/components/pages/project/outline"),
+  { loading: () => <LoadingOverlay visible /> }
+);
+
+const ProjectChapters = dynamic(
+  () => import("@/components/pages/project/chapters"),
+  { loading: () => <LoadingOverlay visible /> }
+);
+
+export default function ProjectDetailPage() {
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab") || "overview";
+
+  return (
+    <Box w="100%" h="100%">
+      {tab === "outline" && <StoryOutline />}
+      {tab === "chapters" && <ProjectChapters />}
+      {tab !== "outline" && tab !== "chapters" && <ProjectOverview />}
+    </Box>
+  );
+}

@@ -62,10 +62,30 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
     router.replace("/login");
   };
 
+  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const currentTab = searchParams?.get("tab") || "overview";
+
   const projectMenuItems = [
-    { key: "overview", label: "项目概览", icon: <FiLayers size={16} />, active: true },
-    { key: "outline", label: "故事大纲", icon: <FiBook size={16} />, disabled: true },
-    { key: "chapters", label: "章节", icon: <FiFileText size={16} />, disabled: true },
+    {
+      key: "overview",
+      label: "项目概览",
+      icon: <FiLayers size={16} />,
+      active: currentTab === "overview",
+    },
+    {
+      key: "outline",
+      label: "故事大纲",
+      icon: <FiBook size={16} />,
+      active: currentTab === "outline",
+      disabled: false,
+    },
+    {
+      key: "chapters",
+      label: "章节",
+      icon: <FiFileText size={16} />,
+      active: currentTab === "chapters",
+      disabled: false,
+    },
     {
       key: "world",
       label: "世界/知识库",
@@ -217,8 +237,11 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
                       item.disabled ? styles.disabled : ""
                     } ${collapsed ? styles.collapsed : ""}`}
                     onClick={() => {
+                      if (item.disabled) return;
                       if (item.hasSub && !collapsed) {
                         setWorldExpanded(!worldExpanded);
+                      } else {
+                        router.push(`${pathname}?tab=${item.key}`);
                       }
                     }}
                   >
