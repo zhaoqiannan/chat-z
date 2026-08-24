@@ -9,5 +9,12 @@
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB", // 变量名（代码里访问）
+      "database_name": "chat_db", // 数据库名称（方便人类识别）
+      "database_id": "69859367-bc53-4412-809c-811a24151ba6" // Cloudflare 分配的唯一标识 UUID
+    }
+  ]
 }

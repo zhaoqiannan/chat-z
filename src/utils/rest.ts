@@ -1,5 +1,4 @@
 import Axios, { AxiosRequestConfig, AxiosResponse, AxiosInstance, CancelTokenSource } from 'axios';
-import { UserApi } from '@/rest/user';
 import { store } from '@/store';
 import { setUser } from '@/store/userInfo';
 
@@ -13,9 +12,14 @@ interface UnifiedResponse<T = any> {
     result?: T;
 }
 
-let accessToken = '';
+let accessToken = typeof window !== 'undefined' ? localStorage.getItem('access_token') || '' : '';
 
-const getToken = () => accessToken;
+const getToken = () => {
+    if (!accessToken && typeof window !== 'undefined') {
+        accessToken = localStorage.getItem('access_token') || '';
+    }
+    return accessToken;
+};
 
 const updateSession = (data: any) => {
     const token = data.accessToken || '';
@@ -23,6 +27,7 @@ const updateSession = (data: any) => {
         accessToken = token;
 
         if (typeof window !== 'undefined') {
+            localStorage.setItem('access_token', token);
             document.cookie = `auth_token=true; path=/; SameSite=Lax`;
             let name = data.userName || 'user';
             let id = data.userId || '';
@@ -46,16 +51,19 @@ const updateSession = (data: any) => {
 const handleLogout = () => {
     accessToken = '';
     if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
         localStorage.removeItem('user_info');
         document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
         window.location.href = '/login';
     }
 };
 
+const REFRESH_API_ROUTE = '/api/refresh';
+
 const refreshSession = async (): Promise<string> => {
     const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || '';
     const response = await Axios.post(
-        `${baseApi}${UserApi.refresh}`,
+        `${baseApi}${REFRESH_API_ROUTE}`,
         {},
         {
             withCredentials: true
@@ -106,13 +114,32 @@ const rest: AxiosInstance = Axios.create({
     withCredentials: true
 });
 
+const AUTH_REGISTER_ROUTE = '/api/register';
+const AUTH_LOGIN_ROUTE = '/api/login';
+const AUTH_LOGOUT_ROUTE = '/api/logout';
+const AUTH_PROFILE_ROUTE = '/api/user/profile';
+
+const REMOTE_WORKER_ROUTES = [
+    AUTH_REGISTER_ROUTE,
+    AUTH_LOGIN_ROUTE,
+    AUTH_LOGOUT_ROUTE,
+    REFRESH_API_ROUTE,
+    AUTH_PROFILE_ROUTE,
+    '/api/chat',
+];
+
+const isRemoteRoute = (url?: string) => {
+    if (!url) return false;
+    return REMOTE_WORKER_ROUTES.some((route) => matchRoute(url, route));
+};
+
 rest.interceptors.request.use((config) => {
     const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-    if (config.url?.startsWith('/api')) {
+    if (baseApi && config.url?.startsWith('/api')) {
         config.baseURL = baseApi;
     }
 
-    const isAuthRoute = matchRoute(config.url, UserApi.register) || matchRoute(config.url, UserApi.login) || matchRoute(config.url, UserApi.refresh);
+    const isAuthRoute = matchRoute(config.url, AUTH_REGISTER_ROUTE) || matchRoute(config.url, AUTH_LOGIN_ROUTE) || matchRoute(config.url, REFRESH_API_ROUTE);
     if (!isAuthRoute) {
         const token = getToken();
         if (token) {
@@ -139,7 +166,7 @@ const processQueue = (error: any, token: string | null = null) => {
 rest.interceptors.response.use(
     (response: AxiosResponse) => {
         const config = response.config;
-        const isLoginOrRefresh = matchRoute(config.url, UserApi.login) || matchRoute(config.url, UserApi.refresh);
+        const isLoginOrRefresh = matchRoute(config.url, AUTH_LOGIN_ROUTE) || matchRoute(config.url, REFRESH_API_ROUTE);
         if (isLoginOrRefresh) {
             updateSession(response.data);
         }
@@ -157,7 +184,7 @@ rest.interceptors.response.use(
             const originalRequest = config;
 
             if (response.status === 401 && !originalRequest._retry) {
-                if (matchRoute(originalRequest.url, UserApi.refresh)) {
+                if (matchRoute(originalRequest.url, REFRESH_API_ROUTE)) {
                     handleLogout();
                     return Promise.reject(formatError(error));
                 }
@@ -275,7 +302,7 @@ export type PostStream = (
 const postStream: PostStream = async (url, data, onChunk, signal) => {
     const makeRequest = async (tokenToUse: string | null): Promise<Response> => {
         const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-        const fullUrl = url.startsWith('/api') ? `${baseApi}${url}` : url;
+        const fullUrl = baseApi && url.startsWith('/api') ? `${baseApi}${url}` : url;
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };

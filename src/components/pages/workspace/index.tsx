@@ -11,6 +11,7 @@ import AiSuggestions from "./ai-suggestions";
 import RecentActivities from "./recent-activities";
 import ModalWork, { WorkFormData } from "./modal-work";
 import ModalDeleteConfirm from "./modal-delete-confirm";
+import { getWorkList, createWork } from "@/rest/work";
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -23,13 +24,43 @@ export default function WorkspacePage() {
     recentActivities,
   } = workspaceMockData;
 
-  const [works, setWorks] = useState<WorkItem[]>(initialWorks);
+  const [works, setWorks] = useState<WorkItem[]>([]);
+  const [loading, setLoading] = useState(false);
   const [modalOpened, setModalOpened] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [currentWork, setCurrentWork] = useState<WorkFormData | null>(null);
 
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [deletingWork, setDeletingWork] = useState<WorkItem | null>(null);
+
+  // 加载作品列表
+  const fetchWorks = async () => {
+    try {
+      setLoading(true);
+      const res = await getWorkList();
+      if (res && res.success && Array.isArray(res.result)) {
+        const formatted: WorkItem[] = res.result.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          tag: item.tag,
+          wordCount: `${item.wordCount || 0}`,
+          chapterCount: 0,
+          progress: 0,
+          lastEditTime: item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "刚刚",
+          expectedWords: item.expectedWords,
+        }));
+        setWorks(formatted);
+      }
+    } catch (err) {
+      console.error("获取作品列表失败:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchWorks();
+  }, []);
 
   // 新建作品
   const handleOpenCreate = () => {
@@ -51,19 +82,20 @@ export default function WorkspacePage() {
   };
 
   // 提交新建 / 编辑
-  const handleSubmitWork = (formData: WorkFormData) => {
+  const handleSubmitWork = async (formData: WorkFormData) => {
     if (modalMode === "create") {
-      const newWork: WorkItem = {
-        id: Date.now(),
-        title: formData.title,
-        tag: formData.tag,
-        wordCount: "0",
-        chapterCount: 0,
-        progress: 0,
-        lastEditTime: "刚刚",
-        expectedWords: formData.expectedWords,
-      };
-      setWorks((prev) => [newWork, ...prev]);
+      try {
+        const res = await createWork({
+          title: formData.title,
+          tag: formData.tag,
+          expectedWords: formData.expectedWords,
+        });
+        if (res && res.success) {
+          fetchWorks();
+        }
+      } catch (err) {
+        console.error("新建作品失败:", err);
+      }
     } else if (modalMode === "edit" && formData.id) {
       setWorks((prev) =>
         prev.map((item) =>
