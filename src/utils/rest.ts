@@ -133,7 +133,21 @@ const isRemoteRoute = (url?: string) => {
     return REMOTE_WORKER_ROUTES.some((route) => matchRoute(url, route));
 };
 
+/**
+ * 为路径规范补全尾部斜杠，消除 Next.js trailingSlash: true 触发的 308 重定向
+ */
+const ensureTrailingSlash = (url?: string) => {
+    if (!url) return url;
+    const [path, query] = url.split('?');
+    const normalizedPath = path.endsWith('/') ? path : `${path}/`;
+    return query !== undefined ? `${normalizedPath}?${query}` : normalizedPath;
+};
+
 rest.interceptors.request.use((config) => {
+    if (config.url?.startsWith('/api')) {
+        config.url = ensureTrailingSlash(config.url);
+    }
+
     const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || '';
     if (baseApi && config.url?.startsWith('/api')) {
         config.baseURL = baseApi;
@@ -302,7 +316,8 @@ export type PostStream = (
 const postStream: PostStream = async (url, data, onChunk, signal) => {
     const makeRequest = async (tokenToUse: string | null): Promise<Response> => {
         const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || '';
-        const fullUrl = baseApi && url.startsWith('/api') ? `${baseApi}${url}` : url;
+        const formattedUrl = ensureTrailingSlash(url) || url;
+        const fullUrl = baseApi && formattedUrl.startsWith('/api') ? `${baseApi}${formattedUrl}` : formattedUrl;
         const headers: Record<string, string> = {
             'Content-Type': 'application/json',
         };
