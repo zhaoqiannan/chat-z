@@ -1,12 +1,6 @@
 import { ReactNode } from "react";
 import {
   FiMessageSquare,
-  FiMap,
-  FiMapPin,
-  FiAlertTriangle,
-  FiDatabase,
-  FiFileText,
-  FiCode,
 } from "react-icons/fi";
 
 export interface MenuItem {
@@ -34,12 +28,6 @@ export const menuConfig: MenuGroup[] = [
         label: "新对话",
         path: "/home",
         icon: <FiMessageSquare />,
-      },
-      {
-        key: "test_case",
-        label: "测试用例生成",
-        path: "/test_case",
-        icon: <FiMap />,
       },
     ],
   }
