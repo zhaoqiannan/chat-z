@@ -38,7 +38,6 @@ export default function ChatMessageList({ messages, userName, viewportRef }: Cha
                             animation: 'fadeIn 0.25s ease-out'
                         }}
                     >
-                        {/* Avatar */}
                         <Box style={{ flexShrink: 0 }}>
                             {msg.role === 'user' ? (
                                 <AvatarCircle

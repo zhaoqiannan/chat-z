@@ -1,188 +1,159 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AppShell, Badge, Box, Flex, Text, Tooltip } from "@mantine/core";
-import useSessionToken from "@/hooks/useSessionToken";
-import { menuConfig } from "@/config/menu";
-import styles from "./style.module.scss";
-import Image from "next/image";
+import { Box, Flex, Text, Menu } from "@mantine/core";
 import {
-    FiChevronLeft,
-    FiChevronRight,
-    FiChevronDown,
-    FiChevronUp
+  FiGrid,
+  FiChevronDown,
+  FiSearch,
+  FiSettings,
+  FiBell,
+  FiMessageSquare,
+  FiCheck,
+  FiLogOut,
 } from "react-icons/fi";
-import MenuUserInfo from "./user-info";
+import { useSelector, useDispatch } from "react-redux";
+import { RootState } from "@/store";
+import { clearUser } from "@/store/userInfo";
+import { logoutUser } from "@/rest/user";
+import AvatarCircle from "@/components/common/avatar-circle";
+import useSessionToken from "@/hooks/useSessionToken";
+import styles from "./style.module.scss";
 
 interface MenuLayoutProps {
-    children: React.ReactNode;
+  children: React.ReactNode;
 }
 
 const MenuLayout = ({ children }: MenuLayoutProps) => {
-    const router = useRouter();
-    const pathname = usePathname();
+  const router = useRouter();
+  const pathname = usePathname();
+  const dispatch = useDispatch();
+  const user = useSelector((state: RootState) => state.userInfo);
 
-    const [collapsed, setCollapsed] = useState(false);
+  const isChat = pathname.startsWith("/home");
+  const currentSpaceLabel = isChat ? "AI问答" : "个人创作空间";
 
-    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
-        "core-query": true,
-        "data-service": true,
-    });
+  const handleSignOut = async () => {
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.error("Error calling logout API:", e);
+    }
+    localStorage.removeItem("user_info");
+    document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    dispatch(clearUser());
+    router.replace("/login");
+  };
 
-    const toggleGroup = (groupKey: string) => {
-        setExpandedGroups(prev => ({
-            ...prev,
-            [groupKey]: !prev[groupKey]
-        }));
-    };
+  return (
+    <Box>
+      <header className={styles.header}>
+        <div className={styles.leftSection}>
+          <div
+            className={styles.brand}
+            onClick={() => router.push("/workspace")}
+          >
+            <div className={styles.logoBadge}>N</div>
+            <span className={styles.brandText}>Novel Studio</span>
+          </div>
 
-    return (
-        <AppShell
-            navbar={{
-                width: collapsed ? 72 : 260,
-                breakpoint: 'sm'
-            }}
-            padding={0}
-            styles={{
-                root: {
-                    display: "flex",
-                    flexDirection: "row",
-                    width: "100vw",
-                    height: "100vh",
-                    overflow: "hidden",
-                },
-                navbar: {
-                    position: "relative",
-                    height: "100%",
-                    flexShrink: 0,
-                    transition: "width 0.2s ease",
-                    background: "#ffffff",
-                    borderRight: "1px solid #f0f0f0",
-                },
-                main: {
-                    flex: 1,
-                    minWidth: 0,
-                    height: "100%",
-                    overflowY: "auto",
-                    overflowX: "hidden",
-                    padding: 0,
-                    background: "#f5f7fa",
-                    boxSizing: "border-box",
-                },
-            }}
-        >
-            <AppShell.Navbar className={styles.navbar} w={collapsed ? 72 : 230}>
-                <Box h={80} pl={16} pr={16} className={`${styles.logoArea} ${collapsed ? styles.collapsed : ""}`}>
-                    {!collapsed ? (
-                        <Box h={32} className={styles.logoWrapper}>
-                            <Flex align="center" gap={8}>
-                                <Image
-                                    src="/images/logo-mini.svg"
-                                    alt="chat-z Logo"
-                                    width={28}
-                                    height={28}
-                                    style={{ objectFit: 'contain', borderRadius: '6px' }}
-                                    priority
-                                />
-                                <Text className={styles.logoText}>
-                                    chat<span>-z</span>
-                                </Text>
-                            </Flex>
-                        </Box>
-                    ) : (
-                        <Flex justify="center" align="center" w="100%" h={32}>
-                            <Image
-                                src="/images/logo-mini.svg"
-                                alt="chat-z Mini Logo"
-                                width={26}
-                                height={26}
-                                style={{ objectFit: 'contain', borderRadius: '6px' }}
-                                priority
-                            />
-                        </Flex>
-                    )}
-                </Box>
+          <Menu shadow="md" width={180} position="bottom-start" offset={8}>
+            <Menu.Target>
+              <div className={styles.spaceSwitcher}>
+                <span className={styles.switcherIcon}>
+                  {isChat ? <FiMessageSquare size={15} /> : <FiGrid size={15} />}
+                </span>
+                <span>{currentSpaceLabel}</span>
+                <FiChevronDown size={14} className={styles.switcherArrow} />
+              </div>
+            </Menu.Target>
 
-                <Box className={styles.menuList}>
-                    {menuConfig.map((group) => {
-                        const isGroupExpanded = expandedGroups[group.key] !== false;
-                        return (
-                            <Box key={group.key} className={styles.menuGroup}>
-                                {!collapsed ? (
-                                    <div
-                                        className={styles.groupHeader}
-                                        onClick={() => toggleGroup(group.key)}
-                                    >
-                                        <Text className={styles.groupTitle}>{group.label}</Text>
-                                        {isGroupExpanded ? <FiChevronUp size={14} /> : <FiChevronDown size={14} />}
-                                    </div>
-                                ) : null}
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<FiGrid size={15} color={!isChat ? "#00c9ff" : undefined} />}
+                rightSection={!isChat ? <FiCheck size={14} color="#00c9ff" /> : null}
+                onClick={() => router.push("/workspace")}
+                style={{
+                  fontWeight: !isChat ? 600 : 400,
+                  color: !isChat ? "#00c9ff" : "#334155",
+                }}
+              >
+                个人创作空间
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<FiMessageSquare size={15} color={isChat ? "#00c9ff" : undefined} />}
+                rightSection={isChat ? <FiCheck size={14} color="#00c9ff" /> : null}
+                onClick={() => router.push("/home")}
+                style={{
+                  fontWeight: isChat ? 600 : 400,
+                  color: isChat ? "#00c9ff" : "#334155",
+                }}
+              >
+                AI问答
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </div>
 
-                                {(collapsed || isGroupExpanded) && (
-                                    <div className={styles.groupItems}>
-                                        {group.children.map((item) => {
-                                            const isActive = item.path === pathname || pathname.startsWith(item.path + "/");
-                                            const itemContent = (
-                                                <Box
-                                                    className={`${styles.menuItem} ${isActive ? styles.active : ""} ${collapsed ? styles.collapsed : ""}`}
-                                                    onClick={() => router.push(item.path)}
-                                                >
-                                                    <Flex align={'center'} justify={collapsed ? "center" : "flex-start"} gap={6} w="100%">
-                                                        <Text className={styles.menuIcon}>{item.icon}</Text>
-                                                        {!collapsed && <Text className={styles.menuLabel} size="xs" lh={'inherit'}>{item.label}</Text>}
-                                                        {!collapsed && item.badge && <Badge size="xs" lh={'inherit'}>{item.badge}</Badge>}
-                                                    </Flex>
-                                                </Box>
-                                            );
+        <div className={styles.rightSection}>
+          <div className={styles.searchWrapper}>
+            <span className={styles.searchIcon}>
+              <FiSearch size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="搜索笔记、设定、章节..."
+              className={styles.searchInput}
+            />
+          </div>
 
-                                            return collapsed ? (
-                                                <Tooltip
-                                                    key={item.key}
-                                                    label={item.label}
-                                                    position="right"
-                                                    withArrow
-                                                    offset={12}
-                                                >
-                                                    {itemContent}
-                                                </Tooltip>
-                                            ) : (
-                                                <React.Fragment key={item.key}>
-                                                    {itemContent}
-                                                </React.Fragment>
-                                            );
-                                        })}
-                                    </div>
-                                )}
-                            </Box>
-                        );
-                    })}
-                </Box>
+          <button className={styles.iconBtn} type="button" title="设置">
+            <FiSettings size={17} />
+          </button>
 
-                <Box className={`${styles.collapseSection} ${collapsed ? styles.collapsed : ""}`} bottom={90}>
-                    <div
-                        className={styles.collapseBtn}
-                        onClick={() => setCollapsed(!collapsed)}
-                        title={collapsed ? "展开菜单" : "收起菜单"}
-                    >
-                        {collapsed ? <FiChevronRight size={16} /> : <FiChevronLeft size={16} />}
-                    </div>
-                </Box>
+          <button className={styles.iconBtn} type="button" title="通知">
+            <FiBell size={17} />
+            <span className={styles.bellDot} />
+          </button>
 
-                <MenuUserInfo collapsed={collapsed} />
-            </AppShell.Navbar>
+          <Menu shadow="md" width={160} position="bottom-end" offset={8}>
+            <Menu.Target>
+              <div className={styles.userTarget}>
+                <AvatarCircle
+                  text={user.name || "作家"}
+                  size={32}
+                  textSize="13px"
+                />
+                <FiChevronDown size={12} color="#94a3b8" />
+              </div>
+            </Menu.Target>
 
-            <AppShell.Main>
-                <GetSession />
-                {children}
-            </AppShell.Main>
-        </AppShell >
-    );
+            <Menu.Dropdown>
+              <Menu.Label>{user.name || "用户"}</Menu.Label>
+              <Menu.Item
+                color="red"
+                leftSection={<FiLogOut size={14} />}
+                onClick={handleSignOut}
+              >
+                退出登录
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+        </div>
+      </header>
+
+      <main className={styles.mainContainer}>
+        <GetSession />
+        {children}
+      </main>
+    </Box>
+  );
 };
 
 export default MenuLayout;
 
 const GetSession = () => {
-    useSessionToken();
-    return null;
+  useSessionToken();
+  return null;
 };

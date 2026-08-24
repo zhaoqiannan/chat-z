@@ -23,7 +23,7 @@ export async function middleware(req: NextRequest) {
   if (!isLogin && !isLoginPage) {
     response = NextResponse.redirect(new URL(`/login/`, req.url));
   } else if (isLogin && (pathname === "/" || pathname === "" || isLoginPage)) {
-    response = NextResponse.redirect(new URL(`/home/`, req.url));
+    response = NextResponse.redirect(new URL(`/workspace/`, req.url));
   } else {
     response = NextResponse.next();
     response.headers.set("x-current-path", pathname);

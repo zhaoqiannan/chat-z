@@ -20,7 +20,7 @@ export default function LoginPage() {
     useEffect(() => {
         const userInfoStr = localStorage.getItem('user_info');
         if (userInfoStr) {
-            router.replace('/home');
+            router.replace('/workspace');
         }
     }, [router]);
 
@@ -36,7 +36,7 @@ export default function LoginPage() {
 
         try {
             await loginUser({ username, password });
-            router.replace('/home');
+            router.replace('/workspace');
         } catch (err: any) {
             setError(err?.message || '登录失败');
         } finally {
@@ -76,16 +76,22 @@ export default function LoginPage() {
         <Box className={styles.container}>
             <BG />
             <Box className={styles.loginCard}>
-                <Flex align="center" gap={8} mb="6px" justify="center">
-                    <Image
-                        src="/images/logo-mini.svg"
-                        alt="chat-z"
-                        width={36}
-                        height={36}
-                        style={{ objectFit: 'contain', borderRadius: '8px' }}
-                    />
+                <Flex align="center" gap={10} mb="12px" justify="center">
+                    <Box style={{
+                        width: '32px',
+                        height: '32px',
+                        background: 'linear-gradient(135deg, #00c9ff 0%, #00a8e8 100%)',
+                        borderRadius: '8px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontWeight: 800,
+                        fontSize: '18px',
+                        boxShadow: '0 2px 8px rgba(0, 201, 255, 0.35)'
+                    }}>N</Box>
                     <Text className={styles.logoText}>
-                        chat<span>-z</span>
+                        Novel Studio
                     </Text>
                 </Flex>
                 <Text className={styles.title} style={{ marginBottom: '24px' }}>{isLogin ? "欢迎登录" : "创建您的账户"}</Text>

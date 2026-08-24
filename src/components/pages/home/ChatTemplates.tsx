@@ -21,7 +21,6 @@ export default function ChatTemplates({ userName, onSelectPrompt }: ChatTemplate
             minHeight: '70vh',
             padding: '24px'
         }}>
-            {/* Greeting / Brand Section */}
             <Stack align="center" gap={12} mb={40} style={{ textAlign: 'center' }}>
                 <Box style={{
                     position: 'relative',
@@ -58,7 +57,6 @@ export default function ChatTemplates({ userName, onSelectPrompt }: ChatTemplate
                 </Text>
             </Stack>
 
-            {/* Templates Simple Grid */}
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" w="100%" max-w="800px">
                 {TEMPLATES.map((item, idx) => (
                     <Card
