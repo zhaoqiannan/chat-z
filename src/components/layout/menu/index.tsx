@@ -1,8 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Box, Flex, Text, Menu } from "@mantine/core";
+import { Box, Menu, Tooltip } from "@mantine/core";
 import {
   FiGrid,
   FiChevronDown,
@@ -12,6 +12,17 @@ import {
   FiMessageSquare,
   FiCheck,
   FiLogOut,
+  FiBook,
+  FiArrowLeft,
+  FiLayers,
+  FiFileText,
+  FiDatabase,
+  FiEdit3,
+  FiBox,
+  FiCpu,
+  FiClock,
+  FiShare2,
+  FiSidebar,
 } from "react-icons/fi";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
@@ -31,6 +42,11 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.userInfo);
 
+  const [collapsed, setCollapsed] = useState(false);
+  const [worldExpanded, setWorldExpanded] = useState(true);
+
+  // 路由状态判断
+  const isProject = pathname.startsWith("/project");
   const isChat = pathname.startsWith("/home");
   const currentSpaceLabel = isChat ? "AI问答" : "个人创作空间";
 
@@ -46,6 +62,26 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
     router.replace("/login");
   };
 
+  const projectMenuItems = [
+    { key: "overview", label: "项目概览", icon: <FiLayers size={16} />, active: true },
+    { key: "outline", label: "故事大纲", icon: <FiBook size={16} />, disabled: true },
+    { key: "chapters", label: "章节", icon: <FiFileText size={16} />, disabled: true },
+    {
+      key: "world",
+      label: "世界/知识库",
+      icon: <FiDatabase size={16} />,
+      disabled: true,
+      hasSub: true,
+      subItems: ["角色", "地点", "阵营", "物品", "规则"],
+    },
+    { key: "notes", label: "笔记", icon: <FiEdit3 size={16} />, disabled: true },
+    { key: "materials", label: "素材", icon: <FiBox size={16} />, disabled: true },
+    { key: "ai_analysis", label: "AI 分析", icon: <FiCpu size={16} />, disabled: true },
+    { key: "timeline", label: "时间线", icon: <FiClock size={16} />, disabled: true },
+    { key: "relation_graph", label: "关系图谱", icon: <FiShare2 size={16} />, disabled: true },
+    { key: "settings", label: "项目设置", icon: <FiSettings size={16} />, disabled: true },
+  ];
+
   return (
     <Box>
       <header className={styles.header}>
@@ -58,42 +94,68 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
             <span className={styles.brandText}>Novel Studio</span>
           </div>
 
-          <Menu shadow="md" width={180} position="bottom-start" offset={8}>
-            <Menu.Target>
-              <div className={styles.spaceSwitcher}>
-                <span className={styles.switcherIcon}>
-                  {isChat ? <FiMessageSquare size={15} /> : <FiGrid size={15} />}
-                </span>
-                <span>{currentSpaceLabel}</span>
-                <FiChevronDown size={14} className={styles.switcherArrow} />
-              </div>
-            </Menu.Target>
+          {isProject ? (
+            <Menu shadow="md" width={200} position="bottom-start" offset={8}>
+              <Menu.Target>
+                <div className={styles.projectSwitcher}>
+                  <FiBook size={15} color="#00c9ff" />
+                  <span>星际迷途</span>
+                  <FiChevronDown size={14} color="#94a3b8" />
+                </div>
+              </Menu.Target>
 
-            <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<FiGrid size={15} color={!isChat ? "#00c9ff" : undefined} />}
-                rightSection={!isChat ? <FiCheck size={14} color="#00c9ff" /> : null}
-                onClick={() => router.push("/workspace")}
-                style={{
-                  fontWeight: !isChat ? 600 : 400,
-                  color: !isChat ? "#00c9ff" : "#334155",
-                }}
-              >
-                个人创作空间
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<FiMessageSquare size={15} color={isChat ? "#00c9ff" : undefined} />}
-                rightSection={isChat ? <FiCheck size={14} color="#00c9ff" /> : null}
-                onClick={() => router.push("/home")}
-                style={{
-                  fontWeight: isChat ? 600 : 400,
-                  color: isChat ? "#00c9ff" : "#334155",
-                }}
-              >
-                AI问答
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
+              <Menu.Dropdown>
+                <Menu.Label>当前项目</Menu.Label>
+                <Menu.Item leftSection={<FiBook size={14} color="#00c9ff" />}>
+                  星际迷途
+                </Menu.Item>
+                <Menu.Divider />
+                <Menu.Item
+                  leftSection={<FiArrowLeft size={14} />}
+                  onClick={() => router.push("/workspace")}
+                >
+                  返回个人创作空间
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          ) : (
+            <Menu shadow="md" width={180} position="bottom-start" offset={8}>
+              <Menu.Target>
+                <div className={styles.spaceSwitcher}>
+                  <span className={styles.switcherIcon}>
+                    {isChat ? <FiMessageSquare size={15} /> : <FiGrid size={15} />}
+                  </span>
+                  <span>{currentSpaceLabel}</span>
+                  <FiChevronDown size={14} className={styles.switcherArrow} />
+                </div>
+              </Menu.Target>
+
+              <Menu.Dropdown>
+                <Menu.Item
+                  leftSection={<FiGrid size={15} color={!isChat ? "#00c9ff" : undefined} />}
+                  rightSection={!isChat ? <FiCheck size={14} color="#00c9ff" /> : null}
+                  onClick={() => router.push("/workspace")}
+                  style={{
+                    fontWeight: !isChat ? 600 : 400,
+                    color: !isChat ? "#00c9ff" : "#334155",
+                  }}
+                >
+                  个人创作空间
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<FiMessageSquare size={15} color={isChat ? "#00c9ff" : undefined} />}
+                  rightSection={isChat ? <FiCheck size={14} color="#00c9ff" /> : null}
+                  onClick={() => router.push("/home")}
+                  style={{
+                    fontWeight: isChat ? 600 : 400,
+                    color: isChat ? "#00c9ff" : "#334155",
+                  }}
+                >
+                  AI问答
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
         </div>
 
         <div className={styles.rightSection}>
@@ -143,10 +205,82 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
         </div>
       </header>
 
-      <main className={styles.mainContainer}>
-        <GetSession />
-        {children}
-      </main>
+      {isProject ? (
+        <div className={styles.workbenchBody}>
+          <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ""}`}>
+            <div className={styles.menuList}>
+              {projectMenuItems.map((item) => {
+                const content = (
+                  <div
+                    key={item.key}
+                    className={`${styles.menuItem} ${item.active ? styles.active : ""} ${
+                      item.disabled ? styles.disabled : ""
+                    } ${collapsed ? styles.collapsed : ""}`}
+                    onClick={() => {
+                      if (item.hasSub && !collapsed) {
+                        setWorldExpanded(!worldExpanded);
+                      }
+                    }}
+                  >
+                    <span>{item.icon}</span>
+                    {!collapsed && <span>{item.label}</span>}
+                    {item.hasSub && !collapsed && (
+                      <FiChevronDown
+                        size={12}
+                        style={{
+                          marginLeft: "auto",
+                          transform: worldExpanded ? "rotate(180deg)" : "none",
+                          transition: "transform 0.2s",
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+
+                return (
+                  <React.Fragment key={item.key}>
+                    {collapsed ? (
+                      <Tooltip label={item.label} position="right" withArrow>
+                        {content}
+                      </Tooltip>
+                    ) : (
+                      content
+                    )}
+
+                    {item.hasSub && !collapsed && worldExpanded && (
+                      <div className={styles.subMenuList}>
+                        {item.subItems?.map((sub) => (
+                          <div key={sub} className={styles.subMenuItem}>
+                            {sub}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            <div
+              className={`${styles.collapseToggle} ${collapsed ? styles.collapsed : ""}`}
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              <FiSidebar size={15} />
+              {!collapsed && <span>折叠侧边栏</span>}
+            </div>
+          </aside>
+
+          <main className={styles.projectMainContent}>
+            <GetSession />
+            {children}
+          </main>
+        </div>
+      ) : (
+        <main className={styles.mainContainer}>
+          <GetSession />
+          {children}
+        </main>
+      )}
     </Box>
   );
 };

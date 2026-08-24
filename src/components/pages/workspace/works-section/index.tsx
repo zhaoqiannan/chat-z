@@ -1,10 +1,19 @@
 "use client";
 
 import React from "react";
-import { Box, Flex, Text, Progress, SimpleGrid, Paper } from "@mantine/core";
-import { FiPlus, FiChevronRight } from "react-icons/fi";
+import {
+  Box,
+  Flex,
+  Text,
+  Progress,
+  SimpleGrid,
+  Paper,
+  Tooltip,
+  ActionIcon,
+} from "@mantine/core";
+import { FiPlus, FiChevronRight, FiEdit2, FiTrash2 } from "react-icons/fi";
 import NoData from "@/components/common/no-data";
-import styles from "./style.module.scss";
+import styles from "../style.module.scss";
 
 export interface WorkItem {
   id: string | number;
@@ -14,18 +23,23 @@ export interface WorkItem {
   chapterCount: number;
   progress: number;
   lastEditTime: string;
+  expectedWords?: string;
 }
 
 interface WorksSectionProps {
   works?: WorkItem[];
   onCreateWork?: () => void;
   onSelectWork?: (work: WorkItem) => void;
+  onEditWork?: (work: WorkItem) => void;
+  onDeleteWork?: (work: WorkItem) => void;
 }
 
 export default function WorksSection({
   works,
   onCreateWork,
   onSelectWork,
+  onEditWork,
+  onDeleteWork,
 }: WorksSectionProps) {
   return (
     <Box>
@@ -63,16 +77,48 @@ export default function WorksSection({
                 <Text fz={15} fw={700} c="#1e293b">
                   {work.title}
                 </Text>
-                <Box
-                  fz={11}
-                  c="#64748b"
-                  bg="#f1f5f9"
-                  px={6}
-                  py={2}
-                  style={{ borderRadius: 4 }}
-                >
-                  {work.tag}
-                </Box>
+                <Flex align="center" gap={6}>
+                  <Box
+                    fz={11}
+                    c="#64748b"
+                    bg="#f1f5f9"
+                    px={6}
+                    py={2}
+                    style={{ borderRadius: 4 }}
+                  >
+                    {work.tag}
+                  </Box>
+
+                  <Tooltip label="编辑作品" position="top" withArrow offset={4}>
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditWork?.(work);
+                      }}
+                      className={styles.cardActionIcon}
+                    >
+                      <FiEdit2 size={13} />
+                    </ActionIcon>
+                  </Tooltip>
+
+                  <Tooltip label="删除作品" position="top" withArrow offset={4}>
+                    <ActionIcon
+                      variant="subtle"
+                      color="red"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteWork?.(work);
+                      }}
+                      className={styles.cardActionIcon}
+                    >
+                      <FiTrash2 size={13} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Flex>
               </Flex>
 
               <Text fz={13} c="#64748b" my={12}>

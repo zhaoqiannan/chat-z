@@ -4,7 +4,7 @@ import React from "react";
 import { Box, Flex, Text, Paper, Button } from "@mantine/core";
 import { FiEdit3 } from "react-icons/fi";
 import NoData from "@/components/common/no-data";
-import styles from "./style.module.scss";
+import styles from "../style.module.scss";
 
 export interface RecentChapterData {
   novelTitle: string;
