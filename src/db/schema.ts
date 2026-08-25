@@ -40,8 +40,12 @@ export const works = sqliteTable('works', {
   tag: text('tag').notNull(),
   /** 预计目标字数（INT 类型，单位：字，默认：500000 字即 50 万字） */
   expectedWords: integer('expected_words').default(500000),
+  /** 预计总章节数（INT 类型，默认：100 章） */
+  expectedChapters: integer('expected_chapters').default(100),
   /** 当前作品实际总字数 */
   wordCount: integer('word_count').default(0),
+  /** 当前作品实际已有章节数 */
+  chapterCount: integer('chapter_count').default(0),
   /** 创作状态：'ongoing'（连载中）/ 'completed'（已完结）/ 'draft'（草稿） */
   status: text('status').default('ongoing'),
   /** 作品简介/大纲概要 */

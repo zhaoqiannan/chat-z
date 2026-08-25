@@ -25,8 +25,10 @@ CREATE TABLE IF NOT EXISTS works (
   user_id TEXT NOT NULL,               -- 关联作者 ID (users.id)
   title TEXT NOT NULL,                 -- 作品书名
   tag TEXT NOT NULL,                   -- 分类标签（科幻/悬疑等）
-  expected_words INTEGER DEFAULT 50,   -- 目标字数 (INT 类型，单位：万字，默认 50)
+  expected_words INTEGER DEFAULT 500000,-- 目标字数 (INT 类型，单位：字，默认 500,000 即 50 万字)
+  expected_chapters INTEGER DEFAULT 100,-- 预计总章节数 (INT 类型，默认 100 章)
   word_count INTEGER DEFAULT 0,        -- 当前总字数
+  chapter_count INTEGER DEFAULT 0,     -- 当前总章节数
   status TEXT DEFAULT 'ongoing',       -- 状态: ongoing(连载中)/completed(已完结)
   description TEXT,                    -- 作品简介
   cover TEXT,                          -- 封面图片

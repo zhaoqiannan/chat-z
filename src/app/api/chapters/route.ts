@@ -17,7 +17,7 @@ async function checkWorkOwnership(db: any, workId: number, userId: string) {
 }
 
 /**
- * 重新计算并更新作品的总字数
+ * 重新计算并更新作品的总字数与正文章节总数
  */
 async function recountWorkWords(db: any, workId: number) {
   const allChapters = await db
@@ -26,10 +26,15 @@ async function recountWorkWords(db: any, workId: number) {
     .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0)));
 
   const totalWords = allChapters.reduce((sum: number, c: any) => sum + (c.wordCount || 0), 0);
+  const totalChapters = allChapters.length;
 
   await db
     .update(works)
-    .set({ wordCount: totalWords, updatedAt: new Date() })
+    .set({
+      wordCount: totalWords,
+      chapterCount: totalChapters,
+      updatedAt: new Date(),
+    })
     .where(eq(works.id, workId));
 }
 
@@ -157,8 +162,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const inserted = await db.insert(chapters).values(newChapterData).returning().get();
 
-    // 重新统计作品总字数
-    if (!isVol && wordCount > 0) {
+    // 重新统计作品总字数与章节总数
+    if (!isVol) {
       await recountWorkWords(db, workId);
     }
 

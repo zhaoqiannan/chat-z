@@ -5,13 +5,47 @@ import { getDb, works, chapters } from "@/db";
 import { desc, eq, and } from "drizzle-orm";
 
 /**
- * 获取当前用户的作品列表（置顶优先，置顶时间倒序，创建时间倒序）
+ * 获取当前用户的作品列表或单条作品详情
+ * 支持 /api/works/ (获取列表) 或 /api/works/?id=123 (获取单本详情)
  */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
+    const rawId = req.nextUrl.searchParams.get("id");
+
+    // 1. 获取单个作品详情
+    if (rawId) {
+      const workId = Number(rawId);
+      if (!workId || isNaN(workId)) {
+        return NextResponse.json(
+          { success: false, message: "无效的作品ID" },
+          { status: 400 }
+        );
+      }
+
+      const workDetail = await db
+        .select()
+        .from(works)
+        .where(and(eq(works.id, workId), eq(works.userId, user.userId)))
+        .get();
+
+      if (!workDetail) {
+        return NextResponse.json(
+          { success: false, message: "作品不存在或无权限访问" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        result: workDetail,
+        message: "获取作品详情成功",
+      });
+    }
+
+    // 2. 获取作品列表（置顶优先，置顶时间倒序，创建时间倒序）
     const userWorks = await db
       .select()
       .from(works)
@@ -35,7 +69,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 });
 
 /**
- * 新建作品 (自增数字 ID, INT 目标字数, 支持置顶)
+ * 新建作品 (自增数字 ID, INT 目标字数, 支持置顶, 预计章节数)
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -43,7 +77,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { title, tag, expectedWords, description, cover, isPinned } = body;
+    const { title, tag, expectedWords, expectedChapters, description, cover, isPinned } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json(
@@ -60,6 +94,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const parsedExpectedWords = Math.round(Number(expectedWords) || 500000);
+    const parsedExpectedChapters = Math.round(Number(expectedChapters) || 100);
     const pinned = isPinned ? 1 : 0;
 
     const newWorkData = {
@@ -67,7 +102,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       title: title.trim(),
       tag: tag.trim(),
       expectedWords: parsedExpectedWords,
+      expectedChapters: parsedExpectedChapters,
       wordCount: 0,
+      chapterCount: 0,
       status: "ongoing",
       description: description?.trim() || "",
       cover: cover || "",
@@ -104,7 +141,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { id, title, tag, expectedWords, description, cover, status, isPinned } = body;
+    const { id, title, tag, expectedWords, expectedChapters, description, cover, status, isPinned } = body;
 
     const workId = Number(id);
     if (!workId || isNaN(workId)) {
@@ -132,6 +169,10 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       ? Math.round(Number(expectedWords) || existing.expectedWords || 500000)
       : existing.expectedWords;
 
+    const parsedExpectedChapters = expectedChapters !== undefined
+      ? Math.round(Number(expectedChapters) || existing.expectedChapters || 100)
+      : existing.expectedChapters;
+
     // 处理置顶状态与置顶时间
     let nextIsPinned = existing.isPinned;
     let nextPinnedAt = existing.pinnedAt;
@@ -145,6 +186,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       title: title !== undefined ? title.trim() : existing.title,
       tag: tag !== undefined ? tag.trim() : existing.tag,
       expectedWords: parsedExpectedWords,
+      expectedChapters: parsedExpectedChapters,
       description: description !== undefined ? description.trim() : existing.description,
       cover: cover !== undefined ? cover : existing.cover,
       status: status || existing.status,

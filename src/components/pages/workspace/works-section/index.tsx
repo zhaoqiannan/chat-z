@@ -28,6 +28,7 @@ export interface WorkItem {
   progress: number;
   lastEditTime: string;
   expectedWords?: number | string;
+  expectedChapters?: number | string;
   isPinned?: boolean | number;
   pinnedAt?: string | null;
 }

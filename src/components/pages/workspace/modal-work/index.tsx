@@ -1,15 +1,16 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { Modal, TextInput, NumberInput, Switch, Button, Flex, Stack, Text } from "@mantine/core";
+import { Modal, TextInput, NumberInput, Switch, Button, Flex, Stack, Text, SimpleGrid } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { FiBook, FiTag, FiFileText } from "react-icons/fi";
+import { FiBook, FiTag, FiFileText, FiLayers } from "react-icons/fi";
 
 export interface WorkFormData {
   id?: string | number;
   title: string;
   tag: string;
   expectedWords: number | string;
+  expectedChapters?: number | string;
   isPinned?: boolean | number;
 }
 
@@ -33,6 +34,7 @@ export default function ModalWork({
       title: "",
       tag: "",
       expectedWords: 50,
+      expectedChapters: 100,
       isPinned: false,
     },
     validate: {
@@ -41,6 +43,10 @@ export default function ModalWork({
       expectedWords: (value) =>
         value === undefined || value === null || Number(value) <= 0
           ? "预计目标字数必须大于 0"
+          : null,
+      expectedChapters: (value) =>
+        value === undefined || value === null || Number(value) <= 0
+          ? "预计总章节数必须大于 0"
           : null,
     },
   });
@@ -59,6 +65,7 @@ export default function ModalWork({
           title: initialData.title || "",
           tag: initialData.tag || "",
           expectedWords: displayWords,
+          expectedChapters: Number(initialData.expectedChapters) || 100,
           isPinned: Boolean(initialData.isPinned),
         });
       } else {
@@ -66,6 +73,7 @@ export default function ModalWork({
           title: "",
           tag: "",
           expectedWords: 50,
+          expectedChapters: 100,
           isPinned: false,
         });
       }
@@ -75,12 +83,14 @@ export default function ModalWork({
 
   const handleSubmit = form.onSubmit((values) => {
     const targetWordsInUnit = Math.round(Number(values.expectedWords) * 10000);
+    const targetChapters = Math.round(Number(values.expectedChapters) || 100);
 
     onSubmit({
       id: initialData?.id,
       title: values.title.trim(),
       tag: values.tag.trim(),
       expectedWords: targetWordsInUnit,
+      expectedChapters: targetChapters,
       isPinned: values.isPinned,
     });
     onClose();
@@ -118,22 +128,41 @@ export default function ModalWork({
             {...form.getInputProps("tag")}
           />
 
-          <Flex gap={20} align="flex-end">
-            <NumberInput
-              label="预计目标字数"
-              placeholder="如：50 或 12.55"
-              min={0.01}
-              step={0.5}
-              decimalScale={2}
-              allowDecimal={true}
-              leftSection={<FiFileText size={15} color="#94a3b8" />}
-              style={{ flex: 1 }}
-              {...form.getInputProps("expectedWords")}
-            />
-            <Text pb={8} fw={600} fz={14} c="#475569">
-              万字
-            </Text>
-          </Flex>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing={16}>
+            <Flex gap={10} align="flex-end">
+              <NumberInput
+                label="预计目标字数"
+                placeholder="如：50 或 12.55"
+                min={0.01}
+                step={0.5}
+                decimalScale={2}
+                allowDecimal={true}
+                leftSection={<FiFileText size={15} color="#94a3b8" />}
+                style={{ flex: 1 }}
+                {...form.getInputProps("expectedWords")}
+              />
+              <Text pb={8} fw={600} fz={14} c="#475569">
+                万字
+              </Text>
+            </Flex>
+
+            <Flex gap={10} align="flex-end">
+              <NumberInput
+                label="预计总章节数"
+                placeholder="如：100"
+                min={1}
+                step={10}
+                decimalScale={0}
+                allowDecimal={false}
+                leftSection={<FiLayers size={15} color="#94a3b8" />}
+                style={{ flex: 1 }}
+                {...form.getInputProps("expectedChapters")}
+              />
+              <Text pb={8} fw={600} fz={14} c="#475569">
+                章
+              </Text>
+            </Flex>
+          </SimpleGrid>
 
           <Flex justify="space-between" align="center" mt={4} py={4}>
             <Text fz={14} fw={600} c="#475569">

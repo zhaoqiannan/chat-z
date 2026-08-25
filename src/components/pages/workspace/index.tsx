@@ -66,7 +66,9 @@ export default function WorkspacePage() {
       id: work.id,
       title: work.title,
       tag: work.tag,
-      expectedWords: work.expectedWords || "50,000",
+      expectedWords: work.expectedWords || 500000,
+      expectedChapters: work.expectedChapters || 100,
+      isPinned: work.isPinned,
     });
     setModalOpened(true);
   };
@@ -79,6 +81,7 @@ export default function WorkspacePage() {
           title: formData.title,
           tag: formData.tag,
           expectedWords: Number(formData.expectedWords) || 500000,
+          expectedChapters: Number(formData.expectedChapters) || 100,
           isPinned: formData.isPinned,
         });
         if (res && res.success) {
@@ -94,6 +97,7 @@ export default function WorkspacePage() {
           title: formData.title,
           tag: formData.tag,
           expectedWords: Number(formData.expectedWords) || 500000,
+          expectedChapters: Number(formData.expectedChapters) || 100,
           isPinned: formData.isPinned,
         });
         if (res && res.success) {

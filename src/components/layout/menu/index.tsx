@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import React, { useState, useEffect } from "react";
+import { usePathname, useRouter, useParams } from "next/navigation";
 import { Box, Menu, Tooltip } from "@mantine/core";
 import {
   FiGrid,
@@ -28,6 +28,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { clearUser } from "@/store/userInfo";
 import { logoutUser } from "@/rest/user";
+import { getWorkList, WorkItem } from "@/rest/work";
 import AvatarCircle from "@/components/common/avatar-circle";
 import useSessionToken from "@/hooks/useSessionToken";
 import styles from "./style.module.scss";
@@ -39,16 +40,34 @@ interface MenuLayoutProps {
 const MenuLayout = ({ children }: MenuLayoutProps) => {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useParams();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.userInfo);
 
   const [collapsed, setCollapsed] = useState(false);
   const [worldExpanded, setWorldExpanded] = useState(true);
+  const [works, setWorks] = useState<WorkItem[]>([]);
 
   // 路由状态判断
   const isProject = pathname.startsWith("/project");
   const isChat = pathname.startsWith("/home");
   const currentSpaceLabel = isChat ? "AI问答" : "个人创作空间";
+  const currentProjectId = params?.id ? String(params.id) : null;
+
+  useEffect(() => {
+    if (isProject) {
+      getWorkList()
+        .then((res) => {
+          if (res && res.success && Array.isArray(res.result)) {
+            setWorks(res.result);
+          }
+        })
+        .catch((err) => console.error("获取项目列表失败:", err));
+    }
+  }, [isProject, currentProjectId]);
+
+  const currentProject = works.find((w) => String(w.id) === String(currentProjectId));
+  const currentProjectTitle = currentProject?.title || "选择作品";
 
   const handleSignOut = async () => {
     try {
@@ -115,20 +134,34 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
           </div>
 
           {isProject ? (
-            <Menu shadow="md" width={200} position="bottom-start" offset={8}>
+            <Menu shadow="md" width={220} position="bottom-start" offset={8}>
               <Menu.Target>
                 <div className={styles.projectSwitcher}>
                   <FiBook size={15} color="#00c9ff" />
-                  <span>星际迷途</span>
+                  <span>{currentProjectTitle}</span>
                   <FiChevronDown size={14} color="#94a3b8" />
                 </div>
               </Menu.Target>
 
               <Menu.Dropdown>
-                <Menu.Label>当前项目</Menu.Label>
-                <Menu.Item leftSection={<FiBook size={14} color="#00c9ff" />}>
-                  星际迷途
-                </Menu.Item>
+                <Menu.Label>我的作品</Menu.Label>
+                {works.map((w) => {
+                  const isSelected = String(w.id) === String(currentProjectId);
+                  return (
+                    <Menu.Item
+                      key={w.id}
+                      leftSection={<FiBook size={14} color={isSelected ? "#00c9ff" : undefined} />}
+                      rightSection={isSelected ? <FiCheck size={14} color="#00c9ff" /> : null}
+                      style={{
+                        fontWeight: isSelected ? 600 : 400,
+                        color: isSelected ? "#00c9ff" : "#334155",
+                      }}
+                      onClick={() => router.push(`/project/${w.id}?tab=${currentTab}`)}
+                    >
+                      {w.title}
+                    </Menu.Item>
+                  );
+                })}
                 <Menu.Divider />
                 <Menu.Item
                   leftSection={<FiArrowLeft size={14} />}
