@@ -1,16 +1,17 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useImperativeHandle, forwardRef } from "react";
 import {
   Box,
   TextInput,
   Textarea,
   Select,
   Stack,
-  SimpleGrid,
   Text,
+  Grid,
 } from "@mantine/core";
-import { OutlineNode, OutlineNodeType, PlotPointType } from "@/rest/outline";
+import { useForm, UseFormReturnType } from "@mantine/form";
+import { OutlineNodeType, PlotPointType } from "@/rest/outline";
 import {
   OUTLINE_NODE_TYPE_OPTIONS,
   PLOT_POINT_TYPE_OPTIONS,
@@ -23,277 +24,246 @@ export interface NodeFormValues {
   pointType?: PlotPointType;
   parentId: string | null;
   goal: string;
-  conflict?: string;
-  eventDescription?: string;
-  expectedOutcome?: string;
-  characters?: string;
-  locations?: string;
-  foreshadowing?: string;
-  linkedChapters?: number[];
-  remarks?: string;
+  conflict: string;
+  eventDescription: string;
+  expectedOutcome: string;
+  characters: string;
+  locations: string;
+  foreshadowing: string;
+  linkedChapters: number[];
+  remarks: string;
+}
+
+export interface NodeFormRef {
+  validate: () => boolean;
+  getValues: () => NodeFormValues;
+  setValues: (values: Partial<NodeFormValues>) => void;
+  reset: () => void;
 }
 
 interface NodeFormProps {
   initialValues?: Partial<NodeFormValues>;
   isEditing?: boolean;
   parentOptions: { value: string; label: string }[];
-  errorMessage?: string;
   onChange?: (values: NodeFormValues) => void;
 }
 
-export default function NodeForm({
-  initialValues,
-  isEditing = true,
-  parentOptions,
-  errorMessage,
-  onChange,
-}: NodeFormProps) {
-  const [title, setTitle] = useState(initialValues?.title || "");
-  const [type, setType] = useState<OutlineNodeType>(initialValues?.type || "scene");
-  const [pointType, setPointType] = useState<PlotPointType>(
-    (initialValues?.pointType as PlotPointType) || "conflict"
-  );
-  const [parentId, setParentId] = useState<string | null>(initialValues?.parentId || null);
-  const [goal, setGoal] = useState(initialValues?.goal || "");
-  const [conflict, setConflict] = useState(initialValues?.conflict || "");
-  const [eventDescription, setEventDescription] = useState(
-    initialValues?.eventDescription || ""
-  );
-  const [expectedOutcome, setExpectedOutcome] = useState(
-    initialValues?.expectedOutcome || ""
-  );
-  const [characters, setCharacters] = useState(initialValues?.characters || "");
-  const [locations, setLocations] = useState(initialValues?.locations || "");
-  const [foreshadowing, setForeshadowing] = useState(
-    initialValues?.foreshadowing || ""
-  );
-  const [linkedChapters, setLinkedChapters] = useState<number[]>(
-    Array.isArray(initialValues?.linkedChapters) ? initialValues.linkedChapters : []
-  );
-  const [remarks, setRemarks] = useState(initialValues?.remarks || "");
+const NodeForm = forwardRef<NodeFormRef, NodeFormProps>(function NodeForm(
+  {
+    initialValues,
+    isEditing = true,
+    parentOptions,
+    onChange,
+  },
+  ref
+) {
+  const form: UseFormReturnType<NodeFormValues> = useForm<NodeFormValues>({
+    initialValues: {
+      title: initialValues?.title || "",
+      type: initialValues?.type || "scene",
+      pointType: (initialValues?.pointType as PlotPointType) || "conflict",
+      parentId: initialValues?.parentId || null,
+      goal: initialValues?.goal || "",
+      conflict: initialValues?.conflict || "",
+      eventDescription: initialValues?.eventDescription || "",
+      expectedOutcome: initialValues?.expectedOutcome || "",
+      characters: initialValues?.characters || "",
+      locations: initialValues?.locations || "",
+      foreshadowing: initialValues?.foreshadowing || "",
+      linkedChapters: Array.isArray(initialValues?.linkedChapters)
+        ? initialValues.linkedChapters
+        : [],
+      remarks: initialValues?.remarks || "",
+    },
+    validate: {
+      title: (value) => (!value?.trim() ? "节点标题不能为空" : null),
+      goal: (value) => (!value?.trim() ? "故事目标为必填项" : null),
+    },
+  });
 
   /**
-   * 当外部传入的 initialValues 变动时同步更新表单内部状态
+   * 当 initialValues 变动时同步更新 form 内部值
    */
   useEffect(() => {
     if (initialValues) {
-      setTitle(initialValues.title || "");
-      setType(initialValues.type || "scene");
-      setPointType((initialValues.pointType as PlotPointType) || "conflict");
-      setParentId(initialValues.parentId || null);
-      setGoal(initialValues.goal || "");
-      setConflict(initialValues.conflict || "");
-      setEventDescription(initialValues.eventDescription || "");
-      setExpectedOutcome(initialValues.expectedOutcome || "");
-      setCharacters(initialValues.characters || "");
-      setLocations(initialValues.locations || "");
-      setForeshadowing(initialValues.foreshadowing || "");
-      setLinkedChapters(
-        Array.isArray(initialValues.linkedChapters) ? initialValues.linkedChapters : []
-      );
-      setRemarks(initialValues.remarks || "");
+      form.setValues({
+        title: initialValues.title || "",
+        type: initialValues.type || "scene",
+        pointType: (initialValues.pointType as PlotPointType) || "conflict",
+        parentId: initialValues.parentId || null,
+        goal: initialValues.goal || "",
+        conflict: initialValues.conflict || "",
+        eventDescription: initialValues.eventDescription || "",
+        expectedOutcome: initialValues.expectedOutcome || "",
+        characters: initialValues.characters || "",
+        locations: initialValues.locations || "",
+        foreshadowing: initialValues.foreshadowing || "",
+        linkedChapters: Array.isArray(initialValues.linkedChapters)
+          ? initialValues.linkedChapters
+          : [],
+        remarks: initialValues.remarks || "",
+      });
+      form.clearErrors();
     }
   }, [initialValues]);
 
   /**
-   * 状态变更触发通知
+   * 暴露方法给父组件
    */
-  const notifyChange = (updated: Partial<NodeFormValues>) => {
-    if (!onChange) return;
-    onChange({
-      title,
-      type,
-      pointType: type === "scene" ? pointType : undefined,
-      parentId,
-      goal,
-      conflict,
-      eventDescription,
-      expectedOutcome,
-      characters,
-      locations,
-      foreshadowing,
-      linkedChapters,
-      remarks,
-      ...updated,
-    });
+  useImperativeHandle(ref, () => ({
+    validate: () => {
+      const result = form.validate();
+      return !result.hasErrors;
+    },
+    getValues: () => form.values,
+    setValues: (vals) => form.setValues(vals),
+    reset: () => form.reset(),
+  }));
+
+  /**
+   * 拦截值变更并通知外部
+   */
+  const handleFieldChange = (field: keyof NodeFormValues, value: any) => {
+    form.setFieldValue(field, value);
+    if (onChange) {
+      onChange({ ...form.values, [field]: value });
+    }
   };
+
+  const currentType = form.values.type;
 
   return (
     <Stack gap="16px" className="form-box">
-      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="12px">
-        <TextInput
-          label="节点标题"
-          placeholder="请输入节点名称"
-          value={title}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setTitle(val);
-            notifyChange({ title: val });
-          }}
-          required
-        />
-
-        <Select
-          label="层级类型"
-          value={type}
-          readOnly={!isEditing}
-          onChange={(val) => {
-            const nextType = (val as OutlineNodeType) || "scene";
-            setType(nextType);
-            notifyChange({ type: nextType });
-          }}
-          data={OUTLINE_NODE_TYPE_OPTIONS}
-        />
-
-        {type === "scene" ? (
-          <Select
-            label="情节点细分类型"
-            value={pointType}
+      <Grid>
+        <Grid.Col span={6}>
+          <TextInput
+            label="节点标题"
+            placeholder="请输入节点名称"
             readOnly={!isEditing}
-            onChange={(val) => {
-              const nextPointType = (val as PlotPointType) || "conflict";
-              setPointType(nextPointType);
-              notifyChange({ pointType: nextPointType });
-            }}
-            data={PLOT_POINT_TYPE_OPTIONS}
+            required
+            {...form.getInputProps("title")}
+            onChange={(e) => handleFieldChange("title", e.currentTarget.value)}
           />
-        ) : (
+        </Grid.Col>
+        <Grid.Col span={3}>
           <Select
-            label="挂载父级节点"
-            placeholder="无父节点 (顶级)"
-            value={parentId || ""}
+            label="层级类型"
             readOnly={!isEditing}
+            data={OUTLINE_NODE_TYPE_OPTIONS}
+            {...form.getInputProps("type")}
             onChange={(val) => {
-              setParentId(val || null);
-              notifyChange({ parentId: val || null });
+              const nextType = (val as OutlineNodeType) || "scene";
+              handleFieldChange("type", nextType);
             }}
-            data={parentOptions}
-            clearable
           />
-        )}
-      </SimpleGrid>
-
-      {type === "scene" && (
-        <Select
-          label="挂载父级节点"
-          placeholder="请选择所属卷/幕"
-          value={parentId || ""}
-          readOnly={!isEditing}
-          onChange={(val) => {
-            setParentId(val || null);
-            notifyChange({ parentId: val || null });
-          }}
-          data={parentOptions}
-          clearable
-        />
-      )}
+        </Grid.Col>
+        <Grid.Col span={3}>
+          {currentType === "scene" ? (
+            <Select
+              label="情节点细分类型"
+              readOnly={!isEditing}
+              data={PLOT_POINT_TYPE_OPTIONS}
+              {...form.getInputProps("pointType")}
+              onChange={(val) => {
+                const nextPointType = (val as PlotPointType) || "conflict";
+                handleFieldChange("pointType", nextPointType);
+              }}
+            />
+          ) : (
+            <Select
+              label="挂载父级节点"
+              placeholder="无父节点 (顶级)"
+              readOnly={!isEditing}
+              data={parentOptions}
+              clearable
+              {...form.getInputProps("parentId")}
+              onChange={(val) => handleFieldChange("parentId", val || null)}
+            />
+          )}
+          {currentType === "scene" && (
+            <Select
+              label="挂载父级节点"
+              placeholder="请选择所属卷/幕"
+              readOnly={!isEditing}
+              data={parentOptions}
+              clearable
+              {...form.getInputProps("parentId")}
+              onChange={(val) => handleFieldChange("parentId", val || null)}
+            />
+          )}
+        </Grid.Col>
+      </Grid>
 
       <Textarea
         label="故事目标"
         placeholder="该节点解决什么故事问题/达成什么叙事目标？"
-        value={goal}
         readOnly={!isEditing}
-        onChange={(e) => {
-          const val = e.currentTarget.value;
-          setGoal(val);
-          notifyChange({ goal: val });
-        }}
         minRows={2}
         required
+        {...form.getInputProps("goal")}
+        onChange={(e) => handleFieldChange("goal", e.currentTarget.value)}
       />
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="14px">
-        <Textarea
-          label="主要冲突"
-          placeholder="人物或力量之间的矛盾与对立..."
-          value={conflict}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setConflict(val);
-            notifyChange({ conflict: val });
-          }}
-          minRows={3}
-        />
+      <Textarea
+        label="主要冲突"
+        placeholder="人物或力量之间的矛盾与对立..."
+        readOnly={!isEditing}
+        minRows={3}
+        {...form.getInputProps("conflict")}
+        onChange={(e) => handleFieldChange("conflict", e.currentTarget.value)}
+      />
 
-        <Textarea
-          label="事件描述"
-          placeholder="简述该节点具体发生的核心事件脉络..."
-          value={eventDescription}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setEventDescription(val);
-            notifyChange({ eventDescription: val });
-          }}
-          minRows={3}
-        />
-      </SimpleGrid>
+      <Textarea
+        label="事件描述"
+        placeholder="简述该节点具体发生的核心事件脉络..."
+        readOnly={!isEditing}
+        minRows={3}
+        {...form.getInputProps("eventDescription")}
+        onChange={(e) => handleFieldChange("eventDescription", e.currentTarget.value)}
+      />
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="14px">
-        <TextInput
-          label="结果 / 状态变化"
-          placeholder="事件结束后局势与角色状态如何变化..."
-          value={expectedOutcome}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setExpectedOutcome(val);
-            notifyChange({ expectedOutcome: val });
-          }}
-        />
+      <TextInput
+        label="结果 / 状态变化"
+        placeholder="事件结束后局势与角色状态如何变化..."
+        readOnly={!isEditing}
+        {...form.getInputProps("expectedOutcome")}
+        onChange={(e) => handleFieldChange("expectedOutcome", e.currentTarget.value)}
+      />
 
-        <TextInput
-          label="伏笔 (新增或回收)"
-          placeholder="新增或回收的前文伏笔/线索..."
-          value={foreshadowing}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setForeshadowing(val);
-            notifyChange({ foreshadowing: val });
-          }}
-        />
-      </SimpleGrid>
+      <TextInput
+        label="伏笔 (新增或回收)"
+        placeholder="新增或回收的前文伏笔/线索..."
+        readOnly={!isEditing}
+        {...form.getInputProps("foreshadowing")}
+        onChange={(e) => handleFieldChange("foreshadowing", e.currentTarget.value)}
+      />
 
-      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="14px">
-        <TextInput
-          label="关联人物"
-          placeholder="如：主角, 长老, 反派圣女"
-          value={characters}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setCharacters(val);
-            notifyChange({ characters: val });
-          }}
-        />
+      <TextInput
+        label="关联人物"
+        placeholder="如：主角, 长老, 反派圣女"
+        readOnly={!isEditing}
+        {...form.getInputProps("characters")}
+        onChange={(e) => handleFieldChange("characters", e.currentTarget.value)}
+      />
 
-        <TextInput
-          label="关联地点"
-          placeholder="如：家族正厅, 后山寒潭"
-          value={locations}
-          readOnly={!isEditing}
-          onChange={(e) => {
-            const val = e.currentTarget.value;
-            setLocations(val);
-            notifyChange({ locations: val });
-          }}
-        />
-      </SimpleGrid>
+      <TextInput
+        label="关联地点"
+        placeholder="如：家族正厅, 后山寒潭"
+        readOnly={!isEditing}
+        {...form.getInputProps("locations")}
+        onChange={(e) => handleFieldChange("locations", e.currentTarget.value)}
+      />
 
       <Box>
-        <Text fz={13} fw={500} c="#475569" mb={6}>
+        <Text size="md" fw={700} mb={8}>
           对应章节
         </Text>
         <ChapterPicker
           readOnly={!isEditing}
-          value={linkedChapters}
+          value={form.values.linkedChapters}
           onChange={(val) => {
             if (isEditing) {
-              setLinkedChapters(val);
-              notifyChange({ linkedChapters: val });
+              handleFieldChange("linkedChapters", val);
             }
           }}
         />
@@ -302,20 +272,12 @@ export default function NodeForm({
       <TextInput
         label="备注说明"
         placeholder="记录作者的临时灵感或备忘说明..."
-        value={remarks}
         readOnly={!isEditing}
-        onChange={(e) => {
-          const val = e.currentTarget.value;
-          setRemarks(val);
-          notifyChange({ remarks: val });
-        }}
+        {...form.getInputProps("remarks")}
+        onChange={(e) => handleFieldChange("remarks", e.currentTarget.value)}
       />
-
-      {errorMessage && (
-        <Text c="red" fz="xs" fw={500}>
-          {errorMessage}
-        </Text>
-      )}
     </Stack>
   );
-}
+});
+
+export default NodeForm;

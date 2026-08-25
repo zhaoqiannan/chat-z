@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useId } from "react";
 import {
   Box,
   Flex,
-  SegmentedControl,
+  Radio,
+  Group,
   NumberInput,
   ActionIcon,
   Button,
@@ -19,14 +20,23 @@ interface ChapterPickerProps {
   readOnly?: boolean;
 }
 
-export default function ChapterPicker({ value = [], onChange, readOnly = false }: ChapterPickerProps) {
+export default function ChapterPicker({
+  value = [],
+  onChange,
+  readOnly = false,
+}: ChapterPickerProps) {
   // mode: 'range' (范围选择) | 'single' (单章/离散多章选择)
   const [mode, setMode] = useState<"range" | "single">("range");
   const [rangeStart, setRangeStart] = useState<number | string>(1);
   const [rangeEnd, setRangeEnd] = useState<number | string>(3);
   const [singleList, setSingleList] = useState<(number | string)[]>([1]);
 
-  // 从传入的 value (number[]) 初始化模式与数据
+  // 生成组件内部唯一的 radio name 作用域
+  const radioGroupId = useId();
+
+  /**
+   * 从传入的 value (number[]) 初始化模式与内部数据
+   */
   useEffect(() => {
     if (!Array.isArray(value) || value.length === 0) return;
 
@@ -45,7 +55,9 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
     }
   }, [value]);
 
-  // 触发 onChange 输出 number[]
+  /**
+   * 触发 onChange 输出 number[]
+   */
   const emitChange = (newMode: "range" | "single", start: any, end: any, singles: any[]) => {
     if (newMode === "range") {
       const s = Math.max(1, parseInt(String(start || 1), 10));
@@ -64,6 +76,9 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
     }
   };
 
+  /**
+   * 切换选择模式
+   */
   const handleModeChange = (newMode: string) => {
     const m = newMode as "range" | "single";
     setMode(m);
@@ -102,6 +117,9 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
     emitChange(mode, rangeStart, rangeEnd, updated);
   };
 
+  /**
+   * 格式化章节展示摘要
+   */
   const formatSummary = () => {
     if (!Array.isArray(value) || value.length === 0) return "未关联任何章节";
     if (value.length === 1) return `第 ${value[0]} 章`;
@@ -115,32 +133,39 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
 
   return (
     <Box p="12px" bg="#f8fafc" bd="1px solid #e2e8f0" style={{ borderRadius: 8 }}>
-      <Flex justify="space-between" align="center" mb={10} wrap="wrap" gap={8}>
+      <Flex justify="space-between" align="center" mb={12} wrap="wrap" gap={8}>
         <Flex align="center" gap={6}>
-          <FiBookOpen size={14} color="#00c9ff" />
+          <FiBookOpen size={14} />
           <Text fz={13} fw={600} c="#1e293b">
             关联正文章节
           </Text>
-          <Badge size="sm" color="cyan" variant="light">
+          <Badge size="sm" variant="light">
             {formatSummary()}
           </Badge>
         </Flex>
 
-        <SegmentedControl
+        {/* 内部作用域 Radio.Group */}
+        <Radio.Group
+          name={radioGroupId}
           size="xs"
           value={mode}
           onChange={handleModeChange}
-          data={[
-            { label: "连续章节范围", value: "range" },
-            { label: "单章/离散多章", value: "single" },
-          ]}
-        />
+        >
+          <Flex gap="md" align="center" justify={'flex-end'}>
+            <Radio value="range" disabled={readOnly} />
+            <Text>连续章节范围</Text>
+            <Radio value="single" disabled={readOnly} />
+            <Text>单章/离散多章</Text>
+          </Flex>
+        </Radio.Group>
       </Flex>
 
       {/* 模式一：范围选择 */}
       {mode === "range" && (
         <Flex align="center" gap={8}>
-          <Text fz={12} c="#64748b">从</Text>
+          <Text fz={12} c="#64748b">
+            从
+          </Text>
           <NumberInput
             size="xs"
             min={1}
@@ -151,7 +176,9 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
             suffix=" 章"
             readOnly={readOnly}
           />
-          <Text fz={12} c="#64748b">到</Text>
+          <Text fz={12} c="#64748b">
+            到
+          </Text>
           <NumberInput
             size="xs"
             min={Number(rangeStart) || 1}
@@ -184,7 +211,7 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
                   suffix=" 章"
                   readOnly={readOnly}
                 />
-                {singleList.length > 1 && (
+                {!readOnly && singleList.length > 1 && (
                   <ActionIcon
                     size="xs"
                     color="red"
@@ -197,15 +224,16 @@ export default function ChapterPicker({ value = [], onChange, readOnly = false }
               </Flex>
             ))}
 
-            <Button
-              size="xs"
-              variant="light"
-              color="pink"
-              leftSection={<FiPlus size={12} />}
-              onClick={handleAddSingle}
-            >
-              加一章
-            </Button>
+            {!readOnly && (
+              <Button
+                size="xs"
+                variant="light"
+                leftSection={<FiPlus size={12} />}
+                onClick={handleAddSingle}
+              >
+                加一章
+              </Button>
+            )}
           </Flex>
         </Box>
       )}

@@ -81,17 +81,21 @@ export default function StoryOutlinePage() {
         setWork(workRes.result);
       }
 
-      if (outlineRes && outlineRes.success && Array.isArray(outlineRes.result)) {
-        const rawList: OutlineNode[] = outlineRes.result;
-        setFlatNodes(rawList);
-        const built = buildTree(rawList);
-        setTreeNodes(built);
+      if (outlineRes && outlineRes.success) {
+        const rawTree: OutlineNode[] = Array.isArray(outlineRes.result) ? outlineRes.result : [];
+        const rawFlat: OutlineNode[] = Array.isArray((outlineRes as any).flatList)
+          ? (outlineRes as any).flatList
+          : rawTree;
+
+        setFlatNodes(rawFlat);
+        const hasChildrenStructure = rawTree.some((n) => Array.isArray(n.children));
+        setTreeNodes(hasChildrenStructure ? rawTree : buildTree(rawFlat));
 
         if (selectedNode) {
-          const found = rawList.find((n) => n.id === selectedNode.id);
-          setSelectedNode(found || (rawList.length > 0 ? rawList[0] : null));
-        } else if (rawList.length > 0 && !isOverviewSelected) {
-          setSelectedNode(rawList[0]);
+          const found = rawFlat.find((n) => n.id === selectedNode.id);
+          setSelectedNode(found || (rawFlat.length > 0 ? rawFlat[0] : null));
+        } else if (rawFlat.length > 0 && !isOverviewSelected) {
+          setSelectedNode(rawFlat[0]);
         }
       }
     } catch (e) {
@@ -322,6 +326,7 @@ export default function StoryOutlinePage() {
           onSelectNode={handleSelectNode}
           onSelectOverview={handleSelectOverview}
           onOpenCreateRoot={handleOpenCreateRoot}
+          onOpenCreateChild={handleOpenCreateChild}
         />
       </Grid.Col>
       <Grid.Col span={8}>

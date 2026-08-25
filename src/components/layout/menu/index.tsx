@@ -278,17 +278,18 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
                       }
                     }}
                   >
-                    <span>{item.icon}</span>
-                    {!collapsed && <span>{item.label}</span>}
+                    <span className={styles.menuIcon}>{item.icon}</span>
+                    {!collapsed && <span className={styles.menuLabel}>{item.label}</span>}
                     {item.hasSub && !collapsed && (
-                      <FiChevronDown
-                        size={12}
+                      <span
+                        className={styles.menuArrow}
                         style={{
-                          marginLeft: "auto",
                           transform: worldExpanded ? "rotate(180deg)" : "none",
-                          transition: "transform 0.2s",
+                          transition: "transform 0.2s ease",
                         }}
-                      />
+                      >
+                        <FiChevronDown size={14} />
+                      </span>
                     )}
                   </div>
                 );

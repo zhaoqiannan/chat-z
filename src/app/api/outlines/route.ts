@@ -74,10 +74,27 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .where(eq(outlines.workId, workId))
       .orderBy(asc(outlines.orderIndex), asc(outlines.createdAt));
 
+    // 服务端组装树形结构
+    const nodeMap: Record<string, any> = {};
+    const tree: any[] = [];
+
+    list.forEach((item: any) => {
+      nodeMap[item.id] = { ...item, children: [] };
+    });
+
+    list.forEach((item: any) => {
+      if (item.parentId && nodeMap[item.parentId]) {
+        nodeMap[item.parentId].children.push(nodeMap[item.id]);
+      } else {
+        tree.push(nodeMap[item.id]);
+      }
+    });
+
     return NextResponse.json({
       success: true,
-      result: list,
-      message: "获取大纲列表成功",
+      result: tree,
+      flatList: list,
+      message: "获取大纲树结构成功",
     });
   } catch (error: any) {
     return NextResponse.json(

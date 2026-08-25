@@ -11,6 +11,7 @@ import {
   TextInput,
   Divider,
   Button,
+  Collapse,
 } from "@mantine/core";
 import {
   FiChevronDown,
@@ -32,6 +33,7 @@ interface TreePanelProps {
   onSelectNode: (node: OutlineNode) => void;
   onSelectOverview: () => void;
   onOpenCreateRoot: () => void;
+  onOpenCreateChild?: (parentId: string) => void;
 }
 
 export default function TreePanel({
@@ -41,11 +43,15 @@ export default function TreePanel({
   onSelectNode,
   onSelectOverview,
   onOpenCreateRoot,
+  onOpenCreateChild,
 }: TreePanelProps) {
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
   const [allExpanded, setAllExpanded] = useState(true);
+
+  const INDENT_SIZE = 22;
 
   /**
    * 切换单个节点的展开/折叠状态
@@ -143,106 +149,216 @@ export default function TreePanel({
   const displayedNodes = filterTree(nodes);
 
   /**
-   * 递归渲染大纲树节点
+   * 递归渲染大纲树节点 (参考 aura-frontend 层级与引导线)
    */
-  const renderTreeNodes = (list: OutlineNode[], depth = 0) => {
+  const renderTreeNodes = (list: OutlineNode[], level = 0) => {
     return list.map((node) => {
       const isSelected = !isOverviewSelected && selectedNodeId === node.id;
-      const isCollapsed = collapsedMap[node.id];
+      const isCollapsed = !!collapsedMap[node.id];
       const hasChildren = node.children && node.children.length > 0;
+      const isHovered = hoveredNodeId === node.id;
 
       return (
-        <Box key={node.id}>
-          <Flex justify={'space-between'} p={10} bdrs={8} bg={isSelected ? 'rgba(0, 201, 255, 0.1)' : '#fff'} onClick={() => onSelectNode(node)} >
-            <Flex gap={10} align={'center'}>
-              {getNodeTypeBadge(node)}
-              <Text c={isSelected ? "#00c9ff" : "#334155"} >{node.title}</Text>
-            </Flex>
-            {hasChildren ? (
-              <ActionIcon
-                size="xs"
-                variant="subtle"
-                color="gray"
-                onClick={(e) => toggleCollapse(node.id, e)}
-                style={{ marginRight: 2 }}
+        <Box key={node.id} pos="relative">
+          {/* 单个节点行 */}
+          <Flex
+            pos="relative"
+            onMouseEnter={() => setHoveredNodeId(node.id)}
+            onMouseLeave={() => setHoveredNodeId(null)}
+            onClick={() => onSelectNode(node)}
+            py={6}
+            px={8}
+            my={2}
+            bdrs={6}
+            align="center"
+            justify="space-between"
+            bg={
+              isSelected
+                ? "rgba(0, 201, 255, 0.12)"
+                : isHovered
+                  ? "rgba(0, 201, 255, 0.04)"
+                  : "transparent"
+            }
+            style={{
+              paddingLeft: `${level * INDENT_SIZE + 8}px`,
+              cursor: "pointer",
+              transition: "background-color 0.15s ease",
+            }}
+          >
+            <Flex align="center" gap={8} style={{ flex: 1, minWidth: 0 }}>
+              {/* 折叠/展开控制按钮 */}
+              {hasChildren ? (
+                <ActionIcon
+                  size="xs"
+                  variant="subtle"
+                  color="gray"
+                  onClick={(e) => toggleCollapse(node.id, e)}
+                  style={{ flexShrink: 0 }}
+                >
+                  {isCollapsed ? <FiChevronRight size={12} /> : <FiChevronDown size={12} />}
+                </ActionIcon>
+              ) : (
+                <span style={{ width: 18, display: "inline-block", flexShrink: 0 }} />
+              )}
+
+              {/* 类型徽章 */}
+              <Box style={{ flexShrink: 0 }}>{getNodeTypeBadge(node)}</Box>
+
+              {/* 标题 */}
+              <Text
+                size="sm"
+                fw={isSelected ? 600 : node.type === "story" || node.type === "volume" ? 600 : 400}
+                c={isSelected ? "#0096bd" : "#334155"}
+                truncate
+                style={{ flex: 1 }}
               >
-                {isCollapsed ? <FiChevronRight size={12} /> : <FiChevronDown size={12} />}
-              </ActionIcon>
-            ) : null}
+                {node.title}
+              </Text>
+            </Flex>
+
+            {/* 悬浮快捷添加子节点按钮 */}
+            {onOpenCreateChild && (
+              <Flex
+                align="center"
+                style={{
+                  opacity: isHovered || isSelected ? 1 : 0,
+                  visibility: isHovered || isSelected ? "visible" : "hidden",
+                  transition: "opacity 0.15s ease",
+                  flexShrink: 0,
+                }}
+              >
+                <Tooltip label="在此节点下添加子节点" withArrow position="top">
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    color="gray"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenCreateChild(node.id);
+                    }}
+                  >
+                    <FiPlus size={12} />
+                  </ActionIcon>
+                </Tooltip>
+              </Flex>
+            )}
           </Flex>
-          {hasChildren && !isCollapsed && renderTreeNodes(node.children!, depth + 1)}
+
+          {/* 子节点折叠层 */}
+          {hasChildren && !isCollapsed && (
+            <Box pos="relative">
+              {renderTreeNodes(node.children!, level + 1)}
+            </Box>
+          )}
+
+          {/* 垂直层级导引线 */}
+          {level > 0 && (
+            <Box
+              pos="absolute"
+              left={`${(level - 1) * INDENT_SIZE + 16}px`}
+              top={0}
+              bottom={0}
+              w={1}
+              bg="#f1f5f9"
+              style={{ pointerEvents: "none", zIndex: 0 }}
+            />
+          )}
         </Box>
       );
     });
   };
 
-  return (<Box h={'100%'} style={{ borderRight: '1px solid #f1f5f9' }}>
-    <Box p={15} pb={0}>
-      <Flex mb={15} justify="space-between" align="center">
-        <Text fz={15} fw={700} c="#0f172a">
-          大纲目录结构
-        </Text>
-        <Tooltip label="添加顶级大纲节点" withArrow position="bottom">
-          <ActionIcon
-            size="sm"
-            variant="light"
-            onClick={onOpenCreateRoot}
-          >
-            <FiPlus size={15} />
-          </ActionIcon>
-        </Tooltip>
-      </Flex>
-      <Flex justify={'space-between'} align={'center'} p={12} bd={'2px solid #f1f5f9'} bdrs={10} onClick={onSelectOverview}>
-        <Flex align={'center'} gap={10}>
-          <FiFileText size={15} color={isOverviewSelected ? "#0d9488" : "#64748b"} />
-          <Text className={styles.overviewTitle}>全文大纲</Text>
-        </Flex>
-        <Badge size="xs" color="teal" variant="light">总览</Badge>
-      </Flex>
-    </Box>
-    <Divider
-      my="xs"
-      variant="dashed"
-      labelPosition="center"
-      label={<Flex align={'center'} justify={'space-between'} py={10} gap={10}>
-        <Text size="sm" c={'gray.6'}>细则</Text>
-        <Tooltip label={allExpanded ? "全部收起" : "全部展开"} withArrow position="top">
-          <ActionIcon
-            size="xs"
-            variant="subtle"
-            color="gray.6"
-            onClick={handleToggleExpandAll}
-          >
-            {allExpanded ? <FiMinimize2 size={12} /> : <FiMaximize2 size={12} />}
-          </ActionIcon>
-        </Tooltip>
-      </Flex>}
-    />
-    <Flex px={15} gap={20}>
-      <TextInput
-        placeholder="搜索大纲内容..."
-        value={inputValue}
-        onChange={(e) => setInputValue(e.currentTarget.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleTriggerSearch();
-        }}
-        leftSection={<FiSearch size={13} color="#94a3b8" />}
-        rightSection={inputValue ? <ActionIcon size="xs" variant="transparent" color="gray" onClick={handleClearSearch}>
-          <FiX size={12} />
-        </ActionIcon> : <></>}
-      />
-      <Button onClick={handleTriggerSearch} size="xs">搜索</Button>
-    </Flex>
-    <Box p={15} >
-      {displayedNodes.length === 0 ? (
-        <Flex direction="column" align="center" justify="center" py={30} gap={6} c="#94a3b8">
-          <Text fz={12}>
-            {searchKeyword ? "未搜到匹配节点" : "暂无细则节点"}
+  return (
+    <Box h="100%" style={{ borderRight: "1px solid #f1f5f9" }}>
+      <Box p={15} pb={0}>
+        <Flex mb={15} justify="space-between" align="center">
+          <Text fz={15} fw={700} c="#0f172a">
+            大纲目录结构
           </Text>
+          <Tooltip label="添加顶级大纲节点" withArrow position="bottom">
+            <ActionIcon size="sm" variant="light" onClick={onOpenCreateRoot}>
+              <FiPlus size={15} />
+            </ActionIcon>
+          </Tooltip>
         </Flex>
-      ) : (
-        renderTreeNodes(displayedNodes)
-      )}
+
+        <Flex
+          justify="space-between"
+          align="center"
+          p={12}
+          bd="2px solid #f1f5f9"
+          bdrs={10}
+          bg={isOverviewSelected ? "rgba(0, 201, 255, 0.08)" : "#fff"}
+          onClick={onSelectOverview}
+          style={{ cursor: "pointer", transition: "all 0.15s ease" }}
+        >
+          <Flex align="center" gap={10}>
+            <FiFileText size={15} color={isOverviewSelected ? "#0096bd" : "#64748b"} />
+            <Text className={styles.overviewTitle} fw={isOverviewSelected ? 600 : 500}>
+              全文大纲
+            </Text>
+          </Flex>
+          <Badge variant="light">
+            总览
+          </Badge>
+        </Flex>
+      </Box>
+
+      <Divider
+        my="xs"
+        variant="dashed"
+        labelPosition="center"
+        label={
+          <Flex align="center" justify="space-between" py={10} gap={10}>
+            <Text size="sm" c="gray.6">
+              细则
+            </Text>
+            <Tooltip label={allExpanded ? "全部收起" : "全部展开"} withArrow position="top">
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                color="gray.6"
+                onClick={handleToggleExpandAll}
+              >
+                {allExpanded ? <FiMinimize2 size={12} /> : <FiMaximize2 size={12} />}
+              </ActionIcon>
+            </Tooltip>
+          </Flex>
+        }
+      />
+
+      <Flex px={15} gap={10} mb={10}>
+        <TextInput
+          placeholder="搜索大纲内容..."
+          value={inputValue}
+          style={{ flex: 1 }}
+          onChange={(e) => setInputValue(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleTriggerSearch();
+          }}
+          leftSection={<FiSearch size={13} color="#94a3b8" />}
+          rightSection={
+            inputValue ? (
+              <ActionIcon size="xs" variant="transparent" color="gray" onClick={handleClearSearch}>
+                <FiX size={12} />
+              </ActionIcon>
+            ) : null
+          }
+        />
+        <Button onClick={handleTriggerSearch}>
+          搜索
+        </Button>
+      </Flex>
+
+      <Box p={15} pt={0} style={{ overflowY: "auto", maxHeight: "calc(100vh - 270px)" }}>
+        {displayedNodes.length === 0 ? (
+          <Flex direction="column" align="center" justify="center" py={30} gap={6} c="#94a3b8">
+            <Text fz={12}>{searchKeyword ? "未搜到匹配节点" : "暂无细则节点"}</Text>
+          </Flex>
+        ) : (
+          renderTreeNodes(displayedNodes)
+        )}
+      </Box>
     </Box>
-  </Box>);
+  );
 }

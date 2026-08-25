@@ -1,11 +1,32 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Badge, Paper, SimpleGrid, Menu, ActionIcon, } from "@mantine/core";
-import { FiSave, FiZap, FiCheckCircle, FiScissors, FiMoreVertical, FiPlus, FiCornerDownRight, FiTrash2, FiEdit2, FiFileText, FiCompass, } from "react-icons/fi";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Box,
+  Flex,
+  Text,
+  Button,
+  Badge,
+  Paper,
+  SimpleGrid,
+  Menu,
+  ActionIcon,
+} from "@mantine/core";
+import {
+  FiSave,
+  FiZap,
+  FiScissors,
+  FiMoreVertical,
+  FiPlus,
+  FiCornerDownRight,
+  FiTrash2,
+  FiEdit2,
+  FiFileText,
+  FiCompass,
+} from "react-icons/fi";
 import { OutlineNode, UpdateOutlinePayload } from "@/rest/outline";
 import { WorkItem } from "@/rest/work";
-import NodeForm, { NodeFormValues } from "../node-form";
+import NodeForm, { NodeFormValues, NodeFormRef } from "../node-form";
 
 interface DetailPanelProps {
   node: OutlineNode | null;
@@ -32,6 +53,7 @@ export default function DetailPanel({
   onOpenCreateChild,
   onDeleteNode,
 }: DetailPanelProps) {
+  const formRef = useRef<NodeFormRef>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formValues, setFormValues] = useState<NodeFormValues>({
     title: "",
@@ -50,8 +72,6 @@ export default function DetailPanel({
   });
 
   const [loading, setLoading] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
-  const [error, setError] = useState("");
 
   /**
    * 当切换节点时，重置表单为该节点数据，并恢复为默认只读态
@@ -74,50 +94,43 @@ export default function DetailPanel({
         remarks: node.remarks || "",
       });
       setIsEditing(false);
-      setSavedSuccess(false);
-      setError("");
     }
   }, [node]);
 
   /**
-   * 保存当前修改并切回只读态
+   * 保存当前修改并切回只读态（基于 Mantine form 表单校验）
    */
   const handleSave = async () => {
-    if (!node) return;
-    if (!formValues.title.trim()) {
-      setError("节点标题不能为空");
+    if (!node || !formRef.current) return;
+    const isValid = formRef.current.validate();
+    if (!isValid) {
       return;
     }
-    if (!formValues.goal.trim()) {
-      setError("故事目标为必填项");
-      return;
-    }
+
+    const currentData = formRef.current.getValues();
 
     try {
       setLoading(true);
-      setError("");
       await onSave({
         id: node.id,
-        title: formValues.title.trim(),
-        type: formValues.type,
-        pointType: formValues.type === "scene" ? formValues.pointType : undefined,
-        parentId: formValues.parentId || null,
-        goal: formValues.goal.trim(),
-        conflict: formValues.conflict?.trim() || "",
-        eventDescription: formValues.eventDescription?.trim() || "",
-        expectedOutcome: formValues.expectedOutcome?.trim() || "",
-        characters: formValues.characters?.trim() || "",
-        locations: formValues.locations?.trim() || "",
-        foreshadowing: formValues.foreshadowing?.trim() || "",
-        linkedChapters: formValues.linkedChapters || [],
-        remarks: formValues.remarks?.trim() || "",
+        title: currentData.title.trim(),
+        type: currentData.type,
+        pointType: currentData.type === "scene" ? currentData.pointType : undefined,
+        parentId: currentData.parentId || null,
+        goal: currentData.goal.trim(),
+        conflict: currentData.conflict?.trim() || "",
+        eventDescription: currentData.eventDescription?.trim() || "",
+        expectedOutcome: currentData.expectedOutcome?.trim() || "",
+        characters: currentData.characters?.trim() || "",
+        locations: currentData.locations?.trim() || "",
+        foreshadowing: currentData.foreshadowing?.trim() || "",
+        linkedChapters: currentData.linkedChapters || [],
+        remarks: currentData.remarks?.trim() || "",
       });
 
       setIsEditing(false);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3000);
     } catch (err: any) {
-      setError(err?.message || "保存失败");
+      console.error("保存大纲节点失败:", err);
     } finally {
       setLoading(false);
     }
@@ -231,9 +244,7 @@ export default function DetailPanel({
 
   return (
     <Box p={15} bg="#ffffff" style={{ flex: 1, height: "100%", overflowY: "auto" }}>
-      {/* 头部 Flex 包裹 */}
       <Flex justify="space-between" align="center" mb={18} wrap="wrap" gap={12}>
-        {/* 左侧：Title + 类型标签 */}
         <Flex align="center" gap={10}>
           <Text fz={18} fw={700} c="#0f172a">
             {formValues.title || "无标题节点"}
@@ -243,49 +254,12 @@ export default function DetailPanel({
           </Badge>
         </Flex>
 
-        {/* 右侧：AI 辅助 + 编辑/保存 + 更多操作 Menu */}
         <Flex align="center" gap={8}>
-          {savedSuccess && (
-            <Flex align="center" gap={4} fz={13} c="#10b981" fw={600}>
-              <FiCheckCircle size={15} />
-              已保存
-            </Flex>
-          )}
-
-          <Button
-            variant="light"
-            color="blue"
-            size="xs"
-            leftSection={<FiZap size={13} />}
-            onClick={() => onTriggerNodeAi("expand_node")}
-          >
-            AI 扩写
-          </Button>
-
-          <Button
-            variant="light"
-            color="teal"
-            size="xs"
-            leftSection={<FiScissors size={13} />}
-            onClick={() => onTriggerNodeAi("split_node")}
-          >
-            拆解情节点
-          </Button>
-
-          {isEditing ? (
+          {!isEditing && (
             <Button
-              size="xs"
-              leftSection={<FiSave size={13} />}
-              loading={loading}
-              onClick={handleSave}
-            >
-              保存
-            </Button>
-          ) : (
-            <Button
-              size="xs"
               variant="outline"
               color="gray"
+              size="xs"
               leftSection={<FiEdit2 size={13} />}
               onClick={() => setIsEditing(true)}
             >
@@ -301,6 +275,19 @@ export default function DetailPanel({
             </Menu.Target>
 
             <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<FiZap size={14} />}
+                onClick={() => onTriggerNodeAi("expand_node")}
+              >
+                AI 扩写
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<FiScissors size={14} />}
+                onClick={() => onTriggerNodeAi("split_node")}
+              >
+                拆解情节点
+              </Menu.Item>
+              <Menu.Divider />
               <Menu.Item
                 leftSection={<FiPlus size={14} />}
                 onClick={() => onOpenCreateSibling(node.parentId)}
@@ -326,15 +313,26 @@ export default function DetailPanel({
         </Flex>
       </Flex>
 
-      {/* 节点 11 全字段通用表单 */}
-      <Paper p="20px 24px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
+      <Paper p="20px 24px" bd="1px solid #e2e8f0" radius="md">
         <NodeForm
+          ref={formRef}
           initialValues={formValues}
           isEditing={isEditing}
           parentOptions={parentOptions}
-          errorMessage={error}
           onChange={(val) => setFormValues(val)}
         />
+
+        {isEditing && (
+          <Flex justify="flex-end" gap={10} mt={20}>
+            <Button
+              leftSection={<FiSave size={13} />}
+              loading={loading}
+              onClick={handleSave}
+            >
+              保存
+            </Button>
+          </Flex>
+        )}
       </Paper>
     </Box>
   );
