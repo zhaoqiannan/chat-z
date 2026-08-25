@@ -1,21 +1,3 @@
-.container {
-    display: flex;
-    height: calc(100vh - 64px);
-    background-color: #f8fafc;
-    overflow: hidden;
-}
-
-.treePanel {
-    width: 320px;
-    min-width: 280px;
-    max-width: 380px;
-    background: #ffffff;
-    border-right: 1px solid #e2e8f0;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-}
-
 .treeHeader {
     padding: 16px 18px 12px;
 }
@@ -27,35 +9,6 @@
 .overviewSection {
     padding: 0 14px;
     margin-bottom: 8px;
-}
-
-.overviewCard {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    user-select: none;
-
-    &:hover {
-        background: #f1f5f9;
-        border-color: #cbd5e1;
-    }
-
-    &.active {
-        background: #f0fdfa;
-        border-color: #5eead4;
-        box-shadow: 0 1px 3px rgba(13, 148, 136, 0.08);
-
-        .overviewTitle {
-            font-weight: 600;
-            color: #0f766e;
-        }
-    }
 }
 
 .overviewTitle {

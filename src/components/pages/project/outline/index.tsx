@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Box, LoadingOverlay, Text } from "@mantine/core";
+import { Box, Flex, Grid, LoadingOverlay, Text } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import {
   getOutlineList,
@@ -147,8 +147,8 @@ export default function StoryOutlinePage() {
       selectedNode?.type === "story"
         ? "volume"
         : selectedNode?.type === "volume"
-        ? "act"
-        : "scene";
+          ? "act"
+          : "scene";
     setCreateDefaultType(childType);
     setCreateModalOpened(true);
   };
@@ -312,62 +312,63 @@ export default function StoryOutlinePage() {
       label: `${n.type === "story" ? "🌟" : n.type === "volume" ? "📁" : "🎬"} ${n.title}`,
     }));
 
-  return (
-    <Box className={styles.container} pos="relative">
-      <LoadingOverlay visible={loading && flatNodes.length === 0} />
+  return (<>
+    <Grid bg={'#fff'}>
+      <Grid.Col span={4}>
+        <TreePanel
+          nodes={treeNodes}
+          selectedNodeId={selectedNode?.id || null}
+          isOverviewSelected={isOverviewSelected}
+          onSelectNode={handleSelectNode}
+          onSelectOverview={handleSelectOverview}
+          onOpenCreateRoot={handleOpenCreateRoot}
+        />
+      </Grid.Col>
+      <Grid.Col span={8}>
+        <DetailPanel
+          node={selectedNode}
+          work={work}
+          isOverview={isOverviewSelected}
+          parentOptions={parentOptions}
+          onSave={handleUpdateNode}
+          onTriggerNodeAi={handleTriggerNodeAi}
+          onOpenAiAssistant={() => setAiAssistantOpened(true)}
+          onOpenCreateSibling={handleOpenCreateSibling}
+          onOpenCreateChild={handleOpenCreateChild}
+          onDeleteNode={handleDeleteNode}
+        />
+      </Grid.Col>
+    </Grid>
 
-      <TreePanel
-        nodes={treeNodes}
-        selectedNodeId={selectedNode?.id || null}
-        isOverviewSelected={isOverviewSelected}
-        onSelectNode={handleSelectNode}
-        onSelectOverview={handleSelectOverview}
-        onOpenCreateRoot={handleOpenCreateRoot}
-      />
+    <ModalCreateNode
+      opened={createModalOpened}
+      onClose={() => setCreateModalOpened(false)}
+      workId={workId}
+      parentOptions={parentOptions}
+      defaultParentId={createParentId}
+      defaultType={createDefaultType}
+      onSubmit={handleCreateNode}
+    />
 
-      <DetailPanel
-        node={selectedNode}
-        work={work}
-        isOverview={isOverviewSelected}
-        parentOptions={parentOptions}
-        onSave={handleUpdateNode}
-        onTriggerNodeAi={handleTriggerNodeAi}
-        onOpenAiAssistant={() => setAiAssistantOpened(true)}
-        onOpenCreateSibling={handleOpenCreateSibling}
-        onOpenCreateChild={handleOpenCreateChild}
-        onDeleteNode={handleDeleteNode}
-      />
+    <ModalAiAssistant
+      opened={aiAssistantOpened}
+      onClose={() => setAiAssistantOpened(false)}
+      workId={workId}
+      currentNode={selectedNode}
+      allNodes={flatNodes}
+      onOpenPreview={(data) => {
+        setPreviewData(data);
+        setPreviewModalOpened(true);
+      }}
+    />
 
-      <ModalCreateNode
-        opened={createModalOpened}
-        onClose={() => setCreateModalOpened(false)}
-        workId={workId}
-        parentOptions={parentOptions}
-        defaultParentId={createParentId}
-        defaultType={createDefaultType}
-        onSubmit={handleCreateNode}
-      />
-
-      <ModalAiAssistant
-        opened={aiAssistantOpened}
-        onClose={() => setAiAssistantOpened(false)}
-        workId={workId}
-        currentNode={selectedNode}
-        allNodes={flatNodes}
-        onOpenPreview={(data) => {
-          setPreviewData(data);
-          setPreviewModalOpened(true);
-        }}
-      />
-
-      <ModalAiPreview
-        opened={previewModalOpened}
-        onClose={() => setPreviewModalOpened(false)}
-        previewData={previewData}
-        targetNodeId={selectedNode?.id}
-        onApplyAll={handleApplyAiAll}
-        onApplySelected={handleApplyAiSelected}
-      />
-    </Box>
-  );
+    <ModalAiPreview
+      opened={previewModalOpened}
+      onClose={() => setPreviewModalOpened(false)}
+      previewData={previewData}
+      targetNodeId={selectedNode?.id}
+      onApplyAll={handleApplyAiAll}
+      onApplySelected={handleApplyAiSelected}
+    />
+  </>);
 }

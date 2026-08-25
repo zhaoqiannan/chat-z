@@ -16,9 +16,10 @@ import { FiPlus, FiTrash2, FiBookOpen } from "react-icons/fi";
 interface ChapterPickerProps {
   value?: number[];
   onChange: (val: number[]) => void;
+  readOnly?: boolean;
 }
 
-export default function ChapterPicker({ value = [], onChange }: ChapterPickerProps) {
+export default function ChapterPicker({ value = [], onChange, readOnly = false }: ChapterPickerProps) {
   // mode: 'range' (范围选择) | 'single' (单章/离散多章选择)
   const [mode, setMode] = useState<"range" | "single">("range");
   const [rangeStart, setRangeStart] = useState<number | string>(1);
@@ -148,6 +149,7 @@ export default function ChapterPicker({ value = [], onChange }: ChapterPickerPro
             style={{ width: 90 }}
             prefix="第 "
             suffix=" 章"
+            readOnly={readOnly}
           />
           <Text fz={12} c="#64748b">到</Text>
           <NumberInput
@@ -158,6 +160,7 @@ export default function ChapterPicker({ value = [], onChange }: ChapterPickerPro
             style={{ width: 90 }}
             prefix="第 "
             suffix=" 章"
+            readOnly={readOnly}
           />
           <Text fz={12} c="#94a3b8">
             （包含区间内所有正文章节）
@@ -179,6 +182,7 @@ export default function ChapterPicker({ value = [], onChange }: ChapterPickerPro
                   style={{ width: 85 }}
                   prefix="第 "
                   suffix=" 章"
+                  readOnly={readOnly}
                 />
                 {singleList.length > 1 && (
                   <ActionIcon
