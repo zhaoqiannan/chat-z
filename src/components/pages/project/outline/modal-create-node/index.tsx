@@ -12,7 +12,7 @@ import {
   Text,
 } from "@mantine/core";
 import { OutlineNodeType, CreateOutlinePayload, OutlineNode } from "@/rest/outline";
-import ChapterPicker from "./chapter-picker";
+import ChapterPicker from "../chapter-picker";
 
 interface ModalCreateNodeProps {
   opened: boolean;

@@ -9,11 +9,8 @@ import {
   Textarea,
   Select,
   Button,
-  Stack,
   SimpleGrid,
-  Badge,
   Paper,
-  Divider,
 } from "@mantine/core";
 import {
   FiSave,
@@ -23,11 +20,10 @@ import {
   FiUsers,
   FiMapPin,
   FiCheckCircle,
-  FiBookOpen,
 } from "react-icons/fi";
 import { OutlineNode, OutlineNodeType, UpdateOutlinePayload } from "@/rest/outline";
-import ChapterPicker from "./chapter-picker";
-import styles from "./style.module.scss";
+import ChapterPicker from "../chapter-picker";
+import styles from "../style.module.scss";
 
 interface DetailPanelProps {
   node: OutlineNode | null;

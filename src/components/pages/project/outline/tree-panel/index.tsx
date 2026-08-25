@@ -14,7 +14,7 @@ import {
   FiActivity,
 } from "react-icons/fi";
 import { OutlineNode } from "@/rest/outline";
-import styles from "./style.module.scss";
+import styles from "../style.module.scss";
 
 interface TreePanelProps {
   nodes: OutlineNode[];
