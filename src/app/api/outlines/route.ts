@@ -17,6 +17,32 @@ async function checkWorkOwnership(db: any, workId: number, userId: string) {
 }
 
 /**
+ * 规范解析关联章节为数字数组
+ */
+function parseLinkedChapters(val: any): number[] {
+  if (Array.isArray(val)) {
+    return val.map((n) => Number(n)).filter((n) => !isNaN(n) && n > 0);
+  }
+  if (typeof val === "string" && val.trim()) {
+    const rangeMatch = val.match(/(\d+)\s*[-~至到]\s*(\d+)/);
+    if (rangeMatch) {
+      const start = parseInt(rangeMatch[1], 10);
+      const end = parseInt(rangeMatch[2], 10);
+      const res: number[] = [];
+      for (let i = Math.min(start, end); i <= Math.max(start, end); i++) {
+        res.push(i);
+      }
+      return res;
+    }
+    const numbers = val.match(/\d+/g);
+    if (numbers) {
+      return numbers.map((n) => parseInt(n, 10)).filter((n) => !isNaN(n) && n > 0);
+    }
+  }
+  return [];
+}
+
+/**
  * 获取指定作品的大纲节点列表
  */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
@@ -62,7 +88,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 });
 
 /**
- * 新增节点
+ * 新增单节点 或 批量新增节点
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -70,17 +96,74 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
+
+    // 1. 批量创建模式（用于 AI 采纳）
+    if (body.batch && Array.isArray(body.nodes)) {
+      const workId = Number(body.workId);
+      if (!workId || isNaN(workId)) {
+        return NextResponse.json(
+          { success: false, message: "无效的作品ID" },
+          { status: 400 }
+        );
+      }
+
+      const isOwner = await checkWorkOwnership(db, workId, user.userId);
+      if (!isOwner) {
+        return NextResponse.json(
+          { success: false, message: "无权操作该作品" },
+          { status: 403 }
+        );
+      }
+
+      const createdList = [];
+      for (const nodeData of body.nodes) {
+        const item = {
+          id: nodeData.id || crypto.randomUUID(),
+          workId,
+          parentId: nodeData.parentId || null,
+          type: nodeData.type || "scene",
+          pointType: nodeData.pointType || null,
+          title: (nodeData.title || "未命名节点").trim(),
+          goal: (nodeData.goal || "达成剧情推进").trim(),
+          conflict: nodeData.conflict?.trim() || "",
+          eventDescription: nodeData.eventDescription?.trim() || "",
+          expectedOutcome: nodeData.expectedOutcome?.trim() || "",
+          characters: nodeData.characters?.trim() || "",
+          locations: nodeData.locations?.trim() || "",
+          foreshadowing: nodeData.foreshadowing?.trim() || "",
+          linkedChapters: parseLinkedChapters(nodeData.linkedChapters),
+          remarks: nodeData.remarks?.trim() || "",
+          orderIndex: typeof nodeData.orderIndex === "number" ? nodeData.orderIndex : 0,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await db.insert(outlines).values(item);
+        createdList.push(item);
+      }
+
+      return NextResponse.json({
+        success: true,
+        result: createdList,
+        message: `成功批量创建 ${createdList.length} 个大纲节点`,
+      });
+    }
+
+    // 2. 单节点创建模式
     const {
       workId: rawWorkId,
       parentId,
       type,
+      pointType,
       title,
       goal,
       conflict,
+      eventDescription,
       characters,
       locations,
+      foreshadowing,
       expectedOutcome,
       linkedChapters,
+      remarks,
       orderIndex,
     } = body;
 
@@ -119,13 +202,17 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       workId,
       parentId: parentId || null,
       type: type || "scene",
+      pointType: pointType || null,
       title: title.trim(),
       goal: goal.trim(),
       conflict: conflict?.trim() || "",
+      eventDescription: eventDescription?.trim() || "",
       characters: characters?.trim() || "",
       locations: locations?.trim() || "",
+      foreshadowing: foreshadowing?.trim() || "",
       expectedOutcome: expectedOutcome?.trim() || "",
-      linkedChapters: linkedChapters?.trim() || "",
+      linkedChapters: parseLinkedChapters(linkedChapters),
+      remarks: remarks?.trim() || "",
       orderIndex: typeof orderIndex === "number" ? orderIndex : 0,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -159,12 +246,16 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       id,
       title,
       type,
+      pointType,
       goal,
       conflict,
+      eventDescription,
       characters,
       locations,
+      foreshadowing,
       expectedOutcome,
       linkedChapters,
+      remarks,
       parentId,
       orderIndex,
     } = body;
@@ -200,12 +291,16 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const updatedNode = {
       title: title !== undefined ? title.trim() : node.title,
       type: type || node.type,
+      pointType: pointType !== undefined ? pointType : node.pointType,
       goal: goal !== undefined ? goal.trim() : node.goal,
       conflict: conflict !== undefined ? conflict.trim() : node.conflict,
+      eventDescription: eventDescription !== undefined ? eventDescription.trim() : node.eventDescription,
       characters: characters !== undefined ? characters.trim() : node.characters,
       locations: locations !== undefined ? locations.trim() : node.locations,
+      foreshadowing: foreshadowing !== undefined ? foreshadowing.trim() : node.foreshadowing,
       expectedOutcome: expectedOutcome !== undefined ? expectedOutcome.trim() : node.expectedOutcome,
-      linkedChapters: linkedChapters !== undefined ? linkedChapters.trim() : node.linkedChapters,
+      linkedChapters: linkedChapters !== undefined ? parseLinkedChapters(linkedChapters) : node.linkedChapters,
+      remarks: remarks !== undefined ? remarks.trim() : node.remarks,
       parentId: parentId !== undefined ? parentId : node.parentId,
       orderIndex: typeof orderIndex === "number" ? orderIndex : node.orderIndex,
       updatedAt: new Date(),

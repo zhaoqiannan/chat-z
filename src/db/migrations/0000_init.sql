@@ -60,15 +60,19 @@ CREATE TABLE IF NOT EXISTS outlines (
   id TEXT PRIMARY KEY,                 -- 大纲节点 UUID
   work_id INTEGER NOT NULL,            -- 关联的小说 ID (works.id)
   parent_id TEXT,                      -- 父节点 ID
-  type TEXT NOT NULL,                  -- volume | act | scene | event
+  type TEXT NOT NULL,                  -- story | volume | act | scene | branch
+  point_type TEXT,                     -- conflict | twist | foreshadow | climax | transition | reveal
   title TEXT NOT NULL,                 -- 节点标题
   order_index INTEGER DEFAULT 0,       -- 排序序号
   goal TEXT NOT NULL,                  -- 节点目标 (*必填)
-  conflict TEXT,                       -- 冲突点 / 阻碍
+  conflict TEXT,                       -- 主要冲突
+  event_description TEXT,              -- 事件描述
+  expected_outcome TEXT,               -- 结果 / 状态变化
   characters TEXT,                     -- 涉及角色
   locations TEXT,                      -- 涉及地点
-  expected_outcome TEXT,               -- 预期结果
-  linked_chapters TEXT,                -- 关联章节
+  foreshadowing TEXT,                  -- 伏笔 (新增/回收)
+  linked_chapters TEXT,                -- 关联章节 (JSON 数字数组格式，如 [1,2,3])
+  remarks TEXT,                        -- 备注说明
   created_at INTEGER,                  -- 创建时间戳
   updated_at INTEGER                   -- 更新时间戳
 );

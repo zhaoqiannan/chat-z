@@ -5,7 +5,7 @@ export const ChapterApi = {
   create: "/api/chapters",
   update: "/api/chapters",
   delete: "/api/chapters",
-  ai: "/api/chapters/ai",
+  ai: "/api/ai/chapter",
 };
 
 export type ChapterStatus = "not_started" | "revising" | "completed";

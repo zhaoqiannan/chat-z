@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname, useRouter, useParams } from "next/navigation";
+import { usePathname, useRouter, useParams, useSearchParams } from "next/navigation";
 import { Box, Menu, Tooltip } from "@mantine/core";
 import {
   FiGrid,
@@ -41,6 +41,7 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
+  const searchParams = useSearchParams();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.userInfo);
 
@@ -81,8 +82,7 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
     router.replace("/login");
   };
 
-  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-  const currentTab = searchParams?.get("tab") || "overview";
+  const currentTab = searchParams.get("tab") || "overview";
 
   const projectMenuItems = [
     {

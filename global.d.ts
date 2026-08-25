@@ -8,6 +8,7 @@ declare module 'ol/ol.css';
 
 interface CloudflareEnv {
   DB: import('@cloudflare/workers-types').D1Database;
+  AI?: any;
   ASSETS?: import('@cloudflare/workers-types').Fetcher;
 }
 

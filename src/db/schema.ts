@@ -104,24 +104,32 @@ export const outlines = sqliteTable('outlines', {
   workId: integer('work_id').notNull(),
   /** 父级节点 ID（为空表示根节点） */
   parentId: text('parent_id'),
-  /** 节点类型: 'volume'(卷/篇章) | 'act'(幕/阶段) | 'scene'(情景点) | 'event'(事件) */
+  /** 节点类型: 'story'(故事主线) | 'volume'(卷) | 'act'(幕) | 'scene'(情节点) | 'branch'(支线) */
   type: text('type').notNull(),
+  /** 情节点细分类型: 'conflict'(冲突) | 'twist'(转折) | 'foreshadow'(铺垫) | 'climax'(高潮) | 'transition'(过渡) | 'reveal'(揭示) */
+  pointType: text('point_type'),
   /** 节点标题/名称 */
   title: text('title').notNull(),
   /** 同级排序索引 */
   orderIndex: integer('order_index').default(0),
-  /** 节点目标 (*必填项) */
+  /** 节点目标 (*必填项，解决什么问题) */
   goal: text('goal').notNull(),
-  /** 冲突点 / 危机与阻碍 */
+  /** 主要冲突（人物或力量之间的矛盾） */
   conflict: text('conflict'),
-  /** 涉及角色（多个角色可用逗号分隔或 JSON） */
-  characters: text('characters'),
-  /** 涉及地点 / 场景 */
-  locations: text('locations'),
-  /** 预期结果 / 伏笔反转 */
+  /** 事件描述（发生什么） */
+  eventDescription: text('event_description'),
+  /** 结果 / 状态变化（事件结束后状态如何变化） */
   expectedOutcome: text('expected_outcome'),
-  /** 关联章节（如：第 1~3 章） */
-  linkedChapters: text('linked_chapters'),
+  /** 涉及角色（关联人物） */
+  characters: text('characters'),
+  /** 涉及地点（关联地点） */
+  locations: text('locations'),
+  /** 伏笔（新增或回收的伏笔） */
+  foreshadowing: text('foreshadowing'),
+  /** 对应章节（JSON 数字数组格式，如：[1, 2, 3]） */
+  linkedChapters: text('linked_chapters', { mode: 'json' }).$type<number[]>(),
+  /** 作者临时说明 / 备注 */
+  remarks: text('remarks'),
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后修改时间 */

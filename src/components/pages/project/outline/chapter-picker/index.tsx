@@ -9,163 +9,183 @@ import {
   ActionIcon,
   Button,
   Text,
+  Badge,
 } from "@mantine/core";
 import { FiPlus, FiTrash2, FiBookOpen } from "react-icons/fi";
 
 interface ChapterPickerProps {
-  value: string;
-  onChange: (formattedValue: string) => void;
+  value?: number[];
+  onChange: (val: number[]) => void;
 }
 
-export default function ChapterPicker({ value, onChange }: ChapterPickerProps) {
+export default function ChapterPicker({ value = [], onChange }: ChapterPickerProps) {
   // mode: 'range' (范围选择) | 'single' (单章/离散多章选择)
   const [mode, setMode] = useState<"range" | "single">("range");
   const [rangeStart, setRangeStart] = useState<number | string>(1);
   const [rangeEnd, setRangeEnd] = useState<number | string>(3);
   const [singleList, setSingleList] = useState<(number | string)[]>([1]);
 
-  // 从已有字符串反向解析初始值
+  // 从传入的 value (number[]) 初始化模式与数据
   useEffect(() => {
-    if (!value) return;
+    if (!Array.isArray(value) || value.length === 0) return;
 
-    // 匹配类似 "第 1 ~ 5 章" 或 "1-5"
-    const rangeMatch = value.match(/(\d+)\s*[-~至到]\s*(\d+)/);
-    if (rangeMatch) {
+    const sorted = [...value].sort((a, b) => Number(a) - Number(b));
+    const isConsecutive =
+      sorted.length > 1 &&
+      sorted.every((val, i) => i === 0 || Number(val) === Number(sorted[i - 1]) + 1);
+
+    if (isConsecutive) {
       setMode("range");
-      setRangeStart(parseInt(rangeMatch[1], 10));
-      setRangeEnd(parseInt(rangeMatch[2], 10));
-      return;
-    }
-
-    // 匹配离散章节 "第 1, 3, 5 章"
-    const numbers = value.match(/\d+/g);
-    if (numbers && numbers.length > 0) {
-      const parsed = numbers.map((n) => parseInt(n, 10));
-      if (parsed.length === 1) {
-        setMode("single");
-        setSingleList([parsed[0]]);
-      } else {
-        setMode("single");
-        setSingleList(parsed);
-      }
-    }
-  }, []);
-
-  // 更新格式化结果
-  const triggerChange = (newMode: "range" | "single", start: any, end: any, singles: any[]) => {
-    if (newMode === "range") {
-      const s = start || 1;
-      const e = end || s;
-      onChange(`第 ${s} ~ ${e} 章`);
+      setRangeStart(sorted[0]);
+      setRangeEnd(sorted[sorted.length - 1]);
     } else {
-      const valid = singles.filter((n) => n !== "" && n !== undefined && !isNaN(Number(n)));
-      if (valid.length === 0) {
-        onChange("");
-      } else if (valid.length === 1) {
-        onChange(`第 ${valid[0]} 章`);
-      } else {
-        onChange(`第 ${valid.join(", ")} 章`);
+      setMode("single");
+      setSingleList(sorted);
+    }
+  }, [value]);
+
+  // 触发 onChange 输出 number[]
+  const emitChange = (newMode: "range" | "single", start: any, end: any, singles: any[]) => {
+    if (newMode === "range") {
+      const s = Math.max(1, parseInt(String(start || 1), 10));
+      const e = Math.max(s, parseInt(String(end || s), 10));
+      const result: number[] = [];
+      for (let i = s; i <= e; i++) {
+        result.push(i);
       }
+      onChange(result);
+    } else {
+      const parsed = singles
+        .map((n) => parseInt(String(n), 10))
+        .filter((n) => !isNaN(n) && n > 0);
+      const uniqueSorted = Array.from(new Set(parsed)).sort((a, b) => a - b);
+      onChange(uniqueSorted);
     }
   };
 
-  const handleModeChange = (newMode: "range" | "single") => {
-    setMode(newMode);
-    triggerChange(newMode, rangeStart, rangeEnd, singleList);
+  const handleModeChange = (newMode: string) => {
+    const m = newMode as "range" | "single";
+    setMode(m);
+    emitChange(m, rangeStart, rangeEnd, singleList);
   };
 
   const handleRangeStartChange = (val: string | number) => {
     setRangeStart(val);
-    triggerChange(mode, val, rangeEnd, singleList);
+    emitChange(mode, val, rangeEnd, singleList);
   };
 
   const handleRangeEndChange = (val: string | number) => {
     setRangeEnd(val);
-    triggerChange(mode, rangeStart, val, singleList);
+    emitChange(mode, rangeStart, val, singleList);
   };
 
-  const handleSingleChange = (index: number, val: string | number) => {
+  const handleSingleItemChange = (index: number, val: string | number) => {
     const updated = [...singleList];
     updated[index] = val;
     setSingleList(updated);
-    triggerChange(mode, rangeStart, rangeEnd, updated);
+    emitChange(mode, rangeStart, rangeEnd, updated);
   };
 
   const handleAddSingle = () => {
-    const last = singleList.length > 0 ? Number(singleList[singleList.length - 1]) || 0 : 0;
-    const updated = [...singleList, last + 1];
+    const last = singleList.length > 0 ? Number(singleList[singleList.length - 1]) || 1 : 1;
+    const nextVal = last + 1;
+    const updated = [...singleList, nextVal];
     setSingleList(updated);
-    triggerChange(mode, rangeStart, rangeEnd, updated);
+    emitChange(mode, rangeStart, rangeEnd, updated);
   };
 
   const handleRemoveSingle = (index: number) => {
+    if (singleList.length <= 1) return;
     const updated = singleList.filter((_, i) => i !== index);
     setSingleList(updated);
-    triggerChange(mode, rangeStart, rangeEnd, updated);
+    emitChange(mode, rangeStart, rangeEnd, updated);
+  };
+
+  const formatSummary = () => {
+    if (!Array.isArray(value) || value.length === 0) return "未关联任何章节";
+    if (value.length === 1) return `第 ${value[0]} 章`;
+    const sorted = [...value].sort((a, b) => a - b);
+    const isConsecutive = sorted.every((v, i) => i === 0 || v === sorted[i - 1] + 1);
+    if (isConsecutive) {
+      return `第 ${sorted[0]} ~ ${sorted[sorted.length - 1]} 章 (共 ${sorted.length} 章)`;
+    }
+    return `第 ${sorted.join(", ")} 章 (共 ${sorted.length} 章)`;
   };
 
   return (
-    <Box>
-      <Flex justify="space-between" align="center" mb={6}>
-        <Flex align="center" gap={4} fz={13} fw={600} c="#475569">
-          <FiBookOpen color="#ec4899" size={14} />
-          <span>关联章节</span>
+    <Box p="12px" bg="#f8fafc" bd="1px solid #e2e8f0" style={{ borderRadius: 8 }}>
+      <Flex justify="space-between" align="center" mb={10} wrap="wrap" gap={8}>
+        <Flex align="center" gap={6}>
+          <FiBookOpen size={14} color="#00c9ff" />
+          <Text fz={13} fw={600} c="#1e293b">
+            关联正文章节
+          </Text>
+          <Badge size="sm" color="cyan" variant="light">
+            {formatSummary()}
+          </Badge>
         </Flex>
+
         <SegmentedControl
           size="xs"
           value={mode}
-          onChange={(val) => handleModeChange(val as "range" | "single")}
+          onChange={handleModeChange}
           data={[
-            { label: "连续范围 (Range)", value: "range" },
-            { label: "单章 / 多单章 (Single)", value: "single" },
+            { label: "连续章节范围", value: "range" },
+            { label: "单章/离散多章", value: "single" },
           ]}
         />
       </Flex>
 
-      {mode === "range" ? (
+      {/* 模式一：范围选择 */}
+      {mode === "range" && (
         <Flex align="center" gap={8}>
+          <Text fz={12} c="#64748b">从</Text>
           <NumberInput
-            placeholder="起始章"
+            size="xs"
             min={1}
             value={rangeStart}
             onChange={handleRangeStartChange}
+            style={{ width: 90 }}
             prefix="第 "
             suffix=" 章"
-            style={{ flex: 1 }}
           />
-          <Text fz={13} c="#94a3b8" fw={700}>
-            至
-          </Text>
+          <Text fz={12} c="#64748b">到</Text>
           <NumberInput
-            placeholder="结束章"
-            min={1}
+            size="xs"
+            min={Number(rangeStart) || 1}
             value={rangeEnd}
             onChange={handleRangeEndChange}
+            style={{ width: 90 }}
             prefix="第 "
             suffix=" 章"
-            style={{ flex: 1 }}
           />
+          <Text fz={12} c="#94a3b8">
+            （包含区间内所有正文章节）
+          </Text>
         </Flex>
-      ) : (
+      )}
+
+      {/* 模式二：单章/离散多章选择 */}
+      {mode === "single" && (
         <Box>
           <Flex wrap="wrap" gap={8} align="center">
-            {singleList.map((item, idx) => (
-              <Flex key={idx} align="center" gap={4}>
+            {singleList.map((item, index) => (
+              <Flex key={index} align="center" gap={4}>
                 <NumberInput
-                  placeholder="章号"
+                  size="xs"
                   min={1}
                   value={item}
-                  onChange={(val) => handleSingleChange(idx, val)}
+                  onChange={(val) => handleSingleItemChange(index, val)}
+                  style={{ width: 85 }}
                   prefix="第 "
                   suffix=" 章"
-                  style={{ width: 110 }}
                 />
                 {singleList.length > 1 && (
                   <ActionIcon
-                    size="sm"
-                    variant="subtle"
+                    size="xs"
                     color="red"
-                    onClick={() => handleRemoveSingle(idx)}
+                    variant="subtle"
+                    onClick={() => handleRemoveSingle(index)}
                   >
                     <FiTrash2 size={13} />
                   </ActionIcon>

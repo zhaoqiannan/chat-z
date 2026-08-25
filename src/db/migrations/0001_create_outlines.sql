@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS outlines (
   characters TEXT,                           -- 涉及角色（JSON 或字符串）
   locations TEXT,                            -- 涉及地点
   expected_outcome TEXT,                     -- 预期结果 / 伏笔
-  linked_chapters TEXT,                      -- 关联章节
+  linked_chapters TEXT,                      -- 关联章节 (JSON 数字数组，如 [1,2,3])
   created_at INTEGER,                        -- 创建时间戳
   updated_at INTEGER                         -- 最后更新时间戳
 );
