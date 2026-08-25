@@ -49,7 +49,7 @@ export default function DiffViewer({
 
         <Flex gap={10}>
           <Button
-            variant="default"
+            variant="outline"
             size="sm"
             color="gray"
             leftSection={<FiX size={14} />}
@@ -59,7 +59,7 @@ export default function DiffViewer({
           </Button>
 
           <Button
-            bg="#10b981"
+            color="teal"
             size="sm"
             leftSection={<FiCheck size={14} />}
             onClick={() => onAccept(currentOptimized)}

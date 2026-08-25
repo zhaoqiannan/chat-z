@@ -7,22 +7,42 @@ export const WorkApi = {
   delete: '/api/works',     // 删除作品 (DELETE)
 };
 
+export interface WorkItem {
+  id: number | string;
+  userId?: string;
+  title: string;
+  tag: string;
+  expectedWords?: number;
+  wordCount?: number;
+  chapterCount?: number;
+  progress?: number;
+  status?: string;
+  cover?: string;
+  description?: string;
+  isPinned?: number;
+  pinnedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CreateWorkPayload {
   title: string;
   tag: string;
   expectedWords?: number | string;
   description?: string;
   cover?: string;
+  isPinned?: boolean | number;
 }
 
 export interface UpdateWorkPayload {
   id: number | string;
-  title: string;
-  tag: string;
+  title?: string;
+  tag?: string;
   expectedWords?: number;
   description?: string;
   cover?: string;
   status?: string;
+  isPinned?: boolean | number;
 }
 
 /**
@@ -43,4 +63,4 @@ export const updateWork = async (data: UpdateWorkPayload) => put(WorkApi.update,
 /**
  * 删除作品 (包含级联章节)
  */
-export const deleteWork = async (id: string) => del(WorkApi.delete, { id });
+export const deleteWork = async (id: string | number) => del(WorkApi.delete, { id });

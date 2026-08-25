@@ -38,8 +38,8 @@ export const works = sqliteTable('works', {
   title: text('title').notNull(),
   /** 作品分类标签（如：科幻、悬疑、都市、奇幻等） */
   tag: text('tag').notNull(),
-  /** 预计目标字数（INT 类型，单位：万字，默认：50 万字） */
-  expectedWords: integer('expected_words').default(50),
+  /** 预计目标字数（INT 类型，单位：字，默认：500000 字即 50 万字） */
+  expectedWords: integer('expected_words').default(500000),
   /** 当前作品实际总字数 */
   wordCount: integer('word_count').default(0),
   /** 创作状态：'ongoing'（连载中）/ 'completed'（已完结）/ 'draft'（草稿） */
@@ -48,6 +48,10 @@ export const works = sqliteTable('works', {
   description: text('description'),
   /** 封面图片 URL */
   cover: text('cover'),
+  /** 是否置顶 (1=置顶, 0=未置顶) */
+  isPinned: integer('is_pinned').default(0),
+  /** 置顶操作时间戳 (用于多个置顶项按置顶时间倒序) */
+  pinnedAt: integer('pinned_at', { mode: 'timestamp' }),
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后编辑更新时间 */

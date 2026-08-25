@@ -107,29 +107,18 @@ export default function ProjectOverviewPage() {
 
               <Flex align="center" gap={10}>
                 <Button
-                  variant="default"
+                  variant="outline"
+                  color="gray"
                   size="sm"
-                  radius="md"
                   leftSection={<FiCompass size={15} />}
-                  styles={{
-                    root: { borderColor: "#cbd5e1", color: "#475569", fontWeight: 600 },
-                  }}
                 >
                   查看脑图
                 </Button>
                 <Button
                   size="sm"
-                  radius="md"
                   leftSection={<FiEdit3 size={15} />}
-                  styles={{
-                    root: {
-                      background: "linear-gradient(135deg, #00c9ff 0%, #00a8e8 100%)",
-                      fontWeight: 600,
-                      boxShadow: "0 2px 6px rgba(0, 201, 255, 0.35)",
-                    },
-                  }}
                 >
-                  进入创作空间
+                  进入写作
                 </Button>
               </Flex>
             </Flex>

@@ -67,11 +67,9 @@ export default function RecentChapterCard({
         </Box>
 
         <Button
-          className={styles.continueBtn}
           onClick={onContinue}
           leftSection={<FiEdit3 size={16} />}
           size="md"
-          radius="md"
         >
           继续写作
         </Button>

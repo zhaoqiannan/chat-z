@@ -25,7 +25,7 @@ export default function WorkspacePage() {
   } = workspaceMockData;
 
   const [works, setWorks] = useState<WorkItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingList, setLoadingList] = useState<boolean>(false);
   const [modalOpened, setModalOpened] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [currentWork, setCurrentWork] = useState<WorkFormData | null>(null);
@@ -36,25 +36,15 @@ export default function WorkspacePage() {
   // 加载作品列表
   const fetchWorks = async () => {
     try {
-      setLoading(true);
+      setLoadingList(true);
       const res = await getWorkList();
       if (res && res.success && Array.isArray(res.result)) {
-        const formatted: WorkItem[] = res.result.map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          tag: item.tag,
-          wordCount: `${item.wordCount || 0}`,
-          chapterCount: 0,
-          progress: 0,
-          lastEditTime: item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : "刚刚",
-          expectedWords: item.expectedWords,
-        }));
-        setWorks(formatted);
+        setWorks(res?.result || []);
       }
     } catch (err) {
       console.error("获取作品列表失败:", err);
     } finally {
-      setLoading(false);
+      setLoadingList(false);
     }
   };
 
@@ -88,7 +78,8 @@ export default function WorkspacePage() {
         const res = await createWork({
           title: formData.title,
           tag: formData.tag,
-          expectedWords: Number(formData.expectedWords) || 50,
+          expectedWords: Number(formData.expectedWords) || 500000,
+          isPinned: formData.isPinned,
         });
         if (res && res.success) {
           fetchWorks();
@@ -102,7 +93,8 @@ export default function WorkspacePage() {
           id: formData.id,
           title: formData.title,
           tag: formData.tag,
-          expectedWords: Number(formData.expectedWords) || 50,
+          expectedWords: Number(formData.expectedWords) || 500000,
+          isPinned: formData.isPinned,
         });
         if (res && res.success) {
           fetchWorks();
@@ -110,6 +102,21 @@ export default function WorkspacePage() {
       } catch (err) {
         console.error("编辑作品失败:", err);
       }
+    }
+  };
+
+  // 快捷置顶 / 取消置顶
+  const handleTogglePin = async (work: WorkItem) => {
+    try {
+      const res = await updateWork({
+        id: work.id,
+        isPinned: !work.isPinned,
+      });
+      if (res && res.success) {
+        fetchWorks();
+      }
+    } catch (err) {
+      console.error("切换置顶状态失败:", err);
     }
   };
 
@@ -172,10 +179,12 @@ export default function WorkspacePage() {
             }}
           /> */}
           <WorksSection
+            loading={loadingList}
             works={works}
             onCreateWork={handleOpenCreate}
             onEditWork={handleOpenEdit}
             onDeleteWork={handleOpenDelete}
+            onTogglePin={handleTogglePin}
             onSelectWork={handleSelectWork}
           />
           {/* <CreationStats stats={creationStats} /> */}

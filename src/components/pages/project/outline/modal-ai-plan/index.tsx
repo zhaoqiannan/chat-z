@@ -144,7 +144,7 @@ export default function ModalAiPlan({
         </Paper>
 
         <Flex justify="flex-end" gap="10px" mt="6px">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
             取消
           </Button>
           <Button

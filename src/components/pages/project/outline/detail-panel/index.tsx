@@ -154,7 +154,6 @@ export default function DetailPanel({
           </Button>
 
           <Button
-            bg="#00c9ff"
             leftSection={<FiSave size={14} />}
             loading={loading}
             onClick={handleSave}

@@ -32,10 +32,6 @@ export default function ModalDeleteConfirm({
       centered
       radius="md"
       padding="xl"
-      overlayProps={{
-        backgroundOpacity: 0.45,
-        blur: 3,
-      }}
     >
       <Box mb={24}>
         <Text fz={14} c="#475569" lh={1.6}>
@@ -47,7 +43,7 @@ export default function ModalDeleteConfirm({
       </Box>
 
       <Flex justify="flex-end" gap={12}>
-        <Button variant="subtle" color="gray" onClick={onClose}>
+        <Button variant="outline" color="gray" onClick={onClose}>
           取消
         </Button>
         <Button
@@ -56,7 +52,6 @@ export default function ModalDeleteConfirm({
             onConfirm();
             onClose();
           }}
-          radius="md"
         >
           确认删除
         </Button>

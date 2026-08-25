@@ -1,0 +1,42 @@
+.spin {
+  width: 30px;
+  aspect-ratio: 1;
+  --_c: no-repeat
+    radial-gradient(farthest-side, rgba(33, 105, 235, 0.5) 80%, #0000);
+  background: var(--_c) top, var(--_c) left, var(--_c) right, var(--_c) bottom;
+  background-size: 10px 10px;
+  animation: spin_load 1s infinite;
+}
+
+@keyframes spin_load {
+  to {
+    transform: rotate(0.5turn);
+  }
+}
+
+.point {
+  width: 32px;
+  aspect-ratio: 4;
+  --_g: no-repeat
+    radial-gradient(circle closest-side, rgba(33, 105, 235, 0.5) 90%, #0000);
+  background: var(--_g) 0% 50%, var(--_g) 50% 50%, var(--_g) 100% 50%;
+  background-size: calc(100% / 3) 100%;
+  animation: point_load 1.5s infinite linear;
+}
+
+@keyframes point_load {
+  33% {
+    background-size: calc(100% / 3) 20%, calc(100% / 3) 100%, calc(100% / 3) 100%;
+    opacity: 1;
+  }
+
+  50% {
+    background-size: calc(100% / 3) 100%, calc(100% / 3) 20%, calc(100% / 3) 100%;
+    opacity: .3;
+  }
+
+  66% {
+    background-size: calc(100% / 3) 100%, calc(100% / 3) 100%, calc(100% / 3) 20%;
+    opacity: .6;
+  }
+}

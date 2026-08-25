@@ -190,7 +190,6 @@ export default function TreePanel({
 
           <Button
             size="xs"
-            bg="#00c9ff"
             leftSection={<FiPlus size={13} />}
             onClick={() => onOpenCreate(null)}
           >

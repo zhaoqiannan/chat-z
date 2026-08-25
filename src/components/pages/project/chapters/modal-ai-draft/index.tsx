@@ -106,7 +106,7 @@ export default function ModalAiDraft({
       size="lg"
       radius="md"
     >
-      <Stack gap="14px">
+      <Stack gap="14px" className="form-box">
         <Textarea
           label="📖 章节大致内容 (*必填)"
           placeholder="简述本章的核心剧情框架，例如：主角来到家族大殿，遭遇反派退婚与羞辱..."
@@ -119,7 +119,7 @@ export default function ModalAiDraft({
         <SimpleGrid cols={{ base: 1, md: 2 }} spacing="12px">
           <Textarea
             label="⚡ 事件安排 / 关键节拍 (选填)"
-            placeholder="如：1.嘲讽主角 2.主角隐忍 3.揭穿底牌 4.震惊全场"
+            placeholder="如：1.嘲讽主角 2.主角隐忍 3.揭传底牌 4.震惊全场"
             value={events}
             onChange={(e) => setEvents(e.currentTarget.value)}
             minRows={2}
@@ -170,7 +170,7 @@ export default function ModalAiDraft({
         {error && <Text c="red" fz="xs">{error}</Text>}
 
         <Flex justify="flex-end" gap="10px" mt="10px">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
             取消
           </Button>
           <Button

@@ -99,7 +99,7 @@ export default function ModalChapterDetail({
       size="lg"
       radius="md"
     >
-      <Stack gap="14px">
+      <Stack gap="14px" className="form-box">
         {/* 数据统计横幅 */}
         <Paper p="12px 16px" bg="#f8fafc" withBorder radius="md">
           <SimpleGrid cols={3}>
@@ -181,11 +181,10 @@ export default function ModalChapterDetail({
         {error && <Text c="red" fz="xs">{error}</Text>}
 
         <Flex justify="flex-end" gap="10px" mt="10px">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
             取消
           </Button>
           <Button
-            bg="#00c9ff"
             leftSection={<FiSave size={14} />}
             loading={loading}
             onClick={handleSave}

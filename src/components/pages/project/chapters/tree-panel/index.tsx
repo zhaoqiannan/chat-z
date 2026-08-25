@@ -81,7 +81,6 @@ export default function TreePanel({
 
           <Button
             size="xs"
-            bg="#00c9ff"
             leftSection={<FiFilePlus size={13} />}
             onClick={() => onOpenCreateChapter(null)}
           >
@@ -287,7 +286,7 @@ export default function TreePanel({
           <Flex direction="column" align="center" justify="center" py={40} gap={10} c="#94a3b8">
             <FiFileText size={36} strokeWidth={1.5} />
             <Text fz={13}>暂无章节内容</Text>
-            <Button size="xs" bg="#00c9ff" onClick={() => onOpenCreateChapter(null)}>
+            <Button size="xs" onClick={() => onOpenCreateChapter(null)}>
               创建第一章
             </Button>
           </Flex>

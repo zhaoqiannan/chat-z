@@ -201,7 +201,6 @@ export default function EditorArea({
           </Button>
 
           <Button
-            bg="#00c9ff"
             leftSection={<FiSave size={14} />}
             loading={loading}
             onClick={handleSave}

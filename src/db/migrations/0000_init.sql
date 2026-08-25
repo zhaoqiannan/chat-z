@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS works (
   status TEXT DEFAULT 'ongoing',       -- 状态: ongoing(连载中)/completed(已完结)
   description TEXT,                    -- 作品简介
   cover TEXT,                          -- 封面图片
+  is_pinned INTEGER DEFAULT 0,         -- 是否置顶 (1=置顶, 0=未置顶)
+  pinned_at INTEGER,                   -- 置顶时间戳
   created_at INTEGER,                  -- 创建时间戳
   updated_at INTEGER                   -- 最后编辑时间戳
 );

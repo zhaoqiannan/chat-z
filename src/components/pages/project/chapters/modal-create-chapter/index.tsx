@@ -98,8 +98,9 @@ export default function ModalCreateChapter({
       }
       centered
       radius="md"
+      padding="xl"
     >
-      <Stack gap="14px">
+      <Stack gap="14px" className="form-box">
         <TextInput
           label="章节标题"
           placeholder="例如：第 1 章 少年与剑"
@@ -139,10 +140,10 @@ export default function ModalCreateChapter({
         {error && <Text c="red" fz="xs">{error}</Text>}
 
         <Flex justify="flex-end" gap="10px" mt="10px">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
             取消
           </Button>
-          <Button bg="#00c9ff" onClick={handleSubmit} loading={loading}>
+          <Button onClick={handleSubmit} loading={loading}>
             确认创建
           </Button>
         </Flex>

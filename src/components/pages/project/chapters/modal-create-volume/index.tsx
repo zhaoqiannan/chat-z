@@ -7,7 +7,7 @@ import { CreateChapterPayload } from "@/rest/chapter";
 interface ModalCreateVolumeProps {
   opened: boolean;
   onClose: () => void;
-  workId: string;
+  workId: number | string;
   onSubmit: (data: CreateChapterPayload) => Promise<void>;
 }
 
@@ -59,8 +59,9 @@ export default function ModalCreateVolume({
       title={<Text fw={700} fz={16}>新建分卷 (Volume)</Text>}
       centered
       radius="md"
+      padding="xl"
     >
-      <Stack gap="14px">
+      <Stack gap="14px" className="form-box">
         <TextInput
           label="分卷名称"
           placeholder="例如：第一卷 龙潜深渊"
@@ -79,10 +80,10 @@ export default function ModalCreateVolume({
         {error && <Text c="red" fz="xs">{error}</Text>}
 
         <Flex justify="flex-end" gap="10px" mt="10px">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
             取消
           </Button>
-          <Button bg="#00c9ff" onClick={handleSubmit} loading={loading}>
+          <Button onClick={handleSubmit} loading={loading}>
             确认创建
           </Button>
         </Flex>

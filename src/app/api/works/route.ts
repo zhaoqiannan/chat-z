@@ -5,7 +5,7 @@ import { getDb, works, chapters } from "@/db";
 import { desc, eq, and } from "drizzle-orm";
 
 /**
- * 获取当前用户的作品列表
+ * 获取当前用户的作品列表（置顶优先，置顶时间倒序，创建时间倒序）
  */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -16,7 +16,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .select()
       .from(works)
       .where(eq(works.userId, user.userId))
-      .orderBy(desc(works.createdAt));
+      .orderBy(desc(works.isPinned), desc(works.pinnedAt), desc(works.createdAt));
 
     return NextResponse.json({
       success: true,
@@ -35,7 +35,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 });
 
 /**
- * 新建作品 (自增数字 ID, INT 目标字数)
+ * 新建作品 (自增数字 ID, INT 目标字数, 支持置顶)
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -43,7 +43,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { title, tag, expectedWords, description, cover } = body;
+    const { title, tag, expectedWords, description, cover, isPinned } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json(
@@ -59,7 +59,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    const parsedExpectedWords = Math.round(Number(expectedWords) || 50);
+    const parsedExpectedWords = Math.round(Number(expectedWords) || 500000);
+    const pinned = isPinned ? 1 : 0;
 
     const newWorkData = {
       userId: user.userId,
@@ -70,6 +71,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       status: "ongoing",
       description: description?.trim() || "",
       cover: cover || "",
+      isPinned: pinned,
+      pinnedAt: pinned ? new Date() : null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -93,7 +96,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 });
 
 /**
- * 编辑作品 (校验归属权)
+ * 编辑作品 (支持全量编辑或单字段如置顶更新)
  */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -101,26 +104,12 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { id, title, tag, expectedWords, description, cover, status } = body;
+    const { id, title, tag, expectedWords, description, cover, status, isPinned } = body;
 
     const workId = Number(id);
     if (!workId || isNaN(workId)) {
       return NextResponse.json(
         { success: false, message: "无效的作品ID" },
-        { status: 400 }
-      );
-    }
-
-    if (!title || !title.trim()) {
-      return NextResponse.json(
-        { success: false, message: "作品名称不能为空" },
-        { status: 400 }
-      );
-    }
-
-    if (!tag || !tag.trim()) {
-      return NextResponse.json(
-        { success: false, message: "作品类别不能为空" },
         { status: 400 }
       );
     }
@@ -140,16 +129,27 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const parsedExpectedWords = expectedWords !== undefined
-      ? Math.round(Number(expectedWords) || existing.expectedWords || 50)
+      ? Math.round(Number(expectedWords) || existing.expectedWords || 500000)
       : existing.expectedWords;
 
+    // 处理置顶状态与置顶时间
+    let nextIsPinned = existing.isPinned;
+    let nextPinnedAt = existing.pinnedAt;
+    if (isPinned !== undefined) {
+      const isPinBool = Boolean(isPinned);
+      nextIsPinned = isPinBool ? 1 : 0;
+      nextPinnedAt = isPinBool ? new Date() : null;
+    }
+
     const updatedWork = {
-      title: title.trim(),
-      tag: tag.trim(),
+      title: title !== undefined ? title.trim() : existing.title,
+      tag: tag !== undefined ? tag.trim() : existing.tag,
       expectedWords: parsedExpectedWords,
       description: description !== undefined ? description.trim() : existing.description,
       cover: cover !== undefined ? cover : existing.cover,
       status: status || existing.status,
+      isPinned: nextIsPinned,
+      pinnedAt: nextPinnedAt,
       updatedAt: new Date(),
     };
 
@@ -161,7 +161,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({
       success: true,
       result: { id: workId, ...updatedWork },
-      message: "编辑作品成功",
+      message: isPinned !== undefined && title === undefined ? (nextIsPinned ? "置顶成功" : "已取消置顶") : "编辑作品成功",
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -111,7 +111,7 @@ export default function ModalCreateNode({
       size="lg"
       radius="md"
     >
-      <Stack gap="14px">
+      <Stack gap="14px" className="form-box">
         <Flex gap="12px">
           <Select
             label="节点类型"
@@ -197,11 +197,10 @@ export default function ModalCreateNode({
         )}
 
         <Flex justify="flex-end" gap="10px" mt="10px">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
             取消
           </Button>
           <Button
-            bg="#00c9ff"
             onClick={handleSubmit}
             loading={loading}
           >
