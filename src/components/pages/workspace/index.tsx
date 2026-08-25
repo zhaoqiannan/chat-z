@@ -88,7 +88,7 @@ export default function WorkspacePage() {
         const res = await createWork({
           title: formData.title,
           tag: formData.tag,
-          expectedWords: formData.expectedWords,
+          expectedWords: Number(formData.expectedWords) || 50,
         });
         if (res && res.success) {
           fetchWorks();
@@ -99,10 +99,10 @@ export default function WorkspacePage() {
     } else if (modalMode === "edit" && formData.id) {
       try {
         const res = await updateWork({
-          id: String(formData.id),
+          id: formData.id,
           title: formData.title,
           tag: formData.tag,
-          expectedWords: formData.expectedWords,
+          expectedWords: Number(formData.expectedWords) || 50,
         });
         if (res && res.success) {
           fetchWorks();
@@ -162,7 +162,7 @@ export default function WorkspacePage() {
         align="flex-start"
         direction={{ base: "column", md: "row" }}
       >
-        <Flex direction="column" gap={24} style={{ flex: 1, minWidth: 0 }} w="100%">
+        <Flex direction="column" gap={24} w="100%">
           {/* <RecentChapterCard
             data={recentChapter}
             onContinue={() => {
@@ -181,7 +181,7 @@ export default function WorkspacePage() {
           {/* <CreationStats stats={creationStats} /> */}
         </Flex>
 
-        <Flex
+        {/* <Flex
           direction="column"
           gap={20}
           w={{ base: "100%", md: 340 }}
@@ -189,7 +189,7 @@ export default function WorkspacePage() {
         >
           <AiSuggestions suggestions={aiSuggestions} />
           <RecentActivities activities={recentActivities} />
-        </Flex>
+        </Flex> */}
       </Flex>
 
       <ModalWork

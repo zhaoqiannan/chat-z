@@ -33,7 +33,7 @@ export default function ModalChapterDetail({
   onUpdate,
 }: ModalChapterDetailProps) {
   const [title, setTitle] = useState("");
-  const [volumeId, setVolumeId] = useState<string | null>(null);
+  const [volumeId, setVolumeId] = useState<number | string | null>(null);
   const [status, setStatus] = useState<ChapterStatus>("not_started");
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(false);
@@ -63,7 +63,7 @@ export default function ModalChapterDetail({
       await onUpdate({
         id: chapter.id,
         title: title.trim(),
-        volumeId: volumeId || null,
+        volumeId: volumeId ? Number(volumeId) : null,
         status,
         summary: summary.trim(),
       });
@@ -78,7 +78,7 @@ export default function ModalChapterDetail({
   const volumeOptions = [
     { value: "", label: "未分卷 / 根目录" },
     ...volumes.map((v) => ({
-      value: v.id,
+      value: String(v.id),
       label: `📁 ${v.title}`,
     })),
   ];
@@ -151,8 +151,8 @@ export default function ModalChapterDetail({
             <Select
               label="归属分卷"
               placeholder="选择所属分卷"
-              value={volumeId || ""}
-              onChange={(val) => setVolumeId(val || null)}
+              value={volumeId !== null && volumeId !== undefined ? String(volumeId) : ""}
+              onChange={(val) => setVolumeId(val ? Number(val) : null)}
               data={volumeOptions}
               clearable
             />

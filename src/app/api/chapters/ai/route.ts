@@ -14,7 +14,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const body = await req.json();
     const {
-      workId,
       chapterId,
       mode, // 'draft' (生成初稿) | 'optimize' (润色优化)
       // 初稿参数
@@ -29,9 +28,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       optimizeGoal,
     } = body;
 
-    if (!workId) {
+    const workId = Number(body.workId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "workId 不能为空" },
+        { success: false, message: "无效的 workId" },
         { status: 400 }
       );
     }

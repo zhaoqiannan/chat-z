@@ -85,11 +85,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { workId, mode, nodeContext, applyDirectly } = body;
+    const { mode, nodeContext, applyDirectly } = body;
 
-    if (!workId) {
+    const workId = Number(body.workId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "workId 不能为空" },
+        { success: false, message: "无效的 workId" },
         { status: 400 }
       );
     }

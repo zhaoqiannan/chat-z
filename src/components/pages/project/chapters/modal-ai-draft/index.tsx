@@ -19,8 +19,8 @@ import { requestChapterAiDraft } from "@/rest/chapter";
 interface ModalAiDraftProps {
   opened: boolean;
   onClose: () => void;
-  workId: string;
-  chapterId?: string;
+  workId: number | string;
+  chapterId?: number | string;
   chapterTitle?: string;
   defaultSummary?: string;
   onGenerated: (draftText: string) => void;

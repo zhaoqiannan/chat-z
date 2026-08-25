@@ -11,9 +11,9 @@ export const ChapterApi = {
 export type ChapterStatus = "not_started" | "revising" | "completed";
 
 export interface ChapterItem {
-  id: string;
-  workId: string;
-  volumeId: string | null;
+  id: number | string;
+  workId: number | string;
+  volumeId: number | string | null;
   isVolume: number;
   title: string;
   content: string;
@@ -26,8 +26,8 @@ export interface ChapterItem {
 }
 
 export interface CreateChapterPayload {
-  workId: string;
-  volumeId?: string | null;
+  workId: number | string;
+  volumeId?: number | string | null;
   isVolume?: boolean | number;
   title: string;
   content?: string;
@@ -36,18 +36,18 @@ export interface CreateChapterPayload {
 }
 
 export interface UpdateChapterPayload {
-  id: string;
+  id: number | string;
   title?: string;
   content?: string;
   status?: ChapterStatus;
   summary?: string;
-  volumeId?: string | null;
+  volumeId?: number | string | null;
   chapterNumber?: number;
 }
 
 export interface AiDraftPayload {
-  workId: string;
-  chapterId?: string;
+  workId: number | string;
+  chapterId?: number | string;
   mode: "draft";
   overview: string;
   events?: string;
@@ -58,8 +58,8 @@ export interface AiDraftPayload {
 }
 
 export interface AiOptimizePayload {
-  workId: string;
-  chapterId?: string;
+  workId: number | string;
+  chapterId?: number | string;
   mode: "optimize";
   currentContent: string;
   optimizeGoal?: string;

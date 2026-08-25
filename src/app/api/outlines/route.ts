@@ -7,7 +7,7 @@ import { eq, and, asc } from "drizzle-orm";
 /**
  * 校验作品是否属于当前用户
  */
-async function checkWorkOwnership(db: any, workId: string, userId: string) {
+async function checkWorkOwnership(db: any, workId: number, userId: string) {
   const work = await db
     .select()
     .from(works)
@@ -24,10 +24,11 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    const workId = req.nextUrl.searchParams.get("workId");
-    if (!workId) {
+    const rawWorkId = req.nextUrl.searchParams.get("workId");
+    const workId = Number(rawWorkId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "workId 不能为空" },
+        { success: false, message: "无效的 workId" },
         { status: 400 }
       );
     }
@@ -70,7 +71,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const body = await req.json();
     const {
-      workId,
+      workId: rawWorkId,
       parentId,
       type,
       title,
@@ -83,9 +84,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       orderIndex,
     } = body;
 
-    if (!workId || !workId.trim()) {
+    const workId = Number(rawWorkId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "作品ID不能为空" },
+        { success: false, message: "无效的作品ID" },
         { status: 400 }
       );
     }
@@ -114,7 +116,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const newNode = {
       id: crypto.randomUUID(),
-      workId: workId.trim(),
+      workId,
       parentId: parentId || null,
       type: type || "scene",
       title: title.trim(),

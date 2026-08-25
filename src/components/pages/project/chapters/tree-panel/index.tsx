@@ -25,14 +25,14 @@ import styles from "../style.module.scss";
 
 interface TreePanelProps {
   volumes: ChapterItem[];
-  chaptersByVolume: Record<string, ChapterItem[]>;
+  chaptersByVolume: Record<string | number, ChapterItem[]>;
   unassignedChapters: ChapterItem[];
-  activeChapterId: string | null;
+  activeChapterId: number | string | null;
   onSelectChapter: (chapter: ChapterItem) => void;
   onOpenDetailModal: (item: ChapterItem) => void;
   onOpenCreateVolume: () => void;
-  onOpenCreateChapter: (volumeId?: string | null) => void;
-  onDeleteItem: (id: string) => void;
+  onOpenCreateChapter: (volumeId?: number | string | null) => void;
+  onDeleteItem: (id: number | string) => void;
 }
 
 export default function TreePanel({
@@ -46,9 +46,9 @@ export default function TreePanel({
   onOpenCreateChapter,
   onDeleteItem,
 }: TreePanelProps) {
-  const [collapsedVolumeIds, setCollapsedVolumeIds] = useState<Record<string, boolean>>({});
+  const [collapsedVolumeIds, setCollapsedVolumeIds] = useState<Record<string | number, boolean>>({});
 
-  const toggleVolumeCollapse = (volId: string, e: React.MouseEvent) => {
+  const toggleVolumeCollapse = (volId: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     setCollapsedVolumeIds((prev) => ({ ...prev, [volId]: !prev[volId] }));
   };

@@ -35,7 +35,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 });
 
 /**
- * 新建作品
+ * 新建作品 (自增数字 ID, INT 目标字数)
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -59,10 +59,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    const parsedExpectedWords = typeof expectedWords === "number" ? expectedWords : (parseFloat(String(expectedWords || "50")) || 50.0);
+    const parsedExpectedWords = Math.round(Number(expectedWords) || 50);
 
-    const newWork = {
-      id: crypto.randomUUID(),
+    const newWorkData = {
       userId: user.userId,
       title: title.trim(),
       tag: tag.trim(),
@@ -75,11 +74,11 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       updatedAt: new Date(),
     };
 
-    await db.insert(works).values(newWork);
+    const inserted = await db.insert(works).values(newWorkData).returning().get();
 
     return NextResponse.json({
       success: true,
-      result: newWork,
+      result: inserted || newWorkData,
       message: "新建作品成功",
     });
   } catch (error: any) {
@@ -104,9 +103,10 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const body = await req.json();
     const { id, title, tag, expectedWords, description, cover, status } = body;
 
-    if (!id || !id.trim()) {
+    const workId = Number(id);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "作品ID不能为空" },
+        { success: false, message: "无效的作品ID" },
         { status: 400 }
       );
     }
@@ -129,7 +129,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const existing = await db
       .select()
       .from(works)
-      .where(and(eq(works.id, id), eq(works.userId, user.userId)))
+      .where(and(eq(works.id, workId), eq(works.userId, user.userId)))
       .get();
 
     if (!existing) {
@@ -140,7 +140,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const parsedExpectedWords = expectedWords !== undefined
-      ? (typeof expectedWords === "number" ? expectedWords : parseFloat(String(expectedWords)) || existing.expectedWords)
+      ? Math.round(Number(expectedWords) || existing.expectedWords || 50)
       : existing.expectedWords;
 
     const updatedWork = {
@@ -156,11 +156,11 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     await db
       .update(works)
       .set(updatedWork)
-      .where(and(eq(works.id, id), eq(works.userId, user.userId)));
+      .where(and(eq(works.id, workId), eq(works.userId, user.userId)));
 
     return NextResponse.json({
       success: true,
-      result: { id, ...updatedWork },
+      result: { id: workId, ...updatedWork },
       message: "编辑作品成功",
     });
   } catch (error: any) {
@@ -182,20 +182,18 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    // 支持通过 URL searchParams (如 /api/works/?id=xxx) 或请求 Body 获取 id
-    let workId = req.nextUrl.searchParams.get("id");
-    if (!workId) {
+    let rawId = req.nextUrl.searchParams.get("id");
+    if (!rawId) {
       try {
         const body = await req.json();
-        workId = body?.id;
-      } catch {
-        // body 为空则忽略
-      }
+        rawId = body?.id;
+      } catch {}
     }
 
-    if (!workId || !workId.trim()) {
+    const workId = Number(rawId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "作品ID不能为空" },
+        { success: false, message: "无效的作品ID" },
         { status: 400 }
       );
     }

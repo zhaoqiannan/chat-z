@@ -17,9 +17,9 @@ import { ChapterItem, CreateChapterPayload, ChapterStatus } from "@/rest/chapter
 interface ModalCreateChapterProps {
   opened: boolean;
   onClose: () => void;
-  workId: string;
+  workId: number | string;
   volumes: ChapterItem[];
-  defaultVolumeId?: string | null;
+  defaultVolumeId?: number | string | null;
   nextChapterNum: number;
   onSubmit: (data: CreateChapterPayload) => Promise<void>;
 }
@@ -34,7 +34,7 @@ export default function ModalCreateChapter({
   onSubmit,
 }: ModalCreateChapterProps) {
   const [title, setTitle] = useState("");
-  const [volumeId, setVolumeId] = useState<string | null>(defaultVolumeId || null);
+  const [volumeId, setVolumeId] = useState<number | string | null>(defaultVolumeId || null);
   const [status, setStatus] = useState<ChapterStatus>("not_started");
   const [summary, setSummary] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,7 +60,7 @@ export default function ModalCreateChapter({
       setError("");
       await onSubmit({
         workId,
-        volumeId: volumeId || null,
+        volumeId: volumeId ? Number(volumeId) : null,
         isVolume: false,
         title: title.trim(),
         status,
@@ -77,7 +77,7 @@ export default function ModalCreateChapter({
   const volumeOptions = [
     { value: "", label: "未分卷 / 根目录" },
     ...volumes.map((v) => ({
-      value: v.id,
+      value: String(v.id),
       label: `📁 ${v.title}`,
     })),
   ];
@@ -111,8 +111,8 @@ export default function ModalCreateChapter({
         <Select
           label="归属分卷"
           placeholder="请选择所属卷（可选）"
-          value={volumeId || ""}
-          onChange={(val) => setVolumeId(val || null)}
+          value={volumeId !== null && volumeId !== undefined ? String(volumeId) : ""}
+          onChange={(val) => setVolumeId(val ? Number(val) : null)}
           data={volumeOptions}
           clearable
         />

@@ -4,7 +4,7 @@
  * 包含用户表 (users)、小说作品表 (works)、章节表 (chapters)、故事大纲表 (outlines) 及其 TypeScript 类型。
  */
 
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 // ============================================================================
 // 1. 用户表 (users)
@@ -30,16 +30,16 @@ export const users = sqliteTable('users', {
 // 2. 作品表 (works)
 // ============================================================================
 export const works = sqliteTable('works', {
-  /** 作品唯一标识 (UUID) */
-  id: text('id').primaryKey(),
+  /** 作品唯一标识 (自增数字 ID) */
+  id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
   /** 关联创建者 ID (对应 users.id) */
   userId: text('user_id').notNull(),
   /** 作品名称/书名 */
   title: text('title').notNull(),
   /** 作品分类标签（如：科幻、悬疑、都市、奇幻等） */
   tag: text('tag').notNull(),
-  /** 预计目标字数（单位：万字，浮点数，默认：50.0 万字） */
-  expectedWords: real('expected_words').default(50.0),
+  /** 预计目标字数（INT 类型，单位：万字，默认：50 万字） */
+  expectedWords: integer('expected_words').default(50),
   /** 当前作品实际总字数 */
   wordCount: integer('word_count').default(0),
   /** 创作状态：'ongoing'（连载中）/ 'completed'（已完结）/ 'draft'（草稿） */
@@ -58,12 +58,14 @@ export const works = sqliteTable('works', {
 // 3. 章节表 (chapters)
 // ============================================================================
 export const chapters = sqliteTable('chapters', {
-  /** 章节唯一标识 (UUID) */
-  id: text('id').primaryKey(),
-  /** 所属作品 ID (对应 works.id) */
-  workId: text('work_id').notNull(),
-  /** 所属卷 ID（为空表示根卷/默认卷） */
-  volumeId: text('volume_id'),
+  /** 章节唯一标识 (自增数字 ID) */
+  id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+  /** 所属作品 ID (对应 works.id 自增数字) */
+  workId: integer('work_id').notNull(),
+  /** 关联用户 ID (对应 users.id) */
+  userId: text('user_id').notNull(),
+  /** 所属卷 ID（对应 chapters.id 自增数字，为空表示根卷/未分卷） */
+  volumeId: integer('volume_id'),
   /** 是否是卷（1=卷文件夹，0=具体正文章节） */
   isVolume: integer('is_volume').default(0),
   /** 章节/卷 标题（如：第一卷 崛起之路 / 第一章 少年与剑） */
@@ -90,8 +92,8 @@ export const chapters = sqliteTable('chapters', {
 export const outlines = sqliteTable('outlines', {
   /** 节点唯一标识 (UUID) */
   id: text('id').primaryKey(),
-  /** 所属小说作品 ID (对应 works.id) */
-  workId: text('work_id').notNull(),
+  /** 所属小说作品 ID (对应 works.id 自增数字) */
+  workId: integer('work_id').notNull(),
   /** 父级节点 ID（为空表示根节点） */
   parentId: text('parent_id'),
   /** 节点类型: 'volume'(卷/篇章) | 'act'(幕/阶段) | 'scene'(情景点) | 'event'(事件) */

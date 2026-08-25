@@ -34,7 +34,7 @@ export default function ChaptersPage() {
   const [modalDetailTarget, setModalDetailTarget] = useState<ChapterItem | null>(null);
   const [volumeModalOpened, setVolumeModalOpened] = useState(false);
   const [chapterModalOpened, setChapterModalOpened] = useState(false);
-  const [createChapterVolumeId, setCreateChapterVolumeId] = useState<string | null>(null);
+  const [createChapterVolumeId, setCreateChapterVolumeId] = useState<number | string | null>(null);
   const [aiDraftModalOpened, setAiDraftModalOpened] = useState(false);
 
   // AI 优化对比视图状态
@@ -143,9 +143,9 @@ export default function ChaptersPage() {
   };
 
   // 删除
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number | string) => {
     if (window.confirm("确定要删除该章节 / 分卷吗？")) {
-      const res = await deleteChapter(id);
+      const res = await deleteChapter(String(id));
       if (res && res.success) {
         await fetchChapters();
       }

@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, chapters, works } from "@/db";
-import { eq, and, asc, desc, max, sql } from "drizzle-orm";
+import { eq, and, asc, desc } from "drizzle-orm";
 
 /**
  * 校验作品归属权
  */
-async function checkWorkOwnership(db: any, workId: string, userId: string) {
+async function checkWorkOwnership(db: any, workId: number, userId: string) {
   const work = await db
     .select()
     .from(works)
@@ -19,7 +19,7 @@ async function checkWorkOwnership(db: any, workId: string, userId: string) {
 /**
  * 重新计算并更新作品的总字数
  */
-async function recountWorkWords(db: any, workId: string) {
+async function recountWorkWords(db: any, workId: number) {
   const allChapters = await db
     .select({ wordCount: chapters.wordCount })
     .from(chapters)
@@ -41,10 +41,11 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    const workId = req.nextUrl.searchParams.get("workId");
-    if (!workId) {
+    const rawWorkId = req.nextUrl.searchParams.get("workId");
+    const workId = Number(rawWorkId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "workId 不能为空" },
+        { success: false, message: "无效的 workId" },
         { status: 400 }
       );
     }
@@ -77,7 +78,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 });
 
 /**
- * 新建卷或章节 (自动计算顺序章节号)
+ * 新建卷或章节 (自增数字 ID, 自动递增章节号)
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -86,8 +87,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const body = await req.json();
     const {
-      workId,
-      volumeId,
+      workId: rawWorkId,
+      volumeId: rawVolumeId,
       isVolume,
       title,
       content,
@@ -95,9 +96,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       summary,
     } = body;
 
-    if (!workId || !workId.trim()) {
+    const workId = Number(rawWorkId);
+    if (!workId || isNaN(workId)) {
       return NextResponse.json(
-        { success: false, message: "作品ID不能为空" },
+        { success: false, message: "无效的作品ID" },
         { status: 400 }
       );
     }
@@ -136,11 +138,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const textContent = content || "";
     const wordCount = textContent.replace(/\s+/g, "").length;
+    const volumeId = rawVolumeId ? Number(rawVolumeId) : null;
 
-    const newChapter = {
-      id: crypto.randomUUID(),
-      workId: workId.trim(),
-      volumeId: volumeId || null,
+    const newChapterData = {
+      workId,
+      userId: user.userId,
+      volumeId,
       isVolume: isVol ? 1 : 0,
       title: title.trim(),
       content: textContent,
@@ -152,7 +155,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       updatedAt: new Date(),
     };
 
-    await db.insert(chapters).values(newChapter);
+    const inserted = await db.insert(chapters).values(newChapterData).returning().get();
 
     // 重新统计作品总字数
     if (!isVol && wordCount > 0) {
@@ -161,7 +164,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     return NextResponse.json({
       success: true,
-      result: newChapter,
+      result: inserted || newChapterData,
       message: isVol ? "新建卷成功" : `成功新建第 ${autoChapterNumber} 章`,
     });
   } catch (error: any) {
@@ -181,11 +184,12 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { id, title, content, status, summary, volumeId, chapterNumber } = body;
+    const { id: rawId, title, content, status, summary, volumeId: rawVolumeId, chapterNumber } = body;
 
-    if (!id || !id.trim()) {
+    const chapterId = Number(rawId);
+    if (!chapterId || isNaN(chapterId)) {
       return NextResponse.json(
-        { success: false, message: "章节ID不能为空" },
+        { success: false, message: "无效的章节ID" },
         { status: 400 }
       );
     }
@@ -193,26 +197,19 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const chapter = await db
       .select()
       .from(chapters)
-      .where(eq(chapters.id, id))
+      .where(and(eq(chapters.id, chapterId), eq(chapters.userId, user.userId)))
       .get();
 
     if (!chapter) {
       return NextResponse.json(
-        { success: false, message: "章节不存在" },
+        { success: false, message: "章节不存在或无权操作" },
         { status: 404 }
-      );
-    }
-
-    const work = await checkWorkOwnership(db, chapter.workId, user.userId);
-    if (!work) {
-      return NextResponse.json(
-        { success: false, message: "无权编辑该章节" },
-        { status: 403 }
       );
     }
 
     const textContent = content !== undefined ? content : chapter.content;
     const wordCount = chapter.isVolume ? 0 : (textContent || "").replace(/\s+/g, "").length;
+    const volumeId = rawVolumeId !== undefined ? (rawVolumeId ? Number(rawVolumeId) : null) : chapter.volumeId;
 
     const updatedData = {
       title: title !== undefined ? title.trim() : chapter.title,
@@ -220,12 +217,12 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       wordCount,
       status: status || chapter.status,
       summary: summary !== undefined ? summary.trim() : chapter.summary,
-      volumeId: volumeId !== undefined ? volumeId : chapter.volumeId,
+      volumeId,
       chapterNumber: typeof chapterNumber === "number" ? chapterNumber : chapter.chapterNumber,
       updatedAt: new Date(),
     };
 
-    await db.update(chapters).set(updatedData).where(eq(chapters.id, id));
+    await db.update(chapters).set(updatedData).where(eq(chapters.id, chapterId));
 
     // 重新统计作品字数
     if (!chapter.isVolume) {
@@ -234,7 +231,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     return NextResponse.json({
       success: true,
-      result: { id, ...updatedData },
+      result: { id: chapterId, ...updatedData },
       message: "更新章节成功",
     });
   } catch (error: any) {
@@ -253,17 +250,18 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    let id = req.nextUrl.searchParams.get("id");
-    if (!id) {
+    let rawId = req.nextUrl.searchParams.get("id");
+    if (!rawId) {
       try {
         const body = await req.json();
-        id = body?.id;
+        rawId = body?.id;
       } catch {}
     }
 
-    if (!id || !id.trim()) {
+    const chapterId = Number(rawId);
+    if (!chapterId || isNaN(chapterId)) {
       return NextResponse.json(
-        { success: false, message: "ID不能为空" },
+        { success: false, message: "无效的章节ID" },
         { status: 400 }
       );
     }
@@ -271,21 +269,13 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const chapter = await db
       .select()
       .from(chapters)
-      .where(eq(chapters.id, id))
+      .where(and(eq(chapters.id, chapterId), eq(chapters.userId, user.userId)))
       .get();
 
     if (!chapter) {
       return NextResponse.json(
-        { success: false, message: "章节不存在" },
+        { success: false, message: "章节不存在或无权操作" },
         { status: 404 }
-      );
-    }
-
-    const work = await checkWorkOwnership(db, chapter.workId, user.userId);
-    if (!work) {
-      return NextResponse.json(
-        { success: false, message: "无权删除该章节" },
-        { status: 403 }
       );
     }
 
@@ -294,10 +284,10 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       await db
         .update(chapters)
         .set({ volumeId: null })
-        .where(eq(chapters.volumeId, id));
+        .where(eq(chapters.volumeId, chapterId));
     }
 
-    await db.delete(chapters).where(eq(chapters.id, id));
+    await db.delete(chapters).where(eq(chapters.id, chapterId));
 
     // 重新统计作品总字数
     if (!chapter.isVolume) {

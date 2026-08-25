@@ -1,0 +1,19 @@
+@use "./variables" as *;
+
+.form-box {
+    .mantine-InputWrapper-label,
+    .mantine-TextInput-label,
+    .mantine-Select-label,
+    .mantine-Textarea-label,
+    .mantine-RadioGroup-label,
+    .mantine-CheckboxGroup-label,
+    .mantine-NumberInput-label {
+        color: $text-color !important;
+        margin-bottom: 0.08rem !important;
+        font-weight: bold;
+        font-size: 0.16rem;
+    }
+
+    // .mantine-Radio-label,
+    // .mantine-Checkbox-label
+}

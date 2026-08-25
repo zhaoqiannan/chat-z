@@ -16,10 +16,10 @@ export interface CreateWorkPayload {
 }
 
 export interface UpdateWorkPayload {
-  id: string;
+  id: number | string;
   title: string;
   tag: string;
-  expectedWords?: number | string;
+  expectedWords?: number;
   description?: string;
   cover?: string;
   status?: string;
@@ -28,27 +28,19 @@ export interface UpdateWorkPayload {
 /**
  * 获取当前用户作品列表
  */
-export const getWorkList = async () => {
-  return get(WorkApi.list);
-};
+export const getWorkList = async () => get(WorkApi.list);
 
 /**
  * 创建新作品
  */
-export const createWork = async (data: CreateWorkPayload) => {
-  return post(WorkApi.create, data);
-};
+export const createWork = async (data: CreateWorkPayload) => post(WorkApi.create, data);
 
 /**
  * 更新/编辑作品
  */
-export const updateWork = async (data: UpdateWorkPayload) => {
-  return put(WorkApi.update, data);
-};
+export const updateWork = async (data: UpdateWorkPayload) => put(WorkApi.update, data);
 
 /**
  * 删除作品 (包含级联章节)
  */
-export const deleteWork = async (id: string) => {
-  return del(WorkApi.delete, { id });
-};
+export const deleteWork = async (id: string) => del(WorkApi.delete, { id });

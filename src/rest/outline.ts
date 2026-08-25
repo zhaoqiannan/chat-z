@@ -12,7 +12,7 @@ export type OutlineNodeType = "volume" | "act" | "scene" | "event";
 
 export interface OutlineNode {
   id: string;
-  workId: string;
+  workId: number | string;
   parentId: string | null;
   type: OutlineNodeType;
   title: string;
@@ -29,7 +29,7 @@ export interface OutlineNode {
 }
 
 export interface CreateOutlinePayload {
-  workId: string;
+  workId: number | string;
   parentId?: string | null;
   type: OutlineNodeType;
   title: string;
