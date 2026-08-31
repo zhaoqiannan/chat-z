@@ -98,7 +98,7 @@ ${additionalPrompt ? `额外创作诉求：${additionalPrompt}` : ""}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7, maxTokens: 4096 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7, maxTokens: 8192 });
         const tree = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(tree) || tree.length === 0) {

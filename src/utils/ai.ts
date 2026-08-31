@@ -148,36 +148,34 @@ export async function callCloudflareAi(
 }
 
 /**
- * 自动修复不完整/被截断的 JSON 字符串
+ * 自动修复不完整/被截断的 JSON 字符串（处理控制字符、未闭合键值与括号栈）
  */
 function repairTruncatedJson(jsonStr: string): string {
-  let str = cleanJsonString(jsonStr);
+  const strClean = cleanJsonString(jsonStr);
 
-  // 如果字符串以未闭合的键值对或截断字段结束，回退到最后一个完整键值对
-  const lastCommaIndex = str.lastIndexOf(",");
-  const lastCloseBrace = str.lastIndexOf("}");
-  const lastCloseBracket = str.lastIndexOf("]");
-  const maxClose = Math.max(lastCloseBrace, lastCloseBracket);
-
-  // 如果最后一段是未闭合的属性（在最后的大括号闭合之后），尝试安全截断到最后一个闭合对象
-  if (maxClose > 0 && maxClose > lastCommaIndex && maxClose > str.length - 80) {
-    str = str.substring(0, maxClose + 1);
-  }
-
-  // 统计未闭合的引号、括号
+  // 1. 转义未转义的字符串内部控制字符（换行/制表符）
   let inString = false;
   let isEscaped = false;
   const stack: string[] = [];
+  let sanitized = "";
 
-  for (let i = 0; i < str.length; i++) {
-    const char = str[i];
+  for (let i = 0; i < strClean.length; i++) {
+    const char = strClean[i];
     if (char === "\\" && inString) {
       isEscaped = !isEscaped;
+      sanitized += char;
       continue;
     }
     if (char === '"' && !isEscaped) {
       inString = !inString;
-    } else if (!inString) {
+      sanitized += char;
+    } else if (inString) {
+      if (char === "\n") sanitized += "\\n";
+      else if (char === "\r") sanitized += "\\r";
+      else if (char === "\t") sanitized += "\\t";
+      else sanitized += char;
+    } else {
+      sanitized += char;
       if (char === "{" || char === "[") {
         stack.push(char);
       } else if (char === "}" && stack[stack.length - 1] === "{") {
@@ -189,15 +187,22 @@ function repairTruncatedJson(jsonStr: string): string {
     isEscaped = false;
   }
 
-  // 如果字符串处于未闭合的双引号中，先闭合双引号
+  let str = sanitized;
+
+  // 2. 如果截断在未闭合的字符串中，先闭合双引号
   if (inString) {
     str += '"';
   }
 
-  // 移除尾部悬空逗号
+  // 3. 检查末尾是否截断在冒号后例如 "key": 
+  if (/:\s*$/.test(str)) {
+    str += '""';
+  }
+
+  // 4. 移除尾随悬空逗号
   str = str.replace(/,\s*$/, "");
 
-  // 按照栈顺序逆序闭合所有未闭合的括号
+  // 5. 按照栈顺序逆序闭合所有未闭合的括号
   while (stack.length > 0) {
     const openChar = stack.pop();
     if (openChar === "{") {
@@ -211,6 +216,39 @@ function repairTruncatedJson(jsonStr: string): string {
 }
 
 /**
+ * 针对数组或对象结果进行规范化包装提取
+ */
+function normalizeResult<T>(parsed: any, fallbackValue: T): T {
+  if (Array.isArray(fallbackValue)) {
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => ({
+        ...item,
+        children: Array.isArray(item.children) ? item.children : [],
+      })) as unknown as T;
+    }
+    if (parsed && typeof parsed === "object") {
+      const arr =
+        parsed.volumes ||
+        parsed.outline ||
+        parsed.tree ||
+        parsed.data ||
+        parsed.list ||
+        parsed.result ||
+        parsed.chapters ||
+        parsed.scenes;
+      if (Array.isArray(arr)) {
+        return arr.map((item) => ({
+          ...item,
+          children: Array.isArray(item.children) ? item.children : [],
+        })) as unknown as T;
+      }
+      return [parsed] as unknown as T;
+    }
+  }
+  return parsed as T;
+}
+
+/**
  * 从 AI 生成的自然语言或 Markdown 文本中提取并解析出合法的 JSON 结构（具备自动截断修复能力）
  */
 export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
@@ -220,46 +258,37 @@ export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
 
   const text = rawText.trim();
 
-  // 1. 尝试直接解析
-  try {
-    return JSON.parse(text);
-  } catch {}
+  // 准备候选解析文本序列
+  const candidates: string[] = [text];
 
-  // 2. 尝试提取 ```json ... ``` 块
   const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/);
   if (jsonBlockMatch && jsonBlockMatch[1]) {
-    const candidate = cleanJsonString(jsonBlockMatch[1]);
-    try {
-      return JSON.parse(candidate);
-    } catch {
-      try {
-        const repaired = repairTruncatedJson(candidate);
-        return JSON.parse(repaired);
-      } catch {}
-    }
+    candidates.unshift(jsonBlockMatch[1]);
   }
 
-  // 3. 尝试匹配首个 [ ... ] (数组优先)
   const firstBracket = text.indexOf("[");
   if (firstBracket !== -1) {
-    const subStr = text.substring(firstBracket);
-    try {
-      const repaired = repairTruncatedJson(subStr);
-      const parsed = JSON.parse(repaired);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed as T;
-      }
-    } catch {}
+    candidates.push(text.substring(firstBracket));
   }
 
-  // 4. 尝试匹配首个 { ... } (对象)
   const firstBrace = text.indexOf("{");
   if (firstBrace !== -1) {
-    const subStr = text.substring(firstBrace);
+    candidates.push(text.substring(firstBrace));
+  }
+
+  for (const raw of candidates) {
+    // 1. 直接解析
     try {
-      const repaired = repairTruncatedJson(subStr);
-      return JSON.parse(repaired);
-    } catch {}
+      const parsed = JSON.parse(raw);
+      return normalizeResult(parsed, fallbackValue);
+    } catch {
+      // 2. 自动修复截断后解析
+      try {
+        const repaired = repairTruncatedJson(raw);
+        const parsed = JSON.parse(repaired);
+        return normalizeResult(parsed, fallbackValue);
+      } catch {}
+    }
   }
 
   return fallbackValue;
