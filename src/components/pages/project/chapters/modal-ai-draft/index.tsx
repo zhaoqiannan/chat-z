@@ -103,7 +103,7 @@ export default function ModalAiDraft({
         </Flex>
       }
       centered
-      size="lg"
+      size="70vw"
       radius="md"
     >
       <Stack gap="14px" className="form-box">

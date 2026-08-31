@@ -97,6 +97,7 @@ export default function ModalCreateChapter({
         </Flex>
       }
       centered
+      size="70vw"
       radius="md"
       padding="xl"
     >

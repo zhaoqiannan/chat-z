@@ -65,6 +65,16 @@ export interface AiOptimizePayload {
   optimizeGoal?: string;
 }
 
+export interface AiSelectionPayload {
+  workId: number | string;
+  chapterId?: number | string;
+  mode: "selection_ai";
+  selectedText: string;
+  actionType: "polish" | "expand" | "shorten" | "enrich_desc" | "dialogue" | "custom";
+  customInstruction?: string;
+  fullContext?: string;
+}
+
 export const getChapterList = async (workId: string) => {
   return get(ChapterApi.list, { workId });
 };
@@ -88,4 +98,30 @@ export const requestChapterAiDraft = async (data: AiDraftPayload) => {
 export const requestChapterAiOptimize = async (data: AiOptimizePayload) => {
   return post(ChapterApi.ai, data);
 };
+
+export const requestChapterSelectionAi = async (data: AiSelectionPayload) => {
+  return post(ChapterApi.ai, data);
+};
+
+export interface ChapterAiHistoryItem {
+  id: number;
+  workId: number;
+  chapterId: number;
+  mode: "draft" | "optimize" | "selection_ai" | string;
+  title: string;
+  promptSummary?: string;
+  content: string;
+  wordCount: number;
+  createdAt: string | number;
+}
+
+export const getChapterAiHistoryList = async (chapterId: number | string, workId?: number | string) => {
+  return get(`/api/ai/chapter/history?chapterId=${chapterId}${workId ? `&workId=${workId}` : ""}`);
+};
+
+export const deleteChapterAiHistory = async (id: number | string) => {
+  return del(`/api/ai/chapter/history`, { id });
+};
+
+
 

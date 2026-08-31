@@ -1,0 +1,134 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  background-color: #ffffff;
+  overflow: hidden;
+}
+
+.header {
+  padding: 16px 28px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  flex-shrink: 0;
+}
+
+.contentArea {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px 60px;
+  background: #ffffff;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.entityCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  &:hover {
+    border-color: #00c9ff;
+    box-shadow: 0 8px 24px rgba(0, 201, 255, 0.08);
+    transform: translateY(-2px);
+  }
+}
+
+.cardAvatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.mapCanvasWrapper {
+  width: 100%;
+  height: calc(100vh - 160px);
+  background: radial-gradient(#e2e8f0 1.2px, #f8fafc 1.2px);
+  background-size: 24px 24px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  cursor: crosshair;
+}
+
+.mapLocationPin {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  z-index: 10;
+
+  &:hover {
+    transform: translate(-50%, -115%) scale(1.15);
+    z-index: 20;
+  }
+}
+
+.pinBadge {
+  background: #ffffff;
+  border: 2px solid #00c9ff;
+  border-radius: 20px;
+  padding: 4px 10px;
+  box-shadow: 0 4px 12px rgba(0, 201, 255, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.levelTreeStep {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  position: relative;
+  border-left: 4px solid #00c9ff;
+  transition: all 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  }
+}
+
+.imageUploadPreview {
+  width: 100%;
+  height: 140px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: #f8fafc;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  position: relative;
+
+  &:hover {
+    border-color: #00c9ff;
+    background: #f0fdf4;
+  }
+}

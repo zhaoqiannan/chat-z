@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Box, LoadingOverlay } from "@mantine/core";
+import { Box, LoadingOverlay, Button, Tooltip } from "@mantine/core";
 import {
   getChapterList,
   createChapter,
@@ -28,6 +28,9 @@ export default function ChaptersPage() {
   const [loading, setLoading] = useState(false);
   const [rawList, setRawList] = useState<ChapterItem[]>([]);
   const [activeChapter, setActiveChapter] = useState<ChapterItem | null>(null);
+
+  // 目录大纲树折叠状态（默认收起以提供沉浸写作空间）
+  const [treeCollapsed, setTreeCollapsed] = useState(true);
 
   // 弹窗状态
   const [detailModalOpened, setDetailModalOpened] = useState(false);
@@ -139,14 +142,20 @@ export default function ChaptersPage() {
     const res = await updateChapter(data);
     if (res && res.success) {
       await fetchChapters();
+      if (activeChapter && activeChapter.id === data.id) {
+        setActiveChapter((prev) => (prev ? { ...prev, ...data } : null));
+      }
     }
   };
 
-  // 删除
+  // 删除节点
   const handleDelete = async (id: number | string) => {
-    if (window.confirm("确定要删除该章节 / 分卷吗？")) {
+    if (confirm("确定要删除该章节/分卷吗？此操作不可撤销。")) {
       const res = await deleteChapter(String(id));
       if (res && res.success) {
+        if (activeChapter?.id === id) {
+          setActiveChapter(null);
+        }
         await fetchChapters();
       }
     }
@@ -191,12 +200,14 @@ export default function ChaptersPage() {
     <Box className={styles.container} pos="relative">
       <LoadingOverlay visible={loading && rawList.length === 0} />
 
-      {/* 1. 左侧分卷与章节大纲树 */}
+      {/* 1. 左侧分卷与章节大纲树 (支持默认收起/展开) */}
       <TreePanel
         volumes={volumes}
         chaptersByVolume={chaptersByVolume}
         unassignedChapters={unassignedChapters}
         activeChapterId={activeChapter?.id || null}
+        collapsed={treeCollapsed}
+        onToggleCollapse={() => setTreeCollapsed(!treeCollapsed)}
         onSelectChapter={handleSelectChapter}
         onOpenDetailModal={handleOpenDetailModal}
         onOpenCreateVolume={() => setVolumeModalOpened(true)}
@@ -209,7 +220,7 @@ export default function ChaptersPage() {
 
       {/* 2. 右侧沉浸式写作区 / AI 双栏对比区 */}
       {isDiffMode && activeChapter ? (
-        <Box className={styles.detailPanel}>
+        <Box style={{ flex: 1, height: "100%", overflowY: "auto", padding: "24px 36px" }}>
           <DiffViewer
             originalText={activeChapter.content || ""}
             optimizedText={aiOptimizedContent}
@@ -221,6 +232,8 @@ export default function ChaptersPage() {
         <EditorArea
           workId={workId}
           chapter={activeChapter}
+          treeCollapsed={treeCollapsed}
+          onToggleTree={() => setTreeCollapsed(!treeCollapsed)}
           onUpdateContent={handleUpdate}
           onOpenAiDraft={() => setAiDraftModalOpened(true)}
           onOpenDetailModal={() => {

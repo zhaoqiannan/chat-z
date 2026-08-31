@@ -109,9 +109,16 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
       key: "world",
       label: "世界/知识库",
       icon: <FiDatabase size={16} />,
-      disabled: true,
+      active: currentTab === "world",
+      disabled: false,
       hasSub: true,
-      subItems: ["角色", "地点", "阵营", "物品", "规则"],
+      subItems: [
+        { label: "角色", key: "characters" },
+        { label: "地点", key: "locations" },
+        { label: "阵营", key: "factions" },
+        { label: "物品", key: "items" },
+        { label: "规则", key: "rules" },
+      ],
     },
     { key: "notes", label: "笔记", icon: <FiEdit3 size={16} />, disabled: true },
     { key: "materials", label: "素材", icon: <FiBox size={16} />, disabled: true },
@@ -306,11 +313,24 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
 
                     {item.hasSub && !collapsed && worldExpanded && (
                       <div className={styles.subMenuList}>
-                        {item.subItems?.map((sub) => (
-                          <div key={sub} className={styles.subMenuItem}>
-                            {sub}
-                          </div>
-                        ))}
+                        {item.subItems?.map((sub: any) => {
+                          const subKey = typeof sub === "string" ? sub : sub.key;
+                          const subLabel = typeof sub === "string" ? sub : sub.label;
+                          const isSubActive = currentTab === "world" && (searchParams.get("subTab") || "characters") === subKey;
+
+                          return (
+                            <div
+                              key={subKey}
+                              className={`${styles.subMenuItem} ${isSubActive ? styles.activeSub : ""}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`${pathname}?tab=world&subTab=${subKey}`);
+                              }}
+                            >
+                              {subLabel}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </React.Fragment>

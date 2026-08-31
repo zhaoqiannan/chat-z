@@ -20,6 +20,11 @@ const ProjectChapters = dynamic(
   { loading: () => <LoadingOverlay visible /> }
 );
 
+const WorldLore = dynamic(
+  () => import("@/components/pages/project/world"),
+  { loading: () => <LoadingOverlay visible /> }
+);
+
 function ProjectDetailContent() {
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "overview";
@@ -28,7 +33,8 @@ function ProjectDetailContent() {
     <Box w="100%" h="100%">
       {tab === "outline" && <StoryOutline />}
       {tab === "chapters" && <ProjectChapters />}
-      {tab !== "outline" && tab !== "chapters" && <ProjectOverview />}
+      {tab === "world" && <WorldLore />}
+      {tab !== "outline" && tab !== "chapters" && tab !== "world" && <ProjectOverview />}
     </Box>
   );
 }

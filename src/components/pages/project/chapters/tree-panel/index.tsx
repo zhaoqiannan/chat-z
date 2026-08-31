@@ -19,6 +19,7 @@ import {
   FiChevronRight,
   FiTrash2,
   FiInfo,
+  FiSidebar,
 } from "react-icons/fi";
 import { ChapterItem } from "@/rest/chapter";
 import styles from "../style.module.scss";
@@ -28,6 +29,8 @@ interface TreePanelProps {
   chaptersByVolume: Record<string | number, ChapterItem[]>;
   unassignedChapters: ChapterItem[];
   activeChapterId: number | string | null;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
   onSelectChapter: (chapter: ChapterItem) => void;
   onOpenDetailModal: (item: ChapterItem) => void;
   onOpenCreateVolume: () => void;
@@ -40,6 +43,8 @@ export default function TreePanel({
   chaptersByVolume,
   unassignedChapters,
   activeChapterId,
+  collapsed = false,
+  onToggleCollapse,
   onSelectChapter,
   onOpenDetailModal,
   onOpenCreateVolume,
@@ -58,34 +63,41 @@ export default function TreePanel({
   };
 
   return (
-    <aside className={styles.treePanel}>
+    <aside className={`${styles.treePanel} ${collapsed ? styles.collapsed : ""}`}>
       <div className={styles.treeHeader}>
-        <Flex align="center" gap={6}>
-          <Text fw={700} fz={15} c="#1e293b">
+        <Flex align="center" gap={8}>
+          <Tooltip label="收起目录 (专注写作)" withArrow position="bottom">
+            <ActionIcon variant="subtle" color="gray" size="sm" onClick={onToggleCollapse}>
+              <FiSidebar size={15} />
+            </ActionIcon>
+          </Tooltip>
+          <Text fw={700} fz={14} c="#1e293b">
             目录大纲
           </Text>
         </Flex>
 
-        <Flex gap={6}>
-          <Tooltip label="新建分卷 (文件夹)" withArrow position="bottom">
-            <Button
-              size="xs"
+        <Flex gap={4}>
+          <Tooltip label="新建分卷" withArrow position="bottom">
+            <ActionIcon
+              size="sm"
               variant="light"
               color="indigo"
-              leftSection={<FiFolderPlus size={13} />}
               onClick={onOpenCreateVolume}
             >
-              新建卷
-            </Button>
+              <FiFolderPlus size={14} />
+            </ActionIcon>
           </Tooltip>
 
-          <Button
-            size="xs"
-            leftSection={<FiFilePlus size={13} />}
-            onClick={() => onOpenCreateChapter(null)}
-          >
-            新建章
-          </Button>
+          <Tooltip label="新建正文章节" withArrow position="bottom">
+            <ActionIcon
+              size="sm"
+              variant="light"
+              color="cyan"
+              onClick={() => onOpenCreateChapter(null)}
+            >
+              <FiFilePlus size={14} />
+            </ActionIcon>
+          </Tooltip>
         </Flex>
       </div>
 
@@ -99,38 +111,20 @@ export default function TreePanel({
           return (
             <div key={vol.id} className={styles.volumeBlock}>
               <div
-                className={styles.volumeHeader}
-                onClick={() => onOpenDetailModal(vol)}
+                className={`${styles.volumeHeader} ${activeChapterId === vol.id ? styles.active : ""}`}
+                onClick={(e) => toggleVolumeCollapse(vol.id, e)}
               >
-                <ActionIcon
-                  size="xs"
-                  variant="subtle"
-                  color="gray"
-                  onClick={(e) => toggleVolumeCollapse(vol.id, e)}
-                  style={{ marginRight: 2 }}
-                >
-                  {isCollapsed ? <FiChevronRight size={13} /> : <FiChevronDown size={13} />}
-                </ActionIcon>
+                {isCollapsed ? <FiChevronRight size={13} /> : <FiChevronDown size={13} />}
+                <FiFolder size={14} color="#6366f1" style={{ marginLeft: 4 }} />
+                <span className={styles.volumeTitle}>{vol.title}</span>
 
-                <FiFolder size={14} color="#6366f1" />
-                <span className={styles.volumeTitle} title={vol.title}>
-                  {vol.title}
-                </span>
-
-                <Badge size="xs" color="gray" variant="light" style={{ marginLeft: 4 }}>
-                  {list.length}章 · {volWords.toLocaleString()}字
-                </Badge>
-
-                <div className={styles.volumeActions}>
-                  <Tooltip label="分卷详情设定" withArrow position="top">
+                <div className={styles.volumeActions} onClick={(e) => e.stopPropagation()}>
+                  <Tooltip label="分卷设定" withArrow position="top">
                     <ActionIcon
-                      size="xs"
                       variant="subtle"
-                      color="blue"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenDetailModal(vol);
-                      }}
+                      color="gray"
+                      size="xs"
+                      onClick={() => onOpenDetailModal(vol)}
                     >
                       <FiInfo size={12} />
                     </ActionIcon>
@@ -138,13 +132,10 @@ export default function TreePanel({
 
                   <Tooltip label="在此卷下新建章" withArrow position="top">
                     <ActionIcon
-                      size="xs"
                       variant="subtle"
                       color="blue"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenCreateChapter(vol.id);
-                      }}
+                      size="xs"
+                      onClick={() => onOpenCreateChapter(vol.id)}
                     >
                       <FiFilePlus size={12} />
                     </ActionIcon>
@@ -152,13 +143,10 @@ export default function TreePanel({
 
                   <Tooltip label="删除卷" withArrow position="top">
                     <ActionIcon
-                      size="xs"
                       variant="subtle"
                       color="red"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteItem(vol.id);
-                      }}
+                      size="xs"
+                      onClick={() => onDeleteItem(vol.id)}
                     >
                       <FiTrash2 size={12} />
                     </ActionIcon>
@@ -166,130 +154,84 @@ export default function TreePanel({
                 </div>
               </div>
 
-              {/* 卷内章节列表 */}
+              {/* 卷下的章节列表 */}
               {!isCollapsed && (
                 <div>
-                  {list.map((ch) => {
-                    const isActive = activeChapterId === ch.id;
-                    return (
-                      <div
-                        key={ch.id}
-                        className={`${styles.chapterItem} ${isActive ? styles.active : ""}`}
-                        onClick={() => onSelectChapter(ch)}
-                      >
-                        {renderStatusDot(ch.status)}
-                        <FiFileText size={13} style={{ marginRight: 2 }} />
-                        <span className={styles.chapterTitle} title={ch.title}>
-                          {ch.title}
-                        </span>
-                        <Text fz={11} c="#94a3b8" style={{ marginLeft: "auto", marginRight: 4 }}>
-                          {(ch.wordCount || 0).toLocaleString()}字
-                        </Text>
+                  {list.map((ch) => (
+                    <div
+                      key={ch.id}
+                      className={`${styles.chapterItem} ${activeChapterId === ch.id ? styles.active : ""}`}
+                      onClick={() => onSelectChapter(ch)}
+                    >
+                      {renderStatusDot(ch.status)}
+                      <span className={styles.chapterTitle}>
+                        第 {ch.chapterNumber} 章 {ch.title}
+                      </span>
 
-                        <div className={styles.chapterActions}>
-                          <Tooltip label="查看章节详情" withArrow position="top">
-                            <ActionIcon
-                              size="xs"
-                              variant="subtle"
-                              color="blue"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenDetailModal(ch);
-                              }}
-                            >
-                              <FiInfo size={12} />
-                            </ActionIcon>
-                          </Tooltip>
-
-                          <ActionIcon
-                            size="xs"
-                            variant="subtle"
-                            color="red"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDeleteItem(ch.id);
-                            }}
-                          >
-                            <FiTrash2 size={12} />
-                          </ActionIcon>
-                        </div>
+                      <div className={styles.chapterActions} onClick={(e) => e.stopPropagation()}>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          size="xs"
+                          onClick={() => onOpenDetailModal(ch)}
+                        >
+                          <FiInfo size={12} />
+                        </ActionIcon>
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          size="xs"
+                          onClick={() => onDeleteItem(ch.id)}
+                        >
+                          <FiTrash2 size={12} />
+                        </ActionIcon>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           );
         })}
 
-        {/* 2. 未分卷的独立章节 */}
+        {/* 2. 未归入分卷的独立章节 */}
         {unassignedChapters.length > 0 && (
-          <div className={styles.volumeBlock}>
-            {volumes.length > 0 && (
-              <Text fz={11} fw={700} c="#94a3b8" px={8} py={4}>
-                未分卷章节 ({unassignedChapters.length})
-              </Text>
-            )}
+          <div className={styles.volumeBlock} style={{ marginTop: 8 }}>
+            <Text fz={11} fw={700} c="#94a3b8" p="4px 8px">
+              独立章节 ({unassignedChapters.length})
+            </Text>
+            {unassignedChapters.map((ch) => (
+              <div
+                key={ch.id}
+                className={`${styles.chapterItem} ${activeChapterId === ch.id ? styles.active : ""}`}
+                onClick={() => onSelectChapter(ch)}
+              >
+                {renderStatusDot(ch.status)}
+                <span className={styles.chapterTitle}>
+                  第 {ch.chapterNumber} 章 {ch.title}
+                </span>
 
-            {unassignedChapters.map((ch) => {
-              const isActive = activeChapterId === ch.id;
-              return (
-                <div
-                  key={ch.id}
-                  className={`${styles.chapterItem} ${isActive ? styles.active : ""}`}
-                  style={{ marginLeft: volumes.length > 0 ? 8 : 0 }}
-                  onClick={() => onSelectChapter(ch)}
-                >
-                  {renderStatusDot(ch.status)}
-                  <FiFileText size={13} style={{ marginRight: 2 }} />
-                  <span className={styles.chapterTitle} title={ch.title}>
-                    {ch.title}
-                  </span>
-                  <Text fz={11} c="#94a3b8" style={{ marginLeft: "auto", marginRight: 4 }}>
-                    {(ch.wordCount || 0).toLocaleString()}字
-                  </Text>
-
-                  <div className={styles.chapterActions}>
-                    <Tooltip label="查看章节详情" withArrow position="top">
-                      <ActionIcon
-                        size="xs"
-                        variant="subtle"
-                        color="blue"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenDetailModal(ch);
-                        }}
-                      >
-                        <FiInfo size={12} />
-                      </ActionIcon>
-                    </Tooltip>
-
-                    <ActionIcon
-                      size="xs"
-                      variant="subtle"
-                      color="red"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteItem(ch.id);
-                      }}
-                    >
-                      <FiTrash2 size={12} />
-                    </ActionIcon>
-                  </div>
+                <div className={styles.chapterActions} onClick={(e) => e.stopPropagation()}>
+                  <ActionIcon
+                    variant="subtle"
+                    color="gray"
+                    size="xs"
+                    onClick={() => onOpenDetailModal(ch)}
+                  >
+                    <FiInfo size={12} />
+                  </ActionIcon>
+                  <ActionIcon
+                    variant="subtle"
+                    color="red"
+                    size="xs"
+                    onClick={() => onDeleteItem(ch.id)}
+                  >
+                    <FiTrash2 size={12} />
+                  </ActionIcon>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
-        )}
-
-        {volumes.length === 0 && unassignedChapters.length === 0 && (
-          <Flex direction="column" align="center" justify="center" py={40} gap={10} c="#94a3b8">
-            <FiFileText size={36} strokeWidth={1.5} />
-            <Text fz={13}>暂无章节内容</Text>
-            <Button size="xs" onClick={() => onOpenCreateChapter(null)}>
-              创建第一章
-            </Button>
-          </Flex>
         )}
       </div>
     </aside>

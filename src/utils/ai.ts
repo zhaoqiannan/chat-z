@@ -304,3 +304,68 @@ function cleanJsonString(str: string): string {
     .replace(/,\s*([\]}])/g, "$1") // 移除尾随逗号 (trailing comma)
     .trim();
 }
+
+/**
+ * 智能提取纯净的小说正文文本（自动剥离 AI 思考链、大纲分析、草稿标记与字数元数据）
+ */
+export function cleanNovelStoryText(rawText: string): string {
+  if (!rawText || !rawText.trim()) return "";
+  let text = rawText.trim();
+
+  // 1. 如果包含常见的思考与草稿分界标志，提取最后一段正式正文
+  const splitKeywords = [
+    /【正文开始】/i,
+    /【正文】/i,
+    /正文如下[：:]/i,
+    /正式正文[：:]/i,
+    /最终(?:正文|定稿)[：:]/i,
+    /重写压缩[：:]/i,
+    /精简版[：:]/i,
+    /目标\d+.*?[：:]/i,
+    /草稿[：:]/i,
+  ];
+
+  for (const pattern of splitKeywords) {
+    const matches = text.split(pattern);
+    if (matches.length > 1) {
+      const lastCandidate = matches[matches.length - 1].trim();
+      if (lastCandidate.length > 100) {
+        text = lastCandidate;
+      }
+    }
+  }
+
+  // 2. 剥离模型开头可能遗留的思考前缀行（如 "我们需要回答用户..."、"好的，我来为您..."）
+  const lines = text.split("\n");
+  let startIndex = 0;
+  for (let i = 0; i < Math.min(lines.length, 12); i++) {
+    const line = lines[i].trim();
+    if (
+      line.startsWith("我们需要") ||
+      line.startsWith("用户要求") ||
+      line.startsWith("需要构思") ||
+      line.startsWith("思考过程") ||
+      line.startsWith("字数估算") ||
+      line.startsWith("好的，") ||
+      line.startsWith("以下是") ||
+      line.startsWith("```")
+    ) {
+      startIndex = i + 1;
+    } else {
+      break;
+    }
+  }
+
+  if (startIndex > 0 && startIndex < lines.length) {
+    text = lines.slice(startIndex).join("\n").trim();
+  }
+
+  // 3. 移除开头的废话前缀如 "可写："、"正文："、"剧情："
+  text = text.replace(/^(?:可写[：:]|正文[：:]|剧情[：:]|故事[：:])\s*/i, "");
+
+  // 4. 剥离文末的字数分析或元说明
+  const endPattern = /\n+(?:字数估算|字数统计|总结|以上是|注[：:])[\s\S]*$/i;
+  text = text.replace(endPattern, "").trim();
+
+  return text;
+}

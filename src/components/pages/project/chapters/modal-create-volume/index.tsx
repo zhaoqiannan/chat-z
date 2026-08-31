@@ -58,6 +58,7 @@ export default function ModalCreateVolume({
       onClose={onClose}
       title={<Text fw={700} fz={16}>新建分卷 (Volume)</Text>}
       centered
+      size="70vw"
       radius="md"
       padding="xl"
     >

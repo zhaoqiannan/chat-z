@@ -109,7 +109,7 @@ export default function ModalCreateNode({
       opened={opened}
       onClose={onClose}
       title="新建大纲节点"
-      size="60vw"
+      size="70vw"
       centered
       overlayProps={{ backgroundOpacity: 0.35, blur: 3 }}
     >
