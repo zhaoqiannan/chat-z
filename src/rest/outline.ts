@@ -6,6 +6,7 @@ export const OutlineApi = {
   update: "/api/outlines",
   delete: "/api/outlines",
   aiAssistant: "/api/ai/outline",
+  history: "/api/ai/outline/history",
 };
 
 /** 大纲节点层级类型：故事主线 | 卷 | 幕 | 情节点 | 支线 | 事件 */
@@ -23,22 +24,22 @@ export type PlotPointType =
 export interface OutlineNode {
   id: string;
   workId: number | string;
-  parentId: string | null;
+  parentId?: string | null;
   type: OutlineNodeType;
-  pointType?: PlotPointType | string;
+  pointType?: PlotPointType | null;
   title: string;
   orderIndex: number;
   goal: string;
-  conflict?: string;
-  eventDescription?: string;
-  expectedOutcome?: string;
-  characters?: string;
-  locations?: string;
-  foreshadowing?: string;
-  linkedChapters?: number[];
-  remarks?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  conflict?: string | null;
+  eventDescription?: string | null;
+  expectedOutcome?: string | null;
+  characters?: string | null;
+  locations?: string | null;
+  foreshadowing?: string | null;
+  linkedChapters?: number[] | null;
+  remarks?: string | null;
+  createdAt?: string | number;
+  updatedAt?: string | number;
   children?: OutlineNode[];
 }
 
@@ -46,8 +47,9 @@ export interface CreateOutlinePayload {
   workId: number | string;
   parentId?: string | null;
   type: OutlineNodeType;
-  pointType?: PlotPointType | string;
+  pointType?: PlotPointType | null;
   title: string;
+  orderIndex?: number;
   goal: string;
   conflict?: string;
   eventDescription?: string;
@@ -57,36 +59,25 @@ export interface CreateOutlinePayload {
   foreshadowing?: string;
   linkedChapters?: number[];
   remarks?: string;
-  orderIndex?: number;
 }
 
-export interface UpdateOutlinePayload {
+export interface UpdateOutlinePayload extends Partial<CreateOutlinePayload> {
   id: string;
-  title?: string;
-  type?: OutlineNodeType;
-  pointType?: PlotPointType | string;
-  goal?: string;
-  conflict?: string;
-  eventDescription?: string;
-  expectedOutcome?: string;
-  characters?: string;
-  locations?: string;
-  foreshadowing?: string;
-  linkedChapters?: number[];
-  remarks?: string;
-  parentId?: string | null;
-  orderIndex?: number;
 }
 
 export type OutlineAiAction =
-  | "generate_from_premise"   // 一句话/梗概生成大纲
-  | "expand_node"             // 扩写当前节点
-  | "split_node"              // 拆分一个节点为多个情节点
-  | "plan_chapters"           // 根据卷大纲生成章节规划
-  | "check_mainline"          // 检查主线完整度
-  | "check_conflict"          // 检查冲突密度
-  | "check_pacing"            // 检查故事节奏
-  | "alternative_plots";      // 提供替代剧情方案
+  | "generate_from_premise"
+  | "plan_chapters"
+  | "expand_node"
+  | "split_node"
+  | "find_plot_holes"
+  | "polish_rhythm"
+  | "generate_alternatives"
+  | "alternative_plots"
+  | "check_mainline"
+  | "check_conflict"
+  | "check_pacing"
+  | "diagnose";
 
 export interface OutlineAiPayload {
   workId: number | string;
@@ -95,6 +86,17 @@ export interface OutlineAiPayload {
   targetNodeId?: string;
   targetNode?: Partial<OutlineNode>;
   additionalPrompt?: string;
+}
+
+export interface OutlineAiHistoryRecord {
+  id: number;
+  workId: number;
+  nodeId?: string | null;
+  action: string;
+  title: string;
+  prompt?: string | null;
+  resultPayload: any;
+  createdAt: string | number;
 }
 
 /**
@@ -137,4 +139,18 @@ export const deleteOutlineNode = async (id: string) => {
  */
 export const requestOutlineAi = async (data: OutlineAiPayload) => {
   return post(OutlineApi.aiAssistant, data);
+};
+
+/**
+ * 获取 AI 推演历史记录
+ */
+export const getOutlineAiHistoryList = async (workId: string | number, nodeId?: string) => {
+  return get(OutlineApi.history, { workId, nodeId });
+};
+
+/**
+ * 删除指定 AI 推演历史记录
+ */
+export const deleteOutlineAiHistoryRecord = async (id: number) => {
+  return del(OutlineApi.history, { id });
 };

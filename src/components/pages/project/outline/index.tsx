@@ -15,6 +15,7 @@ import {
   CreateOutlinePayload,
   UpdateOutlinePayload,
   OutlineNodeType,
+  OutlineAiHistoryRecord,
 } from "@/rest/outline";
 import { getWorkDetail, WorkItem } from "@/rest/work";
 import TreePanel from "./tree-panel";
@@ -22,6 +23,7 @@ import DetailPanel from "./detail-panel";
 import ModalCreateNode from "./modal-create-node";
 import ModalAiAssistant from "./modal-ai-assistant";
 import ModalAiPreview, { PreviewData } from "./modal-ai-preview";
+import DrawerAiHistory from "./drawer-ai-history";
 import styles from "./style.module.scss";
 
 /**
@@ -62,6 +64,7 @@ export default function StoryOutlinePage() {
   const [createDefaultType, setCreateDefaultType] = useState<OutlineNodeType>("scene");
 
   const [aiAssistantOpened, setAiAssistantOpened] = useState(false);
+  const [historyDrawerOpened, setHistoryDrawerOpened] = useState(false);
   const [previewModalOpened, setPreviewModalOpened] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
 
@@ -309,6 +312,22 @@ export default function StoryOutlinePage() {
     await fetchData();
   };
 
+  const handleSelectHistoryVersion = (record: OutlineAiHistoryRecord) => {
+    if (!record || !record.resultPayload) return;
+    const payload = record.resultPayload;
+    setPreviewData({
+      action: record.action,
+      summary: `历史版本恢复 [${record.title}]`,
+      generatedTree: payload.generatedTree,
+      expandedData: payload.expandedData,
+      splitScenes: payload.splitScenes,
+      chapterPlans: payload.chapterPlans,
+      diagnosis: payload.diagnosis,
+      alternatives: payload.alternatives,
+    });
+    setPreviewModalOpened(true);
+  };
+
   const parentOptions = flatNodes
     .filter((n) => n.id !== selectedNode?.id)
     .map((n) => ({
@@ -327,6 +346,7 @@ export default function StoryOutlinePage() {
           onSelectOverview={handleSelectOverview}
           onOpenCreateRoot={handleOpenCreateRoot}
           onOpenCreateChild={handleOpenCreateChild}
+          onOpenHistory={() => setHistoryDrawerOpened(true)}
         />
       </Grid.Col>
       <Grid.Col span={8}>
@@ -338,6 +358,7 @@ export default function StoryOutlinePage() {
           onSave={handleUpdateNode}
           onTriggerNodeAi={handleTriggerNodeAi}
           onOpenAiAssistant={() => setAiAssistantOpened(true)}
+          onOpenHistory={() => setHistoryDrawerOpened(true)}
           onOpenCreateSibling={handleOpenCreateSibling}
           onOpenCreateChild={handleOpenCreateChild}
           onDeleteNode={handleDeleteNode}
@@ -374,6 +395,13 @@ export default function StoryOutlinePage() {
       targetNodeId={selectedNode?.id}
       onApplyAll={handleApplyAiAll}
       onApplySelected={handleApplyAiSelected}
+    />
+
+    <DrawerAiHistory
+      opened={historyDrawerOpened}
+      onClose={() => setHistoryDrawerOpened(false)}
+      workId={workId}
+      onSelectVersion={handleSelectHistoryVersion}
     />
   </>);
 }

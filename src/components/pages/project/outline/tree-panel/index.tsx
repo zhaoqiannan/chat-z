@@ -22,6 +22,7 @@ import {
   FiMinimize2,
   FiMaximize2,
   FiX,
+  FiClock,
 } from "react-icons/fi";
 import { OutlineNode, OutlineNodeType } from "@/rest/outline";
 import styles from "../style.module.scss";
@@ -34,6 +35,7 @@ interface TreePanelProps {
   onSelectOverview: () => void;
   onOpenCreateRoot: () => void;
   onOpenCreateChild?: (parentId: string) => void;
+  onOpenHistory?: () => void;
 }
 
 export default function TreePanel({
@@ -44,6 +46,7 @@ export default function TreePanel({
   onSelectOverview,
   onOpenCreateRoot,
   onOpenCreateChild,
+  onOpenHistory,
 }: TreePanelProps) {
   const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
@@ -275,11 +278,20 @@ export default function TreePanel({
           <Text fz={15} fw={700} c="#0f172a">
             大纲目录结构
           </Text>
-          <Tooltip label="添加顶级大纲节点" withArrow position="bottom">
-            <ActionIcon size="sm" variant="light" onClick={onOpenCreateRoot}>
-              <FiPlus size={15} />
-            </ActionIcon>
-          </Tooltip>
+          <Flex align="center" gap={6}>
+            {onOpenHistory && (
+              <Tooltip label="AI 推演历史版本库" withArrow position="bottom">
+                <ActionIcon size="sm" variant="subtle" color="blue" onClick={onOpenHistory}>
+                  <FiClock size={15} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            <Tooltip label="添加顶级大纲节点" withArrow position="bottom">
+              <ActionIcon size="sm" variant="light" onClick={onOpenCreateRoot}>
+                <FiPlus size={15} />
+              </ActionIcon>
+            </Tooltip>
+          </Flex>
         </Flex>
 
         <Flex

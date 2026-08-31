@@ -116,9 +116,20 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const inserted = await db.insert(works).values(newWorkData).returning().get();
 
+    let resultWork: any = inserted;
+    if (!resultWork || !resultWork.id) {
+      resultWork = await db
+        .select()
+        .from(works)
+        .where(eq(works.userId, user.userId))
+        .orderBy(desc(works.id))
+        .limit(1)
+        .get();
+    }
+
     return NextResponse.json({
       success: true,
-      result: inserted || newWorkData,
+      result: resultWork || newWorkData,
       message: "新建作品成功",
     });
   } catch (error: any) {

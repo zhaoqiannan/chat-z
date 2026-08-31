@@ -23,6 +23,7 @@ import {
   FiEdit2,
   FiFileText,
   FiCompass,
+  FiClock,
 } from "react-icons/fi";
 import { OutlineNode, UpdateOutlinePayload } from "@/rest/outline";
 import { WorkItem } from "@/rest/work";
@@ -36,6 +37,7 @@ interface DetailPanelProps {
   onSave: (data: UpdateOutlinePayload) => Promise<void>;
   onTriggerNodeAi: (action: "expand_node" | "split_node") => void;
   onOpenAiAssistant: () => void;
+  onOpenHistory?: () => void;
   onOpenCreateSibling: (parentId: string | null) => void;
   onOpenCreateChild: (parentId: string) => void;
   onDeleteNode: (id: string) => void;
@@ -49,6 +51,7 @@ export default function DetailPanel({
   onSave,
   onTriggerNodeAi,
   onOpenAiAssistant,
+  onOpenHistory,
   onOpenCreateSibling,
   onOpenCreateChild,
   onDeleteNode,
@@ -177,6 +180,17 @@ export default function DetailPanel({
           </Flex>
 
           <Flex align="center" gap={8}>
+            {onOpenHistory && (
+              <Button
+                variant="outline"
+                color="blue"
+                size="sm"
+                leftSection={<FiClock size={14} />}
+                onClick={onOpenHistory}
+              >
+                推演历史
+              </Button>
+            )}
             <Button
               variant="light"
               color="violet"
@@ -287,10 +301,18 @@ export default function DetailPanel({
               >
                 拆解情节点
               </Menu.Item>
+              {onOpenHistory && (
+                <Menu.Item
+                  leftSection={<FiClock size={14} />}
+                  onClick={onOpenHistory}
+                >
+                  推演历史版本
+                </Menu.Item>
+              )}
               <Menu.Divider />
               <Menu.Item
                 leftSection={<FiPlus size={14} />}
-                onClick={() => onOpenCreateSibling(node.parentId)}
+                onClick={() => onOpenCreateSibling(node.parentId || null)}
               >
                 添加同级节点
               </Menu.Item>

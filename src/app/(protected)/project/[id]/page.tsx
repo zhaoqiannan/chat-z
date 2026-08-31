@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
@@ -20,7 +20,7 @@ const ProjectChapters = dynamic(
   { loading: () => <LoadingOverlay visible /> }
 );
 
-export default function ProjectDetailPage() {
+function ProjectDetailContent() {
   const searchParams = useSearchParams();
   const tab = searchParams.get("tab") || "overview";
 
@@ -30,5 +30,13 @@ export default function ProjectDetailPage() {
       {tab === "chapters" && <ProjectChapters />}
       {tab !== "outline" && tab !== "chapters" && <ProjectOverview />}
     </Box>
+  );
+}
+
+export default function ProjectDetailPage() {
+  return (
+    <Suspense fallback={<LoadingOverlay visible />}>
+      <ProjectDetailContent />
+    </Suspense>
   );
 }

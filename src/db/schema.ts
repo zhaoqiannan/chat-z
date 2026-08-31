@@ -137,7 +137,29 @@ export const outlines = sqliteTable('outlines', {
 });
 
 // ============================================================================
-// 5. TypeScript 类型导出 (强类型提示)
+// 5. 大纲 AI 推演历史记录表 (outline_ai_history)
+// ============================================================================
+export const outlineAiHistory = sqliteTable('outline_ai_history', {
+  /** 历史记录主键 (自增数字 ID) */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属作品 ID */
+  workId: integer('work_id').notNull(),
+  /** 关联大纲节点 ID（可为空） */
+  nodeId: text('node_id'),
+  /** AI 动作类型 (如 generate_from_premise, split_scenes, expand_node, diagnose 等) */
+  action: text('action').notNull(),
+  /** 历史版本标题/摘要说明 */
+  title: text('title').notNull(),
+  /** 生成时的原始提示词/故事梗概 */
+  prompt: text('prompt'),
+  /** AI 生成的完整结构化结果 payload (JSON 格式) */
+  resultPayload: text('result_payload', { mode: 'json' }).notNull(),
+  /** 创建生成时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 6. TypeScript 类型导出 (强类型提示)
 // ============================================================================
 
 /** 用户查询类型 (SELECT) */
@@ -155,3 +177,8 @@ export type NewChapter = typeof chapters.$inferInsert;
 /** 大纲节点查询类型 (SELECT) */
 export type Outline = typeof outlines.$inferSelect;
 export type NewOutline = typeof outlines.$inferInsert;
+
+/** 大纲 AI 历史记录查询类型 (SELECT) */
+export type OutlineAiHistory = typeof outlineAiHistory.$inferSelect;
+export type NewOutlineAiHistory = typeof outlineAiHistory.$inferInsert;
+

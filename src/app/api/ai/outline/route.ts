@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, outlines } from "@/db";
+import { getDb, works, outlines, outlineAiHistory } from "@/db";
 import { eq, and, asc } from "drizzle-orm";
 import { callCloudflareAi, parseStructuredJson, ChatMessage } from "@/utils/ai";
 
@@ -449,6 +449,22 @@ ${existingOutlineSummary || "暂无节点"}
           { success: false, message: `未知的 AI 动作: ${action}` },
           { status: 400 }
         );
+    }
+
+    // 自动记录 AI 推演历史快照
+    try {
+      if (resultPayload) {
+        await db.insert(outlineAiHistory).values({
+          workId: Number(workId),
+          nodeId: targetNodeId ? String(targetNodeId) : null,
+          action: String(action),
+          title: resultPayload.title || `AI 推演方案 (${action})`,
+          prompt: additionalPrompt || premise || "",
+          resultPayload: resultPayload,
+        });
+      }
+    } catch (histErr) {
+      console.warn("写入 AI 推演历史失败:", histErr);
     }
 
     return NextResponse.json({

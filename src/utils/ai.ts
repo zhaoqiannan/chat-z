@@ -18,10 +18,9 @@ export interface AiCallOptions {
  */
 const CANDIDATE_MODELS = [
   "@cf/qwen/qwen3.8-27b",
-  "@cf/deepseek-ai/deepseek-v4-pro-0813",
-  "@cf/deepseek-ai/deepseek-v4-flash-0731",
-  "@cf/moonshotai/kimi-k2.7-code",
-  "@cf/moonshotai/kimi-k2.6",
+  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+  "@cf/meta/llama-3.1-8b-instruct",
+  "@cf/meta/llama-3.2-3b-instruct",
   "@cf/openai/gpt-oss-20b",
 ];
 
@@ -45,8 +44,9 @@ async function callCloudflareAiViaRest(
     body: JSON.stringify({
       messages,
       temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 4096,
+      max_tokens: options.maxTokens ?? 8192,
     }),
+    signal: AbortSignal.timeout(120000), // 120 秒充裕超时
   });
 
   const data: any = await response.json();
@@ -56,11 +56,16 @@ async function callCloudflareAiViaRest(
   }
 
   if (data.result) {
-    // 1. OpenAI 格式 choices[0].message.content (Qwen 3.8 / DeepSeek 等新模型格式)
+    // 1. OpenAI 兼容格式 choices[0].message (支持 content 与 reasoning 字段)
     if (Array.isArray(data.result.choices) && data.result.choices.length > 0) {
-      const msgContent = data.result.choices[0]?.message?.content;
+      const msg = data.result.choices[0]?.message;
+      const msgContent = msg?.content;
       if (typeof msgContent === "string" && msgContent.trim()) {
         return msgContent.trim();
+      }
+      const msgReasoning = msg?.reasoning;
+      if (typeof msgReasoning === "string" && msgReasoning.trim()) {
+        return msgReasoning.trim();
       }
     }
 
@@ -96,13 +101,27 @@ export async function callCloudflareAi(
   const errors: string[] = [];
 
   for (const model of modelsToTry) {
-    // 1. 优先尝试本地/线上的 env.AI 原生绑定
+    // 1. 若配置了 Token（本地开发模式），优先走官方 REST API 直连（支持 120s 超时，避免 Miniflare 本地 15s 超时截断）
+    if (accountId && apiToken) {
+      try {
+        const restRes = await callCloudflareAiViaRest(accountId, apiToken, model, messages, options);
+        if (restRes) {
+          return restRes;
+        }
+      } catch (restErr: any) {
+        const errMsg = restErr?.message || String(restErr);
+        console.warn(`[Workers AI REST] 模型 ${model} 执行异常:`, errMsg);
+        errors.push(`[REST ${model}]: ${errMsg}`);
+      }
+    }
+
+    // 2. 线上环境或未配置 Token 时，使用 env.AI 原生绑定通道
     if (envAi && typeof envAi.run === "function") {
       try {
         const res = await envAi.run(model, {
           messages,
           temperature: options.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? 4096,
+          max_tokens: options.maxTokens ?? 8192,
         });
 
         if (res && typeof res.response === "string" && res.response.trim()) {
@@ -117,25 +136,11 @@ export async function callCloudflareAi(
         errors.push(`[env.AI ${model}]: ${errMsg}`);
       }
     }
-
-    // 2. 如果 env.AI 失败或本地未完全模拟，尝试 REST API (若配置了 Account ID 与 API Token)
-    if (accountId && apiToken) {
-      try {
-        const restRes = await callCloudflareAiViaRest(accountId, apiToken, model, messages, options);
-        if (restRes) {
-          return restRes;
-        }
-      } catch (restErr: any) {
-        const errMsg = restErr?.message || String(restErr);
-        console.warn(`[Workers AI REST] 模型 ${model} 执行异常:`, errMsg);
-        errors.push(`[REST ${model}]: ${errMsg}`);
-      }
-    }
   }
 
   if (!envAi && (!accountId || !apiToken)) {
     throw new Error(
-      "未检测到可用的 Cloudflare AI 运行环境。在本地开发时，请在 .env.local 中配置 CLOUDFLARE_ACCOUNT_ID 与 CLOUDFLARE_API_TOKEN，或在 Cloudflare 上线环境中运行。"
+      "未检测到可用的 Cloudflare AI 运行环境。在本地开发时，请在 .env.local 中配置 CF_AI_ACCOUNT_ID 与 CF_AI_API_TOKEN，或在 Cloudflare 上线环境中运行。"
     );
   }
 
