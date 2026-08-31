@@ -16,6 +16,7 @@ export interface ChapterItem {
   volumeId: number | string | null;
   isVolume: number;
   title: string;
+  subtitle?: string;
   content: string;
   wordCount: number;
   chapterNumber: number;
@@ -30,6 +31,7 @@ export interface CreateChapterPayload {
   volumeId?: number | string | null;
   isVolume?: boolean | number;
   title: string;
+  subtitle?: string;
   content?: string;
   status?: ChapterStatus;
   summary?: string;
@@ -38,6 +40,7 @@ export interface CreateChapterPayload {
 export interface UpdateChapterPayload {
   id: number | string;
   title?: string;
+  subtitle?: string;
   content?: string;
   status?: ChapterStatus;
   summary?: string;

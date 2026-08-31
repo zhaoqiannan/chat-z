@@ -234,6 +234,31 @@
   }
 }
 
+.chapterSubtitleInput {
+  width: 100%;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  font-weight: 500;
+  color: #475569;
+  padding: 0 0 12px;
+  background: transparent;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0.2px;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+
+  &::placeholder {
+    color: #cbd5e1;
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  &:focus {
+    border-bottom: 1px solid #e2e8f0;
+  }
+}
+
 .metaInfoBar {
   display: flex;
   align-items: center;

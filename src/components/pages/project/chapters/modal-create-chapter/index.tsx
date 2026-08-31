@@ -34,6 +34,7 @@ export default function ModalCreateChapter({
   onSubmit,
 }: ModalCreateChapterProps) {
   const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [volumeId, setVolumeId] = useState<number | string | null>(defaultVolumeId || null);
   const [status, setStatus] = useState<ChapterStatus>("not_started");
   const [summary, setSummary] = useState("");
@@ -43,6 +44,7 @@ export default function ModalCreateChapter({
   React.useEffect(() => {
     if (opened) {
       setTitle(`第 ${nextChapterNum} 章 `);
+      setSubtitle("");
       setVolumeId(defaultVolumeId || null);
       setStatus("not_started");
       setSummary("");
@@ -63,6 +65,7 @@ export default function ModalCreateChapter({
         volumeId: volumeId ? Number(volumeId) : null,
         isVolume: false,
         title: title.trim(),
+        subtitle: subtitle.trim() || undefined,
         status,
         summary: summary.trim(),
       });
@@ -108,6 +111,13 @@ export default function ModalCreateChapter({
           value={title}
           onChange={(e) => setTitle(e.currentTarget.value)}
           required
+        />
+
+        <TextInput
+          label="小标题 / 章节副标题 (选填)"
+          placeholder="例如：一剑霜寒十四州 / 命运齿轮的转动"
+          value={subtitle}
+          onChange={(e) => setSubtitle(e.currentTarget.value)}
         />
 
         <Select

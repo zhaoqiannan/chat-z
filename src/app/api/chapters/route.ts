@@ -96,6 +96,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       volumeId: rawVolumeId,
       isVolume,
       title,
+      subtitle,
       content,
       status,
       summary,
@@ -151,6 +152,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       volumeId,
       isVolume: isVol ? 1 : 0,
       title: title.trim(),
+      subtitle: subtitle?.trim() || null,
       content: textContent,
       wordCount: isVol ? 0 : wordCount,
       chapterNumber: autoChapterNumber,
@@ -189,7 +191,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const body = await req.json();
-    const { id: rawId, title, content, status, summary, volumeId: rawVolumeId, chapterNumber } = body;
+    const { id: rawId, title, subtitle, content, status, summary, volumeId: rawVolumeId, chapterNumber } = body;
 
     const chapterId = Number(rawId);
     if (!chapterId || isNaN(chapterId)) {
@@ -218,12 +220,13 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const updatedData = {
       title: title !== undefined ? title.trim() : chapter.title,
+      subtitle: subtitle !== undefined ? (subtitle?.trim() || null) : chapter.subtitle,
       content: textContent,
       wordCount,
-      status: status || chapter.status,
+      status: status !== undefined ? status : chapter.status,
       summary: summary !== undefined ? summary.trim() : chapter.summary,
       volumeId,
-      chapterNumber: typeof chapterNumber === "number" ? chapterNumber : chapter.chapterNumber,
+      chapterNumber: chapterNumber !== undefined ? Number(chapterNumber) : chapter.chapterNumber,
       updatedAt: new Date(),
     };
 

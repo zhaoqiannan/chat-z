@@ -377,6 +377,142 @@ export const chapterAiHistory = sqliteTable('chapter_ai_history', {
 // ============================================================================
 
 /** 用户查询类型 (SELECT) */
+// ============================================================================
+// 12. 随笔与待办笔记表 (notes)
+// ============================================================================
+export const notes = sqliteTable('notes', {
+  /** 笔记自增 ID */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属作品 ID */
+  workId: integer('work_id').notNull(),
+  /** 笔记标题 */
+  title: text('title').notNull(),
+  /** 笔记正文内容 */
+  content: text('content').notNull(),
+  /** 分类: memo(随笔备忘) | idea(灵感火花) | todo(任务待办) | outline_ref(剧情备忘) */
+  category: text('category').default('memo'),
+  /** 是否为待办项 (1=是, 0=否) */
+  isTodo: integer('is_todo').default(0),
+  /** 是否已完成/已办 (1=已办, 0=待办) */
+  isCompleted: integer('is_completed').default(0),
+  /** 优先级: low(低) | medium(中) | high(高) */
+  priority: text('priority').default('medium'),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 更新时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 13. 素材资料库表 (materials)
+// ============================================================================
+export const materials = sqliteTable('materials', {
+  /** 素材自增 ID */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属作品 ID */
+  workId: integer('work_id').notNull(),
+  /** 素材标题 */
+  title: text('title').notNull(),
+  /** 分类: knowledge(专业知识) | reference(设定参考) | photo(图片图鉴) | doc(文献资料) */
+  category: text('category').default('knowledge'),
+  /** 详细知识/文字资料 */
+  content: text('content'),
+  /** 上传的附件/图片/文档 URL */
+  fileUrl: text('file_url'),
+  /** 附件类型: image | document | other */
+  fileType: text('file_type'),
+  /** 原始文件名 */
+  fileName: text('file_name'),
+  /** 标签 (逗号分隔) */
+  tags: text('tags'),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 更新时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 14. 时间线与事件节点表 (timelines & timeline_events)
+// ============================================================================
+export const timelines = sqliteTable('timelines', {
+  /** 时间线自增 ID */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属作品 ID */
+  workId: integer('work_id').notNull(),
+  /** 时间线名称 (如: 主线编年史、上古神魔纪元、主角成长线) */
+  title: text('title').notNull(),
+  /** 时间线描述 */
+  description: text('description'),
+  /** 是否为主时间线 (1=是, 0=否) */
+  isMain: integer('is_main').default(0),
+  /** 主题色 */
+  color: text('color').default('#00c9ff'),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 更新时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export const timelineEvents = sqliteTable('timeline_events', {
+  /** 事件节点自增 ID */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属时间线 ID */
+  timelineId: integer('timeline_id').notNull(),
+  /** 所属作品 ID */
+  workId: integer('work_id').notNull(),
+  /** 时间点描述 (如: 天元历 320 年、第 3 天清晨、纪元前十万年) */
+  timePoint: text('time_point').notNull(),
+  /** 排序权重 */
+  sortOrder: integer('sort_order').default(0),
+  /** 事件标题 */
+  title: text('title').notNull(),
+  /** 发生地点 */
+  location: text('location'),
+  /** 涉及人物 (逗号分隔) */
+  characters: text('characters'),
+  /** 影响等级: climax(高潮转折) | major(重大事件) | normal(日常推进) | minor(背景小事) */
+  impactLevel: text('impact_level').default('major'),
+  /** 详细事件经过描述 */
+  description: text('description'),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 更新时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 15. 角色关系网络表 (character_relations)
+// ============================================================================
+export const characterRelations = sqliteTable('character_relations', {
+  /** 关系记录自增 ID */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属作品 ID */
+  workId: integer('work_id').notNull(),
+  /** 角色 A ID (关联 characters.id) */
+  sourceCharId: integer('source_char_id').notNull(),
+  /** 角色 A 姓名 */
+  sourceCharName: text('source_char_name').notNull(),
+  /** 角色 B ID (关联 characters.id) */
+  targetCharId: integer('target_char_id').notNull(),
+  /** 角色 B 姓名 */
+  targetCharName: text('target_char_name').notNull(),
+  /** 关系类型名称 (如: 生死之交、同门师兄妹、杀父仇敌、暗恋、上下级) */
+  relationType: text('relation_type').notNull(),
+  /** 关系性质标签: friendly(同盟友好) | hostile(敌对仇恨) | romantic(恋爱羁绊) | family(血亲同门) | neutral(利益中立) */
+  relationTag: text('relation_tag').default('friendly'),
+  /** 关系背景渊源 */
+  description: text('description'),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 更新时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 16. TypeScript 类型导出 (强类型提示)
+// ============================================================================
+
+/** 用户查询类型 (SELECT) */
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 
@@ -419,6 +555,27 @@ export type NewWorldRule = typeof worldRules.$inferInsert;
 /** 章节 AI 历史记录类型 */
 export type ChapterAiHistory = typeof chapterAiHistory.$inferSelect;
 export type NewChapterAiHistory = typeof chapterAiHistory.$inferInsert;
+
+/** 笔记记录类型 */
+export type NoteItem = typeof notes.$inferSelect;
+export type NewNoteItem = typeof notes.$inferInsert;
+
+/** 素材资料类型 */
+export type MaterialItem = typeof materials.$inferSelect;
+export type NewMaterialItem = typeof materials.$inferInsert;
+
+/** 时间线类型 */
+export type Timeline = typeof timelines.$inferSelect;
+export type NewTimeline = typeof timelines.$inferInsert;
+
+/** 时间线节点类型 */
+export type TimelineEvent = typeof timelineEvents.$inferSelect;
+export type NewTimelineEvent = typeof timelineEvents.$inferInsert;
+
+/** 角色关系记录类型 */
+export type CharacterRelation = typeof characterRelations.$inferSelect;
+export type NewCharacterRelation = typeof characterRelations.$inferInsert;
+
 
 
 

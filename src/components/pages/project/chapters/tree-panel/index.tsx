@@ -166,6 +166,7 @@ export default function TreePanel({
                       {renderStatusDot(ch.status)}
                       <span className={styles.chapterTitle}>
                         第 {ch.chapterNumber} 章 {ch.title}
+                        {ch.subtitle ? ` · ${ch.subtitle}` : ""}
                       </span>
 
                       <div className={styles.chapterActions} onClick={(e) => e.stopPropagation()}>
@@ -209,6 +210,7 @@ export default function TreePanel({
                 {renderStatusDot(ch.status)}
                 <span className={styles.chapterTitle}>
                   第 {ch.chapterNumber} 章 {ch.title}
+                  {ch.subtitle ? ` · ${ch.subtitle}` : ""}
                 </span>
 
                 <div className={styles.chapterActions} onClick={(e) => e.stopPropagation()}>

@@ -33,6 +33,7 @@ export default function ModalChapterDetail({
   onUpdate,
 }: ModalChapterDetailProps) {
   const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [volumeId, setVolumeId] = useState<number | string | null>(null);
   const [status, setStatus] = useState<ChapterStatus>("not_started");
   const [summary, setSummary] = useState("");
@@ -42,6 +43,7 @@ export default function ModalChapterDetail({
   useEffect(() => {
     if (chapter && opened) {
       setTitle(chapter.title || "");
+      setSubtitle(chapter.subtitle || "");
       setVolumeId(chapter.volumeId || null);
       setStatus(chapter.status || "not_started");
       setSummary(chapter.summary || "");
@@ -63,6 +65,7 @@ export default function ModalChapterDetail({
       await onUpdate({
         id: chapter.id,
         title: title.trim(),
+        subtitle: subtitle.trim() || undefined,
         volumeId: volumeId ? Number(volumeId) : null,
         status,
         summary: summary.trim(),
@@ -138,13 +141,22 @@ export default function ModalChapterDetail({
           </SimpleGrid>
         </Paper>
 
-        <TextInput
-          label="章节标题"
-          placeholder="请输入章节标题"
-          value={title}
-          onChange={(e) => setTitle(e.currentTarget.value)}
-          required
-        />
+        <SimpleGrid cols={2} spacing="12px">
+          <TextInput
+            label="章节标题"
+            placeholder="请输入章节标题"
+            value={title}
+            onChange={(e) => setTitle(e.currentTarget.value)}
+            required
+          />
+
+          <TextInput
+            label="小标题 / 章节副标题 (选填)"
+            placeholder="例如：一剑霜寒十四州 / 命运齿轮的转动"
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.currentTarget.value)}
+          />
+        </SimpleGrid>
 
         {!chapter.isVolume && (
           <SimpleGrid cols={2} spacing="12px">

@@ -64,6 +64,7 @@ export default function EditorArea({
   onEnterDiffView,
 }: EditorAreaProps) {
   const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
@@ -88,6 +89,7 @@ export default function EditorArea({
   useEffect(() => {
     if (chapter) {
       setTitle(chapter.title || "");
+      setSubtitle(chapter.subtitle || "");
       setContent(chapter.content || "");
       setSavedSuccess(false);
       setDiffCandidate(null);
@@ -95,6 +97,7 @@ export default function EditorArea({
       setBubblePosition(null);
     } else {
       setTitle("");
+      setSubtitle("");
       setContent("");
     }
   }, [chapter]);
@@ -245,6 +248,7 @@ export default function EditorArea({
       await onUpdateContent({
         id: chapter.id,
         title: title.trim() || chapter.title,
+        subtitle: subtitle.trim() || undefined,
         content,
       });
       setSavedSuccess(true);
@@ -379,6 +383,14 @@ export default function EditorArea({
             placeholder="输入章节标题..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+          />
+
+          {/* 章节小标题 / 副标题 (支持就地实时编辑) */}
+          <input
+            className={styles.chapterSubtitleInput}
+            placeholder="添加小标题 / 章节副标题 (选填)..."
+            value={subtitle}
+            onChange={(e) => setSubtitle(e.target.value)}
           />
 
           {/* 稿纸副信息栏 */}

@@ -120,12 +120,47 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
         { label: "规则", key: "rules" },
       ],
     },
-    { key: "notes", label: "笔记", icon: <FiEdit3 size={16} />, disabled: true },
-    { key: "materials", label: "素材", icon: <FiBox size={16} />, disabled: true },
-    { key: "ai_analysis", label: "AI 分析", icon: <FiCpu size={16} />, disabled: true },
-    { key: "timeline", label: "时间线", icon: <FiClock size={16} />, disabled: true },
-    { key: "relation_graph", label: "关系图谱", icon: <FiShare2 size={16} />, disabled: true },
-    { key: "settings", label: "项目设置", icon: <FiSettings size={16} />, disabled: true },
+    {
+      key: "notes",
+      label: "笔记",
+      icon: <FiEdit3 size={16} />,
+      active: currentTab === "notes",
+      disabled: false,
+    },
+    {
+      key: "materials",
+      label: "素材",
+      icon: <FiBox size={16} />,
+      active: currentTab === "materials",
+      disabled: false,
+    },
+    {
+      key: "ai_analysis",
+      label: "AI 分析",
+      icon: <FiCpu size={16} />,
+      disabled: true,
+    },
+    {
+      key: "timeline",
+      label: "时间线",
+      icon: <FiClock size={16} />,
+      active: currentTab === "timeline",
+      disabled: false,
+    },
+    {
+      key: "relation_graph",
+      label: "关系图谱",
+      icon: <FiShare2 size={16} />,
+      active: currentTab === "relation_graph",
+      disabled: false,
+    },
+    {
+      key: "settings",
+      label: "项目设置",
+      icon: <FiSettings size={16} />,
+      active: currentTab === "settings",
+      disabled: false,
+    },
   ];
 
   return (
