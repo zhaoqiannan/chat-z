@@ -86,8 +86,8 @@ export async function callCloudflareAi(
   messages: ChatMessage[],
   options: AiCallOptions = {}
 ): Promise<string> {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  const accountId = process.env.CF_AI_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CF_AI_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
 
   const modelsToTry = options.model
     ? [options.model, ...CANDIDATE_MODELS.filter((m) => m !== options.model)]
