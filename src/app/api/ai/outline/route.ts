@@ -53,6 +53,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     switch (action) {
       // 1. 一句话故事 / 核心梗概推演完整大纲树
+      case "generate_from_premise":
       case "generate_outline": {
         const inputPremise = premise || workDesc;
         const messages: ChatMessage[] = [
@@ -93,16 +94,16 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 作品设定：${workDesc}
 核心故事梗概/一句话故事：${inputPremise}
 ${additionalPrompt ? `额外创作诉求：${additionalPrompt}` : ""}
-请立即生成 2~3 个分卷，每卷包含 3~4 个关键情节点的完整大纲 JSON 数组。`,
+请生成 2~3 个分卷，每卷包含 2~3 个核心情节点的标准大纲 JSON 数组，务必保证 JSON 语法完整闭合。`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.75, maxTokens: 3000 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7, maxTokens: 4096 });
         const tree = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(tree) || tree.length === 0) {
           return NextResponse.json(
-            { success: false, message: "AI 生成大纲结构解析失败，请检查提示词或重试" },
+            { success: false, message: `AI 生成大纲结构解析失败，AI原始返回: ${aiResponse?.slice(0, 150) || "空"}` },
             { status: 500 }
           );
         }
@@ -116,6 +117,7 @@ ${additionalPrompt ? `额外创作诉求：${additionalPrompt}` : ""}
       }
 
       // 2. 卷大纲自动生成章节规划
+      case "plan_chapters":
       case "generate_chapter_plan": {
         const messages: ChatMessage[] = [
           {

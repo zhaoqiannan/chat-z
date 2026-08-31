@@ -29,6 +29,7 @@ export interface WorkItem {
   lastEditTime: string;
   expectedWords?: number | string;
   expectedChapters?: number | string;
+  description?: string;
   isPinned?: boolean | number;
   pinnedAt?: string | null;
 }

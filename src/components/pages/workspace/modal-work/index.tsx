@@ -1,7 +1,18 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { Modal, TextInput, NumberInput, Switch, Button, Flex, Stack, Text, SimpleGrid } from "@mantine/core";
+import {
+  Modal,
+  TextInput,
+  Textarea,
+  NumberInput,
+  Switch,
+  Button,
+  Flex,
+  Stack,
+  Text,
+  SimpleGrid,
+} from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { FiBook, FiTag, FiFileText, FiLayers } from "react-icons/fi";
 
@@ -11,6 +22,7 @@ export interface WorkFormData {
   tag: string;
   expectedWords: number | string;
   expectedChapters?: number | string;
+  description?: string;
   isPinned?: boolean | number;
 }
 
@@ -35,6 +47,7 @@ export default function ModalWork({
       tag: "",
       expectedWords: 50,
       expectedChapters: 100,
+      description: "",
       isPinned: false,
     },
     validate: {
@@ -66,6 +79,7 @@ export default function ModalWork({
           tag: initialData.tag || "",
           expectedWords: displayWords,
           expectedChapters: Number(initialData.expectedChapters) || 100,
+          description: initialData.description || "",
           isPinned: Boolean(initialData.isPinned),
         });
       } else {
@@ -74,6 +88,7 @@ export default function ModalWork({
           tag: "",
           expectedWords: 50,
           expectedChapters: 100,
+          description: "",
           isPinned: false,
         });
       }
@@ -91,6 +106,7 @@ export default function ModalWork({
       tag: values.tag.trim(),
       expectedWords: targetWordsInUnit,
       expectedChapters: targetChapters,
+      description: values.description?.trim() || "",
       isPinned: values.isPinned,
     });
     onClose();
@@ -163,6 +179,15 @@ export default function ModalWork({
               </Text>
             </Flex>
           </SimpleGrid>
+
+          <Textarea
+            label="故事梗概"
+            placeholder="简述作品的核心主线、核心矛盾与故事梗概（选填）..."
+            minRows={3}
+            maxRows={6}
+            autosize
+            {...form.getInputProps("description")}
+          />
 
           <Flex justify="space-between" align="center" mt={4} py={4}>
             <Text fz={14} fw={600} c="#475569">

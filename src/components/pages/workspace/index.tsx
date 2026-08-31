@@ -68,6 +68,7 @@ export default function WorkspacePage() {
       tag: work.tag,
       expectedWords: work.expectedWords || 500000,
       expectedChapters: work.expectedChapters || 100,
+      description: work.description || "",
       isPinned: work.isPinned,
     });
     setModalOpened(true);
@@ -82,6 +83,7 @@ export default function WorkspacePage() {
           tag: formData.tag,
           expectedWords: Number(formData.expectedWords) || 500000,
           expectedChapters: Number(formData.expectedChapters) || 100,
+          description: formData.description,
           isPinned: formData.isPinned,
         });
         if (res && res.success) {
@@ -98,6 +100,7 @@ export default function WorkspacePage() {
           tag: formData.tag,
           expectedWords: Number(formData.expectedWords) || 500000,
           expectedChapters: Number(formData.expectedChapters) || 100,
+          description: formData.description,
           isPinned: formData.isPinned,
         });
         if (res && res.success) {

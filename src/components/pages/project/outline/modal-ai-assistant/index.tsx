@@ -1,27 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Modal,
-  Tabs,
-  Textarea,
-  TextInput,
-  Select,
-  Button,
-  Stack,
-  Flex,
-  Text,
-  Paper,
-  SimpleGrid,
-} from "@mantine/core";
-import {
-  FiZap,
-  FiCompass,
-  FiScissors,
-  FiCheckCircle,
-  FiTrendingUp,
-  FiGitBranch,
-} from "react-icons/fi";
+import { Modal, Tabs, Textarea, Select, Button, Stack, Flex, Text, Paper, SimpleGrid } from "@mantine/core";
+import { FiZap, FiCompass, FiScissors, FiCheckCircle } from "react-icons/fi";
 import { requestOutlineAi, OutlineAiAction, OutlineNode } from "@/rest/outline";
 import { PreviewData } from "../modal-ai-preview";
 
@@ -73,10 +54,14 @@ export default function ModalAiAssistant({
         onClose();
         onOpenPreview(res.result);
       } else {
-        setError(res?.message || "AI 处理失败");
+        const errorMsg = res?.message || "AI 处理失败";
+        setError(errorMsg);
+        console.error("AI 推演异常:", errorMsg);
       }
     } catch (err: any) {
-      setError(err?.message || "网络请求失败");
+      const errorMsg = err?.message || "网络请求失败";
+      setError(errorMsg);
+      console.error("AI 请求异常:", errorMsg);
     } finally {
       setLoading(false);
     }
@@ -100,7 +85,7 @@ export default function ModalAiAssistant({
         </Flex>
       }
       centered
-      size="lg"
+      size="70vw"
       radius="md"
     >
       <Tabs value={activeTab} onChange={setActiveTab} color="cyan">

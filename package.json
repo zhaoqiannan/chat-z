@@ -3,7 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "next dev -p 3010 --webpack",
+        "dev": "next dev -p 3100 --webpack",
         "build": "next build --webpack",
         "build:cf": "opennextjs-cloudflare build",
         "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",

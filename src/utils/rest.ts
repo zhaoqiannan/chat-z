@@ -2,7 +2,7 @@ import Axios, { AxiosRequestConfig, AxiosResponse, AxiosInstance, CancelTokenSou
 import { store } from '@/store';
 import { setUser } from '@/store/userInfo';
 
-const DEFAULT_TIMEOUT = 30000;
+const DEFAULT_TIMEOUT = 300000;
 
 type RequestConfig = AxiosRequestConfig;
 
