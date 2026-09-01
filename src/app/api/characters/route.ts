@@ -1,75 +1,66 @@
+// API: 角色档案库管理（自动迁移补齐字段、增删改查、置顶与成长设定维护）
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, characters, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
 
-/**
- * GET: 获取指定作品的角色列表或单条角色
- */
+const ensureCharacterColumns = async (db: any) => {
+  try {
+    await db.run(`ALTER TABLE characters ADD COLUMN tags TEXT`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE characters ADD COLUMN appearance_chapters TEXT`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE characters ADD COLUMN character_arc TEXT`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE characters ADD COLUMN is_pinned INTEGER DEFAULT 0`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE characters ADD COLUMN pinned_at INTEGER`);
+  } catch (_) {}
+};
+
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureCharacterColumns(db);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
     const charId = searchParams.get("id") ? Number(searchParams.get("id")) : null;
 
     if (!workId || isNaN(workId)) {
-      return NextResponse.json(
-        { success: false, message: "缺少有效作品ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "缺少有效作品ID" }, { status: 400 });
     }
 
-    // 校验作品归属
-    const work = await db
-      .select()
-      .from(works)
-      .where(and(eq(works.id, workId), eq(works.userId, user.userId)))
-      .get();
-
+    const work = await db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, user.userId))).get();
     if (!work) {
-      return NextResponse.json(
-        { success: false, message: "作品不存在或无权限访问" },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: "作品不存在或无权限访问" }, { status: 403 });
     }
 
     if (charId) {
-      const char = await db
-        .select()
-        .from(characters)
-        .where(and(eq(characters.id, charId), eq(characters.workId, workId)))
-        .get();
+      const char = await db.select().from(characters).where(and(eq(characters.id, charId), eq(characters.workId, workId))).get();
       return NextResponse.json({ success: true, result: char });
     }
 
-    const list = await db
-      .select()
-      .from(characters)
-      .where(eq(characters.workId, workId))
-      .orderBy(desc(characters.createdAt))
-      .all();
+    const list = await db.select().from(characters).where(eq(characters.workId, workId)).orderBy(desc(characters.isPinned), desc(characters.pinnedAt), desc(characters.updatedAt)).all();
 
     return NextResponse.json({ success: true, result: list });
   } catch (error: any) {
     console.error("GET characters error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "获取角色失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "获取角色失败" }, { status: 500 });
   }
 });
 
-/**
- * POST: 创建新角色
- */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureCharacterColumns(db);
 
     const body = await req.json();
     const {
@@ -89,6 +80,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       relationships,
       organizations,
       abilities,
+      tags,
+      appearanceChapters,
+      characterArc,
+      isPinned,
       extra,
     } = body;
 
@@ -105,7 +100,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       workId,
       name: name.trim(),
       alias: alias?.trim() || null,
-      gender: gender?.trim() || "未知",
+      gender: gender?.trim() || "男",
       age: age?.trim() || null,
       identity: identity?.trim() || null,
       faction: faction?.trim() || null,
@@ -118,6 +113,11 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       relationships: Array.isArray(relationships) ? relationships : [],
       organizations: organizations?.trim() || null,
       abilities: abilities?.trim() || null,
+      tags: tags?.trim() || null,
+      appearanceChapters: appearanceChapters?.trim() || null,
+      characterArc: characterArc?.trim() || null,
+      isPinned: isPinned ? 1 : 0,
+      pinnedAt: isPinned ? new Date() : null,
       extra: typeof extra === "object" ? extra : {},
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -125,74 +125,127 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const inserted = await db.insert(characters).values(newCharData).returning().get();
 
-    let resultChar: any = inserted;
-    if (!resultChar || !resultChar.id) {
-      resultChar = await db
-        .select()
-        .from(characters)
-        .where(eq(characters.workId, workId))
-        .orderBy(desc(characters.id))
-        .limit(1)
-        .get();
-    }
-
     return NextResponse.json({
       success: true,
-      result: resultChar || newCharData,
-      message: "创建角色成功",
+      result: inserted,
+      message: "角色创建成功",
     });
   } catch (error: any) {
     console.error("POST characters error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "创建角色失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "创建角色失败" }, { status: 500 });
   }
 });
 
-/**
- * PUT: 编辑角色
- */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureCharacterColumns(db);
 
     const body = await req.json();
-    const { id: rawId, ...updateData } = body;
+    const {
+      id: rawId,
+      name,
+      alias,
+      gender,
+      age,
+      identity,
+      faction,
+      roleType,
+      appearance,
+      avatarUrl,
+      personality,
+      description,
+      experiences,
+      relationships,
+      organizations,
+      abilities,
+      tags,
+      appearanceChapters,
+      characterArc,
+      isPinned,
+      extra,
+    } = body;
+
     const id = Number(rawId);
+    if (!id || isNaN(id)) {
+      return NextResponse.json({ success: false, message: "缺少角色ID" }, { status: 400 });
+    }
+
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (name !== undefined) updateData.name = name.trim();
+    if (alias !== undefined) updateData.alias = alias?.trim() || null;
+    if (gender !== undefined) updateData.gender = gender;
+    if (age !== undefined) updateData.age = age?.trim() || null;
+    if (identity !== undefined) updateData.identity = identity?.trim() || null;
+    if (faction !== undefined) updateData.faction = faction?.trim() || null;
+    if (roleType !== undefined) updateData.roleType = roleType;
+    if (appearance !== undefined) updateData.appearance = appearance?.trim() || null;
+    if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl || null;
+    if (personality !== undefined) updateData.personality = personality?.trim() || null;
+    if (description !== undefined) updateData.description = description?.trim() || null;
+    if (experiences !== undefined) updateData.experiences = experiences?.trim() || null;
+    if (relationships !== undefined) updateData.relationships = relationships;
+    if (organizations !== undefined) updateData.organizations = organizations?.trim() || null;
+    if (abilities !== undefined) updateData.abilities = abilities?.trim() || null;
+    if (tags !== undefined) updateData.tags = tags?.trim() || null;
+    if (appearanceChapters !== undefined) updateData.appearanceChapters = appearanceChapters?.trim() || null;
+    if (characterArc !== undefined) updateData.characterArc = characterArc?.trim() || null;
+    if (isPinned !== undefined) {
+      updateData.isPinned = isPinned ? 1 : 0;
+      if (isPinned) {
+        updateData.pinnedAt = new Date();
+      }
+    }
+    if (extra !== undefined) updateData.extra = extra;
+
+    const updated = await db.update(characters).set(updateData).where(eq(characters.id, id)).returning().get();
+
+    return NextResponse.json({
+      success: true,
+      result: updated,
+      message: "角色更新成功",
+    });
+  } catch (error: any) {
+    console.error("PUT characters error:", error);
+    return NextResponse.json({ success: false, message: error?.message || "更新角色失败" }, { status: 500 });
+  }
+});
+
+export const PATCH = withAuth(async (req: NextRequest, user: CurrentUser) => {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const db = getDb(env.DB);
+    await ensureCharacterColumns(db);
+
+    const body = await req.json();
+    const id = Number(body.id);
+    const isPinned = body.isPinned ? 1 : 0;
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少角色ID" }, { status: 400 });
     }
 
-    const payload = {
-      ...updateData,
+    await db.update(characters).set({
+      isPinned,
+      pinnedAt: isPinned ? new Date() : null,
       updatedAt: new Date(),
-    };
+    }).where(eq(characters.id, id)).run();
 
-    await db.update(characters).set(payload).where(eq(characters.id, id)).run();
-
-    return NextResponse.json({
-      success: true,
-      message: "编辑角色成功",
-    });
+    return NextResponse.json({ success: true, message: isPinned ? "已置顶角色" : "已取消置顶" });
   } catch (error: any) {
-    console.error("PUT characters error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "编辑角色失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "置顶操作失败" }, { status: 500 });
   }
 });
 
-/**
- * DELETE: 删除角色
- */
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureCharacterColumns(db);
 
     const { searchParams } = new URL(req.url);
     const id = Number(searchParams.get("id"));
@@ -203,15 +256,9 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     await db.delete(characters).where(eq(characters.id, id)).run();
 
-    return NextResponse.json({
-      success: true,
-      message: "删除角色成功",
-    });
+    return NextResponse.json({ success: true, message: "角色删除成功" });
   } catch (error: any) {
     console.error("DELETE characters error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "删除角色失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "删除角色失败" }, { status: 500 });
   }
 });

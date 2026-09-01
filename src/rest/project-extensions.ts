@@ -6,27 +6,45 @@ export interface NoteData {
   workId: number;
   title: string;
   content: string;
-  category: "memo" | "idea" | "todo" | "outline_ref" | string;
-  isTodo: number;
-  isCompleted: number;
-  priority: "low" | "medium" | "high" | string;
+  category: "idea" | "plot" | "character" | "world" | "research" | "memo" | string;
+  isPinned?: number | boolean;
+  pinnedAt?: string | number | null;
+  isArchived?: number | boolean;
+  linkedChapterIds?: string | null;
+  linkedEntityIds?: string | null;
+  isTodo?: number;
+  isCompleted?: number;
+  priority?: "low" | "medium" | "high" | string;
   createdAt?: string | number;
   updatedAt?: string | number;
 }
 
-export const getNoteList = async (workId: number | string) => {
-  return get(`/api/notes?workId=${workId}`);
+export interface NoteListResult {
+  list: NoteData[];
+  counts: {
+    all: number;
+    idea: number;
+    plot: number;
+    character: number;
+    world: number;
+    research: number;
+    archived: number;
+  };
+}
+
+export const getNoteList = async (workId: number | string, category: string = "all", keyword?: string) => {
+  return get(`/api/notes?workId=${workId}&category=${category}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ""}`);
 };
 
-export const createNote = async (data: Partial<NoteData> & { workId: number; title: string }) => {
+export const createNote = async (data: Partial<NoteData> & { workId: number | string; title: string }) => {
   return post(`/api/notes`, data);
 };
 
-export const updateNote = async (data: Partial<NoteData> & { id: number }) => {
+export const updateNote = async (data: Partial<NoteData> & { id: number | string }) => {
   return put(`/api/notes`, data);
 };
 
-export const deleteNote = async (id: number) => {
+export const deleteNote = async (id: number | string) => {
   return del(`/api/notes`, { id });
 };
 
@@ -36,29 +54,45 @@ export interface MaterialData {
   workId: number;
   title: string;
   category: "knowledge" | "reference" | "photo" | "doc" | string;
-  content?: string;
-  fileUrl?: string;
-  fileType?: string;
-  fileName?: string;
-  tags?: string;
+  status: "processed" | "processing" | "pending" | "failed" | string;
+  content?: string | null;
+  fileUrl?: string | null;
+  fileType: "document" | "image" | "data" | "audio" | "video" | "link" | string;
+  fileName?: string | null;
+  fileSize?: string | null;
+  aiSummary?: string | null;
+  sourceUrl?: string | null;
+  extractedLore?: string | null;
+  includeInAiContext?: number | boolean;
+  linkedTarget?: string | null;
+  tags?: string | null;
   createdAt?: string | number;
   updatedAt?: string | number;
 }
 
-export const getMaterialList = async (workId: number | string) => {
-  return get(`/api/materials?workId=${workId}`);
+export const getMaterialList = async (workId: number | string, params?: { fileType?: string; status?: string; tag?: string; keyword?: string }) => {
+  let url = `/api/materials?workId=${workId}`;
+  if (params?.fileType && params.fileType !== "all") url += `&fileType=${params.fileType}`;
+  if (params?.status && params.status !== "all") url += `&status=${params.status}`;
+  if (params?.tag && params.tag !== "all") url += `&tag=${encodeURIComponent(params.tag)}`;
+  if (params?.keyword) url += `&keyword=${encodeURIComponent(params.keyword)}`;
+  return get(url);
 };
 
-export const createMaterial = async (data: Partial<MaterialData> & { workId: number; title: string }) => {
+export const createMaterial = async (data: Partial<MaterialData> & { workId: number | string; title: string }) => {
   return post(`/api/materials`, data);
 };
 
-export const updateMaterial = async (data: Partial<MaterialData> & { id: number }) => {
+export const updateMaterial = async (data: Partial<MaterialData> & { id: number | string }) => {
   return put(`/api/materials`, data);
 };
 
-export const deleteMaterial = async (id: number) => {
+export const deleteMaterial = async (id: number | string) => {
   return del(`/api/materials`, { id });
+};
+
+export const extractMaterialAiSummary = async (data: { title: string; content?: string; sourceUrl?: string }) => {
+  return post(`/api/materials/ai-summary`, data);
 };
 
 // 3. 时间线相关类型与 API

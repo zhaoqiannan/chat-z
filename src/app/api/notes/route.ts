@@ -1,68 +1,110 @@
+// API: 灵感随笔与小说笔记管理（自动迁移补齐字段、多维分类、置顶、归档与实体关联）
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, notes } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
 
-/**
- * 笔记列表查询 (GET)
- */
+const ensureNotesColumns = async (db: any) => {
+  try {
+    await db.run(`ALTER TABLE notes ADD COLUMN is_pinned INTEGER DEFAULT 0`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE notes ADD COLUMN pinned_at INTEGER`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE notes ADD COLUMN is_archived INTEGER DEFAULT 0`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE notes ADD COLUMN linked_chapter_ids TEXT`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE notes ADD COLUMN linked_entity_ids TEXT`);
+  } catch (_) {}
+};
+
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureNotesColumns(db);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
+    const category = searchParams.get("category") || "all";
+    const keyword = searchParams.get("keyword")?.trim();
 
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "缺少合法的 workId" }, { status: 400 });
     }
 
-    const list = await db
-      .select()
-      .from(notes)
-      .where(eq(notes.workId, workId))
-      .orderBy(desc(notes.id))
-      .all();
+    const allNotes = await db.select().from(notes).where(eq(notes.workId, workId)).orderBy(desc(notes.isPinned), desc(notes.pinnedAt), desc(notes.updatedAt)).all();
+
+    const counts = {
+      all: allNotes.filter((n) => !n.isArchived).length,
+      idea: allNotes.filter((n) => !n.isArchived && n.category === "idea").length,
+      plot: allNotes.filter((n) => !n.isArchived && n.category === "plot").length,
+      character: allNotes.filter((n) => !n.isArchived && n.category === "character").length,
+      world: allNotes.filter((n) => !n.isArchived && n.category === "world").length,
+      research: allNotes.filter((n) => !n.isArchived && n.category === "research").length,
+      archived: allNotes.filter((n) => Boolean(n.isArchived)).length,
+    };
+
+    let filtered = allNotes;
+
+    if (category === "archived") {
+      filtered = filtered.filter((n) => Boolean(n.isArchived));
+    } else {
+      filtered = filtered.filter((n) => !n.isArchived);
+      if (category !== "all") {
+        filtered = filtered.filter((n) => n.category === category);
+      }
+    }
+
+    if (keyword) {
+      const lower = keyword.toLowerCase();
+      filtered = filtered.filter((n) => n.title.toLowerCase().includes(lower) || n.content.toLowerCase().includes(lower));
+    }
 
     return NextResponse.json({
       success: true,
-      result: list,
+      result: {
+        list: filtered,
+        counts,
+      },
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, message: err?.message || "获取笔记列表失败" }, { status: 500 });
   }
 });
 
-/**
- * 新建笔记 (POST)
- */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureNotesColumns(db);
 
     const body = await req.json();
-    const { workId: rawWorkId, title, content, category, isTodo, priority } = body;
+    const { workId: rawWorkId, title, content, category, isPinned, linkedChapterIds, linkedEntityIds } = body;
     const workId = Number(rawWorkId);
 
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "无效的 workId" }, { status: 400 });
     }
 
-    if (!title || !title.trim()) {
-      return NextResponse.json({ success: false, message: "笔记标题不能为空" }, { status: 400 });
-    }
-
     const record = {
       workId,
-      title: title.trim(),
+      title: (title || "未命名笔记").trim(),
       content: content || "",
-      category: category || "memo",
-      isTodo: isTodo ? 1 : 0,
+      category: category || "idea",
+      isPinned: isPinned ? 1 : 0,
+      pinnedAt: isPinned ? new Date() : null,
+      isArchived: 0,
+      linkedChapterIds: linkedChapterIds || null,
+      linkedEntityIds: linkedEntityIds || null,
+      isTodo: 0,
       isCompleted: 0,
-      priority: priority || "medium",
+      priority: "medium",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -79,16 +121,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   }
 });
 
-/**
- * 编辑笔记 / 切换完成状态 (PUT)
- */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureNotesColumns(db);
 
     const body = await req.json();
-    const { id: rawId, title, content, category, isTodo, isCompleted, priority } = body;
+    const { id: rawId, title, content, category, isPinned, isArchived, linkedChapterIds, linkedEntityIds } = body;
     const id = Number(rawId);
 
     if (!id || isNaN(id)) {
@@ -102,14 +142,19 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (title !== undefined) updatedData.title = title.trim();
     if (content !== undefined) updatedData.content = content;
     if (category !== undefined) updatedData.category = category;
-    if (isTodo !== undefined) updatedData.isTodo = isTodo ? 1 : 0;
-    if (isCompleted !== undefined) updatedData.isCompleted = isCompleted ? 1 : 0;
-    if (priority !== undefined) updatedData.priority = priority;
+    if (isPinned !== undefined) {
+      updatedData.isPinned = isPinned ? 1 : 0;
+      updatedData.pinnedAt = isPinned ? new Date() : null;
+    }
+    if (isArchived !== undefined) updatedData.isArchived = isArchived ? 1 : 0;
+    if (linkedChapterIds !== undefined) updatedData.linkedChapterIds = linkedChapterIds;
+    if (linkedEntityIds !== undefined) updatedData.linkedEntityIds = linkedEntityIds;
 
-    await db.update(notes).set(updatedData).where(eq(notes.id, id));
+    const res = await db.update(notes).set(updatedData).where(eq(notes.id, id)).returning().get();
 
     return NextResponse.json({
       success: true,
+      result: res,
       message: "更新笔记成功",
     });
   } catch (err: any) {
@@ -117,19 +162,17 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   }
 });
 
-/**
- * 删除笔记 (DELETE)
- */
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureNotesColumns(db);
 
     const { searchParams } = new URL(req.url);
     const id = Number(searchParams.get("id"));
 
     if (!id || isNaN(id)) {
-      return NextResponse.json({ success: false, message: "无效的 id" }, { status: 400 });
+      return NextResponse.json({ success: false, message: "缺少待删除的笔记 id" }, { status: 400 });
     }
 
     await db.delete(notes).where(eq(notes.id, id)).run();

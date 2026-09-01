@@ -1,6 +1,7 @@
+// 组件：新建分卷弹窗（极简线条表单、分卷标题与主线备忘录入）
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Modal, TextInput, Textarea, Button, Stack, Flex, Text } from "@mantine/core";
 import { CreateChapterPayload } from "@/rest/chapter";
 
@@ -22,7 +23,7 @@ export default function ModalCreateVolume({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (opened) {
       setTitle("");
       setSummary("");
@@ -56,35 +57,41 @@ export default function ModalCreateVolume({
     <Modal
       opened={opened}
       onClose={onClose}
-      title={<Text fw={700} fz={16}>新建分卷 (Volume)</Text>}
+      title={<Text fw={700} fz={15} c="#0f172a">新建分卷 (Volume)</Text>}
       centered
-      size="70vw"
-      radius="md"
-      padding="xl"
+      size="md"
+      radius="sm"
+      styles={{
+        header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
+        body: { paddingTop: 14 },
+      }}
     >
-      <Stack gap="14px" className="form-box">
+      <Stack gap="xs">
         <TextInput
           label="分卷名称"
           placeholder="例如：第一卷 龙潜深渊"
+          size="xs"
           value={title}
           onChange={(e) => setTitle(e.currentTarget.value)}
           required
         />
         <Textarea
-          label="分卷概要/主线备忘 (选填)"
-          placeholder="简述本卷的核心主线目标..."
+          label="分卷概要 / 主线备忘 (选填)"
+          placeholder="简述本卷的核心主线目标与大纲规划..."
+          size="xs"
           value={summary}
           onChange={(e) => setSummary(e.currentTarget.value)}
           minRows={3}
+          autosize
         />
 
         {error && <Text c="red" fz="xs">{error}</Text>}
 
-        <Flex justify="flex-end" gap="10px" mt="10px">
-          <Button variant="outline" color="gray" onClick={onClose} disabled={loading}>
+        <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+          <Button variant="default" size="xs" onClick={onClose} disabled={loading}>
             取消
           </Button>
-          <Button onClick={handleSubmit} loading={loading}>
+          <Button color="cyan" size="xs" onClick={handleSubmit} loading={loading}>
             确认创建
           </Button>
         </Flex>

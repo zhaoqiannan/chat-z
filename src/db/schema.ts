@@ -198,6 +198,16 @@ export const characters = sqliteTable('characters', {
   organizations: text('organizations'),
   /** 拥有的能力/功法/专属装备 */
   abilities: text('abilities'),
+  /** 人物标签 (逗号分隔，如：剑修, 重生, 高冷) */
+  tags: text('tags'),
+  /** 出场章节 (如：第1章, 第5章, 第12章) */
+  appearanceChapters: text('appearance_chapters'),
+  /** 人物成长弧线 / 蜕变过程 */
+  characterArc: text('character_arc'),
+  /** 是否置顶 (1=置顶, 0=未置顶) */
+  isPinned: integer('is_pinned').default(0),
+  /** 置顶时间戳 */
+  pinnedAt: integer('pinned_at', { mode: 'timestamp' }),
   /** 其它补充设定 / 备忘扩展 (JSON 键值对) */
   extra: text('extra', { mode: 'json' }).$type<Record<string, any>>(),
   /** 创建时间 */
@@ -389,8 +399,18 @@ export const notes = sqliteTable('notes', {
   title: text('title').notNull(),
   /** 笔记正文内容 */
   content: text('content').notNull(),
-  /** 分类: memo(随笔备忘) | idea(灵感火花) | todo(任务待办) | outline_ref(剧情备忘) */
-  category: text('category').default('memo'),
+  /** 分类: idea(灵感) | plot(情节) | character(角色) | world(世界观) | research(调研) | memo(随笔) */
+  category: text('category').default('idea'),
+  /** 是否置顶 (1=置顶, 0=未置顶) */
+  isPinned: integer('is_pinned').default(0),
+  /** 置顶时间戳 */
+  pinnedAt: integer('pinned_at', { mode: 'timestamp' }),
+  /** 是否归档 (1=已归档, 0=未归档) */
+  isArchived: integer('is_archived').default(0),
+  /** 关联章节 IDs (如: "1,2,5") */
+  linkedChapterIds: text('linked_chapter_ids'),
+  /** 关联实体 IDs (如: "char:1,loc:3") */
+  linkedEntityIds: text('linked_entity_ids'),
   /** 是否为待办项 (1=是, 0=否) */
   isTodo: integer('is_todo').default(0),
   /** 是否已完成/已办 (1=已办, 0=待办) */
@@ -411,18 +431,32 @@ export const materials = sqliteTable('materials', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   /** 所属作品 ID */
   workId: integer('work_id').notNull(),
-  /** 素材标题 */
+  /** 素材标题 / 文件名 */
   title: text('title').notNull(),
   /** 分类: knowledge(专业知识) | reference(设定参考) | photo(图片图鉴) | doc(文献资料) */
   category: text('category').default('knowledge'),
+  /** 状态: processed(已处理) | processing(处理中) | pending(待处理) | failed(失败) */
+  status: text('status').default('processed'),
   /** 详细知识/文字资料 */
   content: text('content'),
   /** 上传的附件/图片/文档 URL */
   fileUrl: text('file_url'),
-  /** 附件类型: image | document | other */
-  fileType: text('file_type'),
+  /** 附件类型: document(文档) | image(图片) | data(数据) | audio(音频) | video(视频) | link(链接) */
+  fileType: text('file_type').default('document'),
   /** 原始文件名 */
   fileName: text('file_name'),
+  /** 文件大小 (如: "12.4 MB") */
+  fileSize: text('file_size'),
+  /** AI 提炼智能摘要 */
+  aiSummary: text('ai_summary'),
+  /** 物理来源 / 原始链接 */
+  sourceUrl: text('source_url'),
+  /** 提取的硬核设定要点 */
+  extractedLore: text('extracted_lore'),
+  /** 是否加入 AI 写作大模型上下文 (1=是, 0=否) */
+  includeInAiContext: integer('include_in_ai_context').default(1),
+  /** 关联内容 (如: "关联 3 章", "关联 曙光号") */
+  linkedTarget: text('linked_target'),
   /** 标签 (逗号分隔) */
   tags: text('tags'),
   /** 创建时间 */

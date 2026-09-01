@@ -21,6 +21,11 @@ export interface CharacterItem {
   relationships?: { targetName: string; relation: string; description?: string }[] | null;
   organizations?: string | null;
   abilities?: string | null;
+  tags?: string | null;
+  appearanceChapters?: string | null;
+  characterArc?: string | null;
+  isPinned?: number | boolean;
+  pinnedAt?: string | null;
   extra?: Record<string, any> | null;
   createdAt?: string;
   updatedAt?: string;
@@ -40,6 +45,14 @@ export const createCharacter = async (data: Partial<CharacterItem> & { workId: n
 
 export const updateCharacter = async (data: Partial<CharacterItem> & { id: number | string }) => {
   return put("/api/characters", data);
+};
+
+export const togglePinCharacter = async (id: number | string, isPinned: boolean) => {
+  return fetch("/api/characters", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, isPinned }),
+  }).then((r) => r.json());
 };
 
 export const deleteCharacter = async (id: number | string) => {
