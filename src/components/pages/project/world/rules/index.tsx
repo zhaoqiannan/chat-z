@@ -17,16 +17,17 @@ import {
   LoadingOverlay,
   Paper,
   Divider,
+  Group,
+  Card,
 } from "@mantine/core";
 import {
   FiPlus,
   FiEdit,
   FiTrash2,
-  FiBookOpen,
-  FiSearch,
   FiZap,
   FiAlertOctagon,
   FiLayers,
+  FiSearch,
 } from "react-icons/fi";
 import {
   WorldRuleItem,
@@ -36,7 +37,6 @@ import {
   updateWorldRule,
   deleteWorldRule,
 } from "@/rest/world";
-import styles from "../style.module.scss";
 
 interface RulesTabProps {
   workId: string;
@@ -108,38 +108,33 @@ export default function RulesTab({ workId }: RulesTabProps) {
     setLevelSteps(
       Array.isArray(item.levelTree) && item.levelTree.length > 0
         ? item.levelTree
-        : [{ order: 1, name: "第一阶" }]
+        : [{ order: 1, name: "初级", lifespan: "", breakthrough: "", powers: "" }]
     );
     setModalOpened(true);
   };
 
   const handleAddStep = () => {
-    setLevelSteps([
-      ...levelSteps,
-      {
-        order: levelSteps.length + 1,
-        name: `第 ${levelSteps.length + 1} 境`,
-        lifespan: "",
-        breakthrough: "",
-        powers: "",
-      },
+    setLevelSteps((prev) => [
+      ...prev,
+      { order: prev.length + 1, name: `第${prev.length + 1}阶段`, lifespan: "", breakthrough: "", powers: "" },
     ]);
   };
 
   const handleRemoveStep = (index: number) => {
-    const updated = levelSteps.filter((_, i) => i !== index);
-    setLevelSteps(updated);
+    setLevelSteps((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleStepChange = (index: number, field: keyof LevelTreeNode, val: string) => {
-    const updated = [...levelSteps];
-    updated[index] = { ...updated[index], [field]: val };
-    setLevelSteps(updated);
+  const handleStepChange = (index: number, key: keyof LevelTreeNode, val: string | number) => {
+    setLevelSteps((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [key]: val };
+      return next;
+    });
   };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      alert("法则/体系名称不能为空");
+      alert("请输入规则体系名称！");
       return;
     }
 
@@ -150,20 +145,20 @@ export default function RulesTab({ workId }: RulesTabProps) {
           id: editingItem.id,
           name: name.trim(),
           category,
-          levelTree: levelSteps,
-          mechanisms,
-          taboos,
-          description,
+          mechanisms: mechanisms.trim() || undefined,
+          taboos: taboos.trim() || undefined,
+          levelTree: category === "power_system" ? levelSteps : undefined,
+          description: description.trim() || undefined,
         });
       } else {
         await createWorldRule({
           workId: Number(workId),
           name: name.trim(),
           category,
-          levelTree: levelSteps,
-          mechanisms,
-          taboos,
-          description,
+          mechanisms: mechanisms.trim() || undefined,
+          taboos: taboos.trim() || undefined,
+          levelTree: category === "power_system" ? levelSteps : undefined,
+          description: description.trim() || undefined,
         });
       }
       setModalOpened(false);
@@ -176,7 +171,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm("确定要删除该法则体系吗？")) {
+    if (confirm("确定要删除该规则体系吗？此操作不可撤销。")) {
       const res = await deleteWorldRule(id);
       if (res && res.success) {
         await fetchList();
@@ -195,7 +190,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
 
   return (
     <Box>
-      <Flex justify="space-between" align="center" mb={20} gap={12}>
+      <Group justify="space-between" align="center" mb="lg" wrap="wrap">
         <TextInput
           placeholder="搜索法则体系名称、运转机制或禁忌..."
           leftSection={<FiSearch size={14} />}
@@ -203,97 +198,115 @@ export default function RulesTab({ workId }: RulesTabProps) {
           onChange={(e) => setSearchKey(e.target.value)}
           style={{ width: 360 }}
         />
-        <Button leftSection={<FiPlus size={14} />} onClick={handleOpenCreate}>
+        <Button leftSection={<FiPlus size={14} />} color="cyan" onClick={handleOpenCreate}>
           新建规则体系
         </Button>
-      </Flex>
+      </Group>
 
       <Box pos="relative" style={{ minHeight: 300 }}>
         <LoadingOverlay visible={loading} />
 
         {filteredList.length === 0 && !loading ? (
-          <Flex direction="column" align="center" justify="center" p={60} c="#94a3b8" gap={8}>
+          <Stack align="center" justify="center" p={60} c="dimmed" gap="xs">
             <FiLayers size={40} strokeWidth={1.2} />
             <Text fz={15} fw={600}>暂无规则与力量体系</Text>
             <Text fz={13}>点击右上角「新建规则体系」构建修炼境界、物理魔法规律与世界禁忌</Text>
-          </Flex>
+          </Stack>
         ) : (
-          <Stack gap="20px">
+          <Stack gap="lg">
             {filteredList.map((item) => (
-              <div key={item.id} className={styles.entityCard}>
-                <Flex justify="space-between" align="center" mb={12}>
-                  <Flex align="center" gap={8}>
-                    <FiLayers size={20} color="#00c9ff" />
-                    <Text fz={18} fw={700} c="#1e293b">
+              <Card
+                key={item.id}
+                shadow="sm"
+                radius="md"
+                withBorder
+                p="md"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <Group justify="space-between" align="center" mb="sm">
+                  <Group gap="xs" align="center">
+                    <FiLayers size={20} color="#06b6d4" />
+                    <Text fz={18} fw={700} c="dark.7">
                       {item.name}
                     </Text>
-                  </Flex>
+                  </Group>
 
-                  <Flex align="center" gap={8}>
-                    <Badge color="cyan" variant="light">
+                  <Group gap="xs" align="center">
+                    <Badge color="cyan" variant="light" size="sm">
                       {item.category === "power_system" ? "⚡ 力量/境界体系" : item.category === "taboo" ? "💀 世界禁忌" : "📜 法则公约"}
                     </Badge>
-                    <ActionIcon variant="subtle" color="blue" size="sm" onClick={() => handleOpenEdit(item)}>
+                    <ActionIcon variant="subtle" color="cyan" size="sm" onClick={() => handleOpenEdit(item)}>
                       <FiEdit size={14} />
                     </ActionIcon>
                     <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDelete(item.id)}>
                       <FiTrash2 size={14} />
                     </ActionIcon>
-                  </Flex>
-                </Flex>
+                  </Group>
+                </Group>
 
-                {/* 境界阶梯阶梯树 */}
+                {/* 境界阶梯序列 */}
                 {Array.isArray(item.levelTree) && item.levelTree.length > 0 && (
-                  <Box mb={14}>
-                    <Text fz={13} fw={700} c="#475569" mb={8}>
+                  <Box mb="sm">
+                    <Text fz={13} fw={700} c="dark.5" mb="xs">
                       🪜 境界突破阶梯序列：
                     </Text>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                    <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="sm">
                       {item.levelTree.map((step, idx) => (
-                        <div key={idx} className={styles.levelTreeStep}>
-                          <Flex justify="space-between" align="center" mb={4}>
-                            <Text fz={14} fw={700} c="#0284c7">
+                        <Paper
+                          key={idx}
+                          p="xs"
+                          withBorder
+                          bg="gray.0"
+                          radius="sm"
+                          style={{ borderColor: "var(--mantine-color-gray-3)" }}
+                        >
+                          <Group justify="space-between" align="center" mb={4}>
+                            <Text fz={14} fw={700} c="cyan.8">
                               {step.order ? `${step.order}. ` : ""}{step.name}
                             </Text>
-                            {step.lifespan && <Badge size="xs" color="gray" variant="light">寿命: {step.lifespan}</Badge>}
-                          </Flex>
+                            {step.lifespan && <Badge size="xs" color="gray" variant="light">寿元: {step.lifespan}</Badge>}
+                          </Group>
                           {step.breakthrough && (
-                            <Text fz={12} c="#64748b" mb={2}>
-                              🔑 突破契机：{step.breakthrough}
+                            <Text fz={12} c="dimmed" mb={2} lineClamp={1}>
+                              🔑 突破：{step.breakthrough}
                             </Text>
                           )}
                           {step.powers && (
-                            <Text fz={12} c="#059669">
-                              ✨ 标志神通：{step.powers}
+                            <Text fz={12} c="teal.8" lineClamp={1}>
+                              ✨ 神通：{step.powers}
                             </Text>
                           )}
-                        </div>
+                        </Paper>
                       ))}
-                    </div>
+                    </SimpleGrid>
                   </Box>
                 )}
 
                 {item.mechanisms && (
-                  <Box mb={8} p="8px 12px" bg="#f8fafc" style={{ borderRadius: 8 }}>
-                    <Text fz={11} fw={700} c="#64748b" mb={2}>底层运转机制</Text>
-                    <Text fz={12} c="#334155" style={{ lineHeight: 1.5 }}>
+                  <Paper mb="xs" p="xs" bg="gray.0" radius="sm">
+                    <Text fz={11} fw={700} c="dimmed" mb={2}>底层运转机制</Text>
+                    <Text fz={12} c="dark.6" style={{ lineHeight: 1.5 }}>
                       {item.mechanisms}
                     </Text>
-                  </Box>
+                  </Paper>
                 )}
 
                 {item.taboos && (
-                  <Box p="8px 12px" bg="#fff1f2" style={{ borderRadius: 8, border: "1px solid #fecdd3" }}>
-                    <Flex align="center" gap={4} c="#991b1b" fz={11} fw={700} mb={2}>
+                  <Paper p="xs" bg="red.0" radius="sm" style={{ border: "1px solid var(--mantine-color-red-2)" }}>
+                    <Group gap={4} c="red.9" fz={11} fw={700} mb={2}>
                       <FiAlertOctagon size={12} />
-                      <span>天道禁忌与走火入魔风险</span>
-                    </Flex>
-                    <Text fz={12} c="#7f1d1d" style={{ lineHeight: 1.5 }}>
+                      <Text fz={11} fw={700}>天道禁忌与走火入魔风险</Text>
+                    </Group>
+                    <Text fz={12} c="red.9" style={{ lineHeight: 1.5 }}>
                       {item.taboos}
                     </Text>
-                  </Box>
+                  </Paper>
                 )}
-              </div>
+              </Card>
             ))}
           </Stack>
         )}
@@ -304,19 +317,19 @@ export default function RulesTab({ workId }: RulesTabProps) {
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
         title={
-          <Flex align="center" gap={8}>
-            <FiLayers color="#00c9ff" size={18} />
+          <Group gap="xs" align="center">
+            <FiLayers color="#06b6d4" size={18} />
             <Text fw={700} fz={16}>
               {editingItem ? `编辑法则体系 - ${editingItem.name}` : "新建世界法则与境界体系"}
             </Text>
-          </Flex>
+          </Group>
         }
         centered
         size="70vw"
         radius="md"
       >
-        <Stack gap="16px">
-          <SimpleGrid cols={2}>
+        <Stack gap="md">
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
             <TextInput
               label="体系 / 法则名称"
               placeholder="例如：传统仙道修真境界 / 纳米基因觉醒序列"
@@ -338,83 +351,92 @@ export default function RulesTab({ workId }: RulesTabProps) {
           </SimpleGrid>
 
           {/* 境界阶梯阶梯编辑器 */}
-          <Paper p="16px" withBorder bg="#f8fafc" radius="md">
-            <Flex justify="space-between" align="center" mb={12}>
-              <Text fz={14} fw={700} c="#1e293b">
-                🪜 境界等级阶梯设计 (从低到高递进)
-              </Text>
-              <Button size="xs" variant="light" leftSection={<FiPlus size={12} />} onClick={handleAddStep}>
-                添加下一阶境界
-              </Button>
-            </Flex>
+          {category === "power_system" && (
+            <Paper p="md" withBorder bg="gray.0" radius="md">
+              <Group justify="space-between" align="center" mb="xs">
+                <Text fz={13} fw={700} c="dark.7">
+                  🪜 境界递进阶梯配置（自低向高排序）
+                </Text>
+                <Button size="xs" variant="light" color="cyan" leftSection={<FiPlus size={12} />} onClick={handleAddStep}>
+                  添加下一阶段境界
+                </Button>
+              </Group>
 
-            <Stack gap="10px">
-              {levelSteps.map((step, idx) => (
-                <Flex key={idx} gap={8} align="center">
-                  <TextInput
-                    placeholder="境界名 (如 练气期)"
-                    value={step.name}
-                    onChange={(e) => handleStepChange(idx, "name", e.target.value)}
-                    style={{ width: 140 }}
-                  />
-                  <TextInput
-                    placeholder="寿命 (如 120年)"
-                    value={step.lifespan || ""}
-                    onChange={(e) => handleStepChange(idx, "lifespan", e.target.value)}
-                    style={{ width: 110 }}
-                  />
-                  <TextInput
-                    placeholder="突破契机与瓶颈要求"
-                    value={step.breakthrough || ""}
-                    onChange={(e) => handleStepChange(idx, "breakthrough", e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <TextInput
-                    placeholder="标志性战力/神通表现"
-                    value={step.powers || ""}
-                    onChange={(e) => handleStepChange(idx, "powers", e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <ActionIcon color="red" variant="subtle" onClick={() => handleRemoveStep(idx)}>
-                    <FiTrash2 size={14} />
-                  </ActionIcon>
-                </Flex>
-              ))}
-            </Stack>
-          </Paper>
+              <Stack gap="xs">
+                {levelSteps.map((step, idx) => (
+                  <Paper key={idx} p="xs" withBorder bg="#ffffff" radius="sm">
+                    <Group gap="xs" align="center" wrap="nowrap">
+                      <Badge circle size="md" color="cyan">{idx + 1}</Badge>
+                      <TextInput
+                        placeholder="境界名 (如: 金丹期)"
+                        value={step.name}
+                        onChange={(e) => handleStepChange(idx, "name", e.target.value)}
+                        style={{ width: 130 }}
+                        size="xs"
+                      />
+                      <TextInput
+                        placeholder="寿元极限 (如: 500年)"
+                        value={step.lifespan || ""}
+                        onChange={(e) => handleStepChange(idx, "lifespan", e.target.value)}
+                        style={{ width: 120 }}
+                        size="xs"
+                      />
+                      <TextInput
+                        placeholder="突破条件/契机"
+                        value={step.breakthrough || ""}
+                        onChange={(e) => handleStepChange(idx, "breakthrough", e.target.value)}
+                        style={{ flex: 1 }}
+                        size="xs"
+                      />
+                      <TextInput
+                        placeholder="标志神通/威能"
+                        value={step.powers || ""}
+                        onChange={(e) => handleStepChange(idx, "powers", e.target.value)}
+                        style={{ flex: 1 }}
+                        size="xs"
+                      />
+                      <ActionIcon color="red" variant="subtle" size="sm" onClick={() => handleRemoveStep(idx)}>
+                        <FiTrash2 size={13} />
+                      </ActionIcon>
+                    </Group>
+                  </Paper>
+                ))}
+              </Stack>
+            </Paper>
+          )}
 
           <Textarea
-            label="底层运作机理与公式"
-            placeholder="例如：灵气需经由十二正经炼化为真元；能量遵循热力学与因果律守恒..."
+            label="底层运转机理 / 能量循环本质"
+            placeholder="例如：万物皆有灵性，通过吸纳天地灵气淬炼神魂肉体，暗合天道运转..."
             value={mechanisms}
             onChange={(e) => setMechanisms(e.target.value)}
             minRows={2}
           />
 
           <Textarea
-            label="天道禁忌与走火入魔风险"
-            placeholder="例如：强行吞服暴烈丹药将导致经脉尽断；不可向深渊呼唤旧日之名..."
+            label="违背代价 / 禁忌戒律 / 天谴劫难 (选填)"
+            placeholder="例如：强行催动超阶功法会导致经脉尽碎；杀戮过重将遭遇九九灭世雷劫..."
             value={taboos}
             onChange={(e) => setTaboos(e.target.value)}
             minRows={2}
           />
 
           <Textarea
-            label="详细设定说明 (选填)"
-            placeholder="补充关于该规则的细节与战力平衡备忘..."
+            label="详细设定备忘与补充 (选填)"
+            placeholder="记录关于该法则体系的其他渊源与思考..."
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             minRows={2}
           />
 
-          <Flex justify="flex-end" gap={10} mt={10}>
+          <Group justify="flex-end" gap="sm" mt="md">
             <Button variant="outline" color="gray" onClick={() => setModalOpened(false)}>
               取消
             </Button>
-            <Button loading={formLoading} onClick={handleSubmit}>
-              {editingItem ? "保存修改" : "确认创建法则"}
+            <Button color="cyan" loading={formLoading} onClick={handleSubmit}>
+              {editingItem ? "保存修改" : "确认创建规则"}
             </Button>
-          </Flex>
+          </Group>
         </Stack>
       </Modal>
     </Box>

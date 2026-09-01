@@ -8,7 +8,6 @@ import {
   Button,
   Badge,
   ActionIcon,
-  Tooltip,
   Modal,
   TextInput,
   Textarea,
@@ -18,7 +17,9 @@ import {
   LoadingOverlay,
   Image,
   Paper,
-  Divider,
+  Group,
+  Avatar,
+  Card,
 } from "@mantine/core";
 import {
   FiPlus,
@@ -38,7 +39,6 @@ import {
   deleteCharacter,
   uploadImageFile,
 } from "@/rest/world";
-import styles from "../style.module.scss";
 
 interface CharactersTabProps {
   workId: string;
@@ -112,7 +112,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
 
   const handleOpenEdit = (item: CharacterItem) => {
     setEditingItem(item);
-    setName(item.name || "");
+    setName(item.name);
     setAlias(item.alias || "");
     setGender(item.gender || "男");
     setAge(item.age || "");
@@ -134,20 +134,21 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
     if (!file) return;
 
     try {
+      setFormLoading(true);
       const res = await uploadImageFile(file);
       if (res && res.success && res.url) {
         setAvatarUrl(res.url);
-      } else {
-        alert(res?.message || "上传图片失败");
       }
-    } catch (err: any) {
-      alert("上传图片异常: " + (err?.message || "网络错误"));
+    } catch (e: any) {
+      alert("上传头像失败: " + (e?.message || "网络异常"));
+    } finally {
+      setFormLoading(false);
     }
   };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      alert("角色姓名不能为空");
+      alert("请输入角色姓名！");
       return;
     }
 
@@ -157,37 +158,37 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
         await updateCharacter({
           id: editingItem.id,
           name: name.trim(),
-          alias,
+          alias: alias.trim() || undefined,
           gender,
-          age,
-          identity,
-          faction,
+          age: age.trim() || undefined,
+          identity: identity.trim() || undefined,
+          faction: faction.trim() || undefined,
           roleType,
-          appearance,
-          avatarUrl,
-          personality,
-          description,
-          experiences,
-          organizations,
-          abilities,
+          appearance: appearance.trim() || undefined,
+          avatarUrl: avatarUrl.trim() || undefined,
+          personality: personality.trim() || undefined,
+          description: description.trim() || undefined,
+          experiences: experiences.trim() || undefined,
+          organizations: organizations.trim() || undefined,
+          abilities: abilities.trim() || undefined,
         });
       } else {
         await createCharacter({
           workId: Number(workId),
           name: name.trim(),
-          alias,
+          alias: alias.trim() || undefined,
           gender,
-          age,
-          identity,
-          faction,
+          age: age.trim() || undefined,
+          identity: identity.trim() || undefined,
+          faction: faction.trim() || undefined,
           roleType,
-          appearance,
-          avatarUrl,
-          personality,
-          description,
-          experiences,
-          organizations,
-          abilities,
+          appearance: appearance.trim() || undefined,
+          avatarUrl: avatarUrl.trim() || undefined,
+          personality: personality.trim() || undefined,
+          description: description.trim() || undefined,
+          experiences: experiences.trim() || undefined,
+          organizations: organizations.trim() || undefined,
+          abilities: abilities.trim() || undefined,
         });
       }
       setModalOpened(false);
@@ -211,15 +212,15 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
   const getRoleBadge = (type: string) => {
     switch (type) {
       case "protagonist":
-        return <Badge color="cyan" variant="filled">主角</Badge>;
+        return <Badge color="cyan" variant="filled" size="sm">主角</Badge>;
       case "antagonist":
-        return <Badge color="red" variant="filled">反派 Boss</Badge>;
+        return <Badge color="red" variant="filled" size="sm">反派 Boss</Badge>;
       case "major":
-        return <Badge color="indigo" variant="light">重要配角</Badge>;
+        return <Badge color="indigo" variant="light" size="sm">重要配角</Badge>;
       case "supporting":
-        return <Badge color="teal" variant="light">配角</Badge>;
+        return <Badge color="teal" variant="light" size="sm">配角</Badge>;
       default:
-        return <Badge color="gray" variant="light">龙套</Badge>;
+        return <Badge color="gray" variant="light" size="sm">龙套</Badge>;
     }
   };
 
@@ -238,8 +239,8 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
   return (
     <Box>
       {/* 顶部搜索与操作栏 */}
-      <Flex justify="space-between" align="center" mb={20} gap={12} wrap="wrap">
-        <Flex gap={12} align="center" style={{ flex: 1, maxWidth: 500 }}>
+      <Group justify="space-between" align="center" mb="lg" wrap="wrap">
+        <Group gap="sm" align="center" style={{ flex: 1, maxWidth: 520 }}>
           <TextInput
             placeholder="搜索角色姓名、身份或阵营..."
             leftSection={<FiSearch size={14} />}
@@ -261,96 +262,103 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             ]}
             style={{ width: 140 }}
           />
-        </Flex>
+        </Group>
 
-        <Button leftSection={<FiPlus size={14} />} onClick={handleOpenCreate}>
+        <Button leftSection={<FiPlus size={14} />} color="cyan" onClick={handleOpenCreate}>
           新建角色卡
         </Button>
-      </Flex>
+      </Group>
 
       {/* 角色卡片网格 */}
       <Box pos="relative" style={{ minHeight: 300 }}>
         <LoadingOverlay visible={loading} />
 
         {filteredList.length === 0 && !loading ? (
-          <Flex direction="column" align="center" justify="center" p={60} c="#94a3b8" gap={8}>
+          <Stack align="center" justify="center" p={60} c="dimmed" gap="xs">
             <FiUsers size={40} strokeWidth={1.2} />
             <Text fz={15} fw={600}>暂无匹配的角色数据</Text>
             <Text fz={13}>点击右上角「新建角色卡」添加小说世界人物设定</Text>
-          </Flex>
+          </Stack>
         ) : (
-          <div className={styles.cardGrid}>
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
             {filteredList.map((item) => (
-              <div key={item.id} className={styles.entityCard}>
-                <Flex gap={14} align="flex-start" mb={12}>
-                  {item.avatarUrl ? (
-                    <img src={item.avatarUrl} alt={item.name} className={styles.cardAvatar} />
-                  ) : (
-                    <Flex
-                      className={styles.cardAvatar}
-                      align="center"
-                      justify="center"
-                      c="#94a3b8"
-                      bg="#f8fafc"
-                    >
-                      <FiUser size={28} />
-                    </Flex>
-                  )}
+              <Card
+                key={item.id}
+                shadow="sm"
+                radius="md"
+                withBorder
+                p="md"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <Group align="flex-start" gap="md" mb="xs" wrap="nowrap">
+                  <Avatar
+                    src={item.avatarUrl || undefined}
+                    alt={item.name}
+                    size={64}
+                    radius="md"
+                    color="cyan"
+                  >
+                    <FiUser size={28} />
+                  </Avatar>
 
                   <Box style={{ flex: 1, minWidth: 0 }}>
-                    <Flex align="center" justify="space-between" gap={6}>
-                      <Text fz={16} fw={700} c="#1e293b" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
+                      <Text fz={16} fw={700} c="dark.7" truncate="end">
                         {item.name} {item.alias ? `(${item.alias})` : ""}
                       </Text>
                       {getRoleBadge(item.roleType)}
-                    </Flex>
+                    </Group>
 
-                    <Flex gap={8} mt={4} fz={12} c="#64748b" wrap="wrap">
-                      <span>性别：{item.gender || "未知"}</span>
-                      {item.age && <span>· 年龄：{item.age}</span>}
-                    </Flex>
+                    <Group gap="xs" mt={4} fz={12} c="dimmed" wrap="wrap">
+                      <Text fz={12} c="dimmed">性别：{item.gender || "未知"}</Text>
+                      {item.age && <Text fz={12} c="dimmed">· 年龄：{item.age}</Text>}
+                    </Group>
 
                     {item.identity && (
-                      <Text fz={12} c="#0369a1" mt={2} fw={600}>
+                      <Text fz={12} c="cyan.8" mt={2} fw={600} truncate="end">
                         身份：{item.identity}
                       </Text>
                     )}
                   </Box>
-                </Flex>
+                </Group>
 
                 {item.faction && (
-                  <Flex align="center" gap={6} mb={8} fz={12} c="#475569">
-                    <FiTag size={12} color="#00c9ff" />
-                    <span>所属阵营：<b>{item.faction}</b></span>
-                  </Flex>
+                  <Group gap={6} mb="xs" fz={12} c="dark.4">
+                    <FiTag size={12} color="#06b6d4" />
+                    <Text fz={12}>所属阵营：<Text span fw={700}>{item.faction}</Text></Text>
+                  </Group>
                 )}
 
                 {item.personality && (
-                  <Box mb={8} p="8px 12px" bg="#f8fafc" style={{ borderRadius: 8 }}>
-                    <Text fz={11} fw={700} c="#64748b" mb={2}>性格侧写</Text>
-                    <Text fz={12} c="#334155" lineClamp={2} style={{ lineHeight: 1.5 }}>
+                  <Paper mb="xs" p="xs" bg="gray.0" radius="sm">
+                    <Text fz={11} fw={700} c="dimmed" mb={2}>性格侧写</Text>
+                    <Text fz={12} c="dark.6" lineClamp={2} style={{ lineHeight: 1.5 }}>
                       {item.personality}
                     </Text>
-                  </Box>
+                  </Paper>
                 )}
 
                 {item.abilities && (
-                  <Text fz={12} c="#059669" mb={8} lineClamp={1}>
+                  <Text fz={12} c="teal.7" mb="xs" lineClamp={1}>
                     ⚡ 能力功法：{item.abilities}
                   </Text>
                 )}
 
-                <Flex justify="flex-end" gap={6} mt="auto" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
-                  <ActionIcon variant="subtle" color="blue" size="sm" onClick={() => handleOpenEdit(item)}>
+                <Group justify="flex-end" gap="xs" mt="auto" pt="xs" style={{ borderTop: "1px solid var(--mantine-color-gray-2)" }}>
+                  <ActionIcon variant="subtle" color="cyan" size="sm" onClick={() => handleOpenEdit(item)}>
                     <FiEdit size={14} />
                   </ActionIcon>
                   <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDelete(item.id)}>
                     <FiTrash2 size={14} />
                   </ActionIcon>
-                </Flex>
-              </div>
+                </Group>
+              </Card>
             ))}
-          </div>
+          </SimpleGrid>
         )}
       </Box>
 
@@ -359,20 +367,20 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
         title={
-          <Flex align="center" gap={8}>
-            <FiUser color="#00c9ff" size={18} />
+          <Group gap="xs" align="center">
+            <FiUser color="#06b6d4" size={18} />
             <Text fw={700} fz={16}>
               {editingItem ? `编辑角色设定 - ${editingItem.name}` : "新建角色卡片"}
             </Text>
-          </Flex>
+          </Group>
         }
         centered
         size="70vw"
         radius="md"
       >
-        <Stack gap="16px">
+        <Stack gap="md">
           {/* 基本信息 */}
-          <SimpleGrid cols={3}>
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
             <TextInput
               label="角色姓名"
               placeholder="例如：林肆"
@@ -400,7 +408,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             />
           </SimpleGrid>
 
-          <SimpleGrid cols={4}>
+          <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
             <Select
               label="性别"
               value={gender}
@@ -428,8 +436,8 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           </SimpleGrid>
 
           {/* 头像/立绘上传 */}
-          <Paper p="14px" withBorder bg="#f8fafc" radius="md">
-            <Flex gap={16} align="center">
+          <Paper p="md" withBorder bg="gray.0" radius="md">
+            <Group gap="md" align="center">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -437,24 +445,36 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                 style={{ display: "none" }}
                 onChange={handleImageUpload}
               />
-              <div
-                className={styles.imageUploadPreview}
-                style={{ width: 120, height: 120, flexShrink: 0 }}
+              <Paper
+                withBorder
+                radius="md"
+                p={4}
+                style={{
+                  width: 120,
+                  height: 120,
+                  flexShrink: 0,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "#ffffff",
+                  overflow: "hidden",
+                }}
                 onClick={() => fileInputRef.current?.click()}
               >
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="预览" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <Image src={avatarUrl} alt="预览" fit="cover" w="100%" h="100%" radius="sm" />
                 ) : (
-                  <Flex direction="column" align="center" gap={4} c="#94a3b8">
+                  <Stack align="center" gap={4} c="dimmed">
                     <FiUploadCloud size={24} />
                     <Text fz={11}>点击上传立绘</Text>
-                  </Flex>
+                  </Stack>
                 )}
-              </div>
+              </Paper>
 
               <Box style={{ flex: 1 }}>
-                <Text fz={13} fw={700} c="#1e293b" mb={4}>角色肖像 / 头像立绘</Text>
-                <Text fz={12} c="#64748b" mb={8}>支持 JPG, PNG 等本地图片上传，自动生成高速图片链接存储在角色档案中。</Text>
+                <Text fz={13} fw={700} c="dark.7" mb={4}>角色肖像 / 头像立绘</Text>
+                <Text fz={12} c="dimmed" mb="xs">支持 JPG, PNG 等本地图片上传，自动生成图片链接存储在角色档案中。</Text>
                 <TextInput
                   placeholder="或直接输入在线图片 URL 链接..."
                   size="xs"
@@ -462,11 +482,11 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                   onChange={(e) => setAvatarUrl(e.target.value)}
                 />
               </Box>
-            </Flex>
+            </Group>
           </Paper>
 
           {/* 性格侧写与外貌长相 */}
-          <SimpleGrid cols={2}>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
             <Textarea
               label="性格侧写 / 心理动机 / 核心准则"
               placeholder="例如：极度冷静理智，重诺守信，有恩必报，对敌人绝不手软..."
@@ -484,7 +504,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           </SimpleGrid>
 
           {/* 拥有能力与重大经历 */}
-          <SimpleGrid cols={2}>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
             <Textarea
               label="专属能力 / 功法武技 / 标志法宝"
               placeholder="例如：九霄御雷剑决、不灭金身、混沌至尊骨..."
@@ -509,14 +529,14 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             minRows={3}
           />
 
-          <Flex justify="flex-end" gap={10} mt={10}>
+          <Group justify="flex-end" gap="sm" mt="md">
             <Button variant="outline" color="gray" onClick={() => setModalOpened(false)}>
               取消
             </Button>
-            <Button loading={formLoading} onClick={handleSubmit}>
+            <Button color="cyan" loading={formLoading} onClick={handleSubmit}>
               {editingItem ? "保存修改" : "确认创建角色"}
             </Button>
-          </Flex>
+          </Group>
         </Stack>
       </Modal>
     </Box>

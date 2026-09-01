@@ -25,7 +25,6 @@ import {
   FiClock,
 } from "react-icons/fi";
 import { OutlineNode, OutlineNodeType } from "@/rest/outline";
-import styles from "../style.module.scss";
 
 interface TreePanelProps {
   nodes: OutlineNode[];
@@ -306,7 +305,7 @@ export default function TreePanel({
         >
           <Flex align="center" gap={10}>
             <FiFileText size={15} color={isOverviewSelected ? "#0096bd" : "#64748b"} />
-            <Text className={styles.overviewTitle} fw={isOverviewSelected ? 600 : 500}>
+            <Text fz={13} fw={isOverviewSelected ? 600 : 500} c={isOverviewSelected ? "cyan.8" : "dark.6"} style={{ flex: 1 }}>
               全文大纲
             </Text>
           </Flex>

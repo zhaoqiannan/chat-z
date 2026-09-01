@@ -509,7 +509,54 @@ export const characterRelations = sqliteTable('character_relations', {
 });
 
 // ============================================================================
-// 16. TypeScript 类型导出 (强类型提示)
+// 16. 章节 AI 问答对话与协同创作表 (chapter_ai_chats)
+// ============================================================================
+export const chapterAiChats = sqliteTable('chapter_ai_chats', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull(),
+  chapterId: integer('chapter_id').notNull(),
+  userId: text('user_id').notNull(),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  actionType: text('action_type').default('chat'),
+  selectedText: text('selected_text'),
+  contextTags: text('context_tags', { mode: 'json' }).$type<{ id: string | number; name: string; type: string }[]>(),
+  applied: integer('applied').default(0),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 17. 章节版本生成历史表 (chapter_versions，纯文本修改快照，剥离 AI 关系)
+// ============================================================================
+export const chapterVersions = sqliteTable('chapter_versions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull(),
+  chapterId: integer('chapter_id').notNull(),
+  userId: text('user_id').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  wordCount: integer('word_count').default(0),
+  versionTag: text('version_tag').default('手动保存快照'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 18. 记忆碎片库表 (memory_fragments)
+// ============================================================================
+export const memoryFragments = sqliteTable('memory_fragments', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull(),
+  chapterId: integer('chapter_id'),
+  userId: text('user_id').notNull(),
+  title: text('title').notNull(),
+  content: text('content').notNull(),
+  sourceType: text('source_type').default('ai_chat'),
+  tags: text('tags'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 19. TypeScript 类型导出 (强类型提示)
 // ============================================================================
 
 /** 用户查询类型 (SELECT) */
@@ -575,6 +622,20 @@ export type NewTimelineEvent = typeof timelineEvents.$inferInsert;
 /** 角色关系记录类型 */
 export type CharacterRelation = typeof characterRelations.$inferSelect;
 export type NewCharacterRelation = typeof characterRelations.$inferInsert;
+
+/** 章节 AI 问答对话记录类型 */
+export type ChapterAiChat = typeof chapterAiChats.$inferSelect;
+export type NewChapterAiChat = typeof chapterAiChats.$inferInsert;
+
+/** 章节纯文本修改历史版本类型 */
+export type ChapterVersion = typeof chapterVersions.$inferSelect;
+export type NewChapterVersion = typeof chapterVersions.$inferInsert;
+
+/** 记忆碎片类型 */
+export type MemoryFragment = typeof memoryFragments.$inferSelect;
+export type NewMemoryFragment = typeof memoryFragments.$inferInsert;
+
+
 
 
 

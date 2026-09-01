@@ -24,7 +24,6 @@ import ModalCreateNode from "./modal-create-node";
 import ModalAiAssistant from "./modal-ai-assistant";
 import ModalAiPreview, { PreviewData } from "./modal-ai-preview";
 import DrawerAiHistory from "./drawer-ai-history";
-import styles from "./style.module.scss";
 
 /**
  * 将平铺的 Outline 数组转化为树形结构

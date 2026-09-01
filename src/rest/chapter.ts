@@ -126,5 +126,118 @@ export const deleteChapterAiHistory = async (id: number | string) => {
   return del(`/api/ai/chapter/history`, { id });
 };
 
+export interface ContextTagOption {
+  id: string | number;
+  name: string;
+  type: "character" | "location" | "faction" | "item" | "rule" | "outline" | "chapter" | string;
+  desc?: string;
+}
 
+export interface ChapterAiChatItem {
+  id: number;
+  workId: number;
+  chapterId: number;
+  userId: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  actionType: string;
+  selectedText?: string;
+  contextTags?: ContextTagOption[];
+  applied: number;
+  createdAt: string | number;
+}
+
+export interface SendChapterAiChatPayload {
+  workId: number | string;
+  chapterId: number | string;
+  prompt?: string;
+  actionType?: string;
+  selectedText?: string;
+  currentContent?: string;
+  contextTags?: ContextTagOption[];
+}
+
+export const getWorkContextTagOptions = async (workId: number | string, chapterId?: number | string) => {
+  return get(`/api/ai/chapter/context-tags?workId=${workId}${chapterId ? `&chapterId=${chapterId}` : ""}`);
+};
+
+export const getChapterAiChatList = async (chapterId: number | string) => {
+  return get(`/api/ai/chapter/chat?chapterId=${chapterId}`);
+};
+
+export const sendChapterAiChat = async (data: SendChapterAiChatPayload) => {
+  return post(`/api/ai/chapter/chat`, data);
+};
+
+export const applyChapterAiChat = async (id: number | string, applied: boolean = true) => {
+  return fetch("/api/ai/chapter/chat", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, applied }),
+  }).then((r) => r.json());
+};
+
+export const deleteChapterAiChat = async (id: number | string) => {
+  return del(`/api/ai/chapter/chat`, { id });
+};
+
+export interface ChapterVersionItem {
+  id: number;
+  workId: number;
+  chapterId: number;
+  title: string;
+  content: string;
+  wordCount: number;
+  versionTag?: string;
+  createdAt: string | number;
+}
+
+export const getChapterVersionList = async (chapterId: number | string) => {
+  return get(`/api/chapters/versions?chapterId=${chapterId}`);
+};
+
+export const createChapterVersion = async (data: {
+  workId: number | string;
+  chapterId: number | string;
+  title: string;
+  content: string;
+  wordCount?: number;
+  versionTag?: string;
+}) => {
+  return post(`/api/chapters/versions`, data);
+};
+
+export const deleteChapterVersion = async (id: number | string) => {
+  return del(`/api/chapters/versions`, { id });
+};
+
+export interface MemoryFragmentItem {
+  id: number;
+  workId: number;
+  chapterId?: number;
+  title: string;
+  content: string;
+  sourceType: string;
+  tags?: string;
+  createdAt: string | number;
+}
+
+export const getMemoryFragmentList = async (workId: number | string, keyword?: string) => {
+  return get(`/api/chapters/fragments?workId=${workId}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ""}`);
+};
+
+export const createMemoryFragment = async (data: {
+  workId: number | string;
+  chapterId?: number | string;
+  title?: string;
+  content: string;
+  sourceType?: string;
+  tags?: string;
+}) => {
+  return post(`/api/chapters/fragments`, data);
+};
+
+export const deleteMemoryFragment = async (id: number | string) => {
+  return del(`/api/chapters/fragments`, { id });
+};
 

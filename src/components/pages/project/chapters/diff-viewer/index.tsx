@@ -3,14 +3,17 @@
 import React, { useState } from "react";
 import {
   Box,
-  Flex,
   Text,
   Button,
   Paper,
   SimpleGrid,
   Badge,
+  Group,
+  Stack,
+  ScrollArea,
+  Textarea,
 } from "@mantine/core";
-import { FiCheck, FiX, FiRefreshCw, FiCopy } from "react-icons/fi";
+import { FiCheck, FiX } from "react-icons/fi";
 
 interface DiffViewerProps {
   originalText: string;
@@ -32,89 +35,153 @@ export default function DiffViewer({
   const diffCount = optWordCount - origWordCount;
 
   return (
-    <Box p="16px" bg="#ffffff" style={{ borderRadius: 12, border: "1px solid #e2e8f0", height: "100%", display: "flex", flexDirection: "column" }}>
+    <Paper
+      p="md"
+      withBorder
+      shadow="sm"
+      radius="md"
+      style={{
+        backgroundColor: "#ffffff",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       {/* 顶部操作控制条 */}
-      <Flex justify="space-between" align="center" mb={14} pb={12} style={{ borderBottom: "1px solid #f1f5f9" }}>
-        <Flex align="center" gap={10}>
-          <Text fw={700} fz={16} c="#1e293b">
-            AI 润色与修改对比视图
-          </Text>
-          <Badge
-            color={diffCount >= 0 ? "teal" : "orange"}
-            variant="light"
-          >
-            {diffCount >= 0 ? `+${diffCount} 字` : `${diffCount} 字`}
-          </Badge>
-        </Flex>
+      <Paper
+        p="xs"
+        pb="sm"
+        mb="sm"
+        style={{ borderBottom: "1px solid var(--mantine-color-gray-2)", backgroundColor: "#ffffff" }}
+      >
+        <Group justify="space-between" align="center">
+          <Group gap="sm" align="center">
+            <Text fw={700} fz={16} c="dark.6">
+              AI 润色与修改对比视图
+            </Text>
+            <Badge
+              color={diffCount >= 0 ? "teal" : "orange"}
+              variant="light"
+              size="md"
+            >
+              {diffCount >= 0 ? `+${diffCount} 字` : `${diffCount} 字`}
+            </Badge>
+          </Group>
 
-        <Flex gap={10}>
-          <Button
-            variant="outline"
-            size="sm"
-            color="gray"
-            leftSection={<FiX size={14} />}
-            onClick={onReject}
-          >
-            放弃修改 (保留原文)
-          </Button>
+          <Group gap="xs">
+            <Button
+              variant="outline"
+              size="sm"
+              color="gray"
+              leftSection={<FiX size={14} />}
+              onClick={onReject}
+            >
+              放弃修改 (保留原文)
+            </Button>
 
-          <Button
-            color="teal"
-            size="sm"
-            leftSection={<FiCheck size={14} />}
-            onClick={() => onAccept(currentOptimized)}
-          >
-            一键采纳 (替换原文)
-          </Button>
-        </Flex>
-      </Flex>
+            <Button
+              color="teal"
+              size="sm"
+              leftSection={<FiCheck size={14} />}
+              onClick={() => onAccept(currentOptimized)}
+            >
+              一键采纳 (替换原文)
+            </Button>
+          </Group>
+        </Group>
+      </Paper>
 
       {/* 双栏对比区 */}
-      <SimpleGrid cols={2} spacing="16px" style={{ flex: 1, minHeight: 0 }}>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" style={{ flex: 1, minHeight: 0 }}>
         {/* 左栏：现有文章 (原文) */}
-        <Flex direction="column" style={{ height: "100%", border: "1px solid #e2e8f0", borderRadius: 8, background: "#f8fafc", overflow: "hidden" }}>
-          <Flex justify="space-between" align="center" p="10px 14px" bg="#f1f5f9" style={{ borderBottom: "1px solid #e2e8f0" }}>
-            <Text fw={700} fz={13} c="#475569">
-              📄 现有文章 (原文)
+        <Paper
+          withBorder
+          radius="md"
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            backgroundColor: "var(--mantine-color-gray-0)",
+            overflow: "hidden",
+          }}
+        >
+          <Paper
+            p="xs"
+            px="md"
+            style={{
+              backgroundColor: "var(--mantine-color-gray-1)",
+              borderBottom: "1px solid var(--mantine-color-gray-3)",
+            }}
+          >
+            <Group justify="space-between" align="center">
+              <Text fw={700} fz={13} c="dark.4">
+                📄 现有文章 (原文)
+              </Text>
+              <Text fz={12} c="dimmed">
+                {origWordCount.toLocaleString()} 字
+              </Text>
+            </Group>
+          </Paper>
+
+          <ScrollArea style={{ flex: 1 }} p="md">
+            <Text fz={14} lh={1.8} c="dark.5" style={{ whiteSpace: "pre-wrap" }}>
+              {originalText || "（暂无正文）"}
             </Text>
-            <Text fz={12} c="#94a3b8">
-              {origWordCount.toLocaleString()} 字
-            </Text>
-          </Flex>
-          <Box p="14px" style={{ flex: 1, overflowY: "auto", fontSize: 14, lineHeight: 1.8, color: "#334155", whiteSpace: "pre-wrap" }}>
-            {originalText || "（暂无正文）"}
-          </Box>
-        </Flex>
+          </ScrollArea>
+        </Paper>
 
         {/* 右栏：AI 优化后文章 (支持二次微调) */}
-        <Flex direction="column" style={{ height: "100%", border: "1px solid #bbf7d0", borderRadius: 8, background: "#f0fdf4", overflow: "hidden" }}>
-          <Flex justify="space-between" align="center" p="10px 14px" bg="#dcfce7" style={{ borderBottom: "1px solid #bbf7d0" }}>
-            <Text fw={700} fz={13} c="#15803d">
-              ✨ AI 优化后文章 (可直接编辑微调)
-            </Text>
-            <Text fz={12} c="#16a34a" fw={600}>
-              {optWordCount.toLocaleString()} 字
-            </Text>
-          </Flex>
-          <textarea
+        <Paper
+          withBorder
+          radius="md"
+          style={{
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            backgroundColor: "var(--mantine-color-teal-0)",
+            borderColor: "var(--mantine-color-teal-2)",
+            overflow: "hidden",
+          }}
+        >
+          <Paper
+            p="xs"
+            px="md"
             style={{
-              flex: 1,
-              width: "100%",
-              border: "none",
-              background: "transparent",
-              padding: 14,
-              fontSize: 14,
-              lineHeight: 1.8,
-              color: "#14532d",
-              outline: "none",
-              resize: "none",
-              fontFamily: "inherit",
+              backgroundColor: "var(--mantine-color-teal-1)",
+              borderBottom: "1px solid var(--mantine-color-teal-2)",
             }}
-            value={currentOptimized}
-            onChange={(e) => setCurrentOptimized(e.target.value)}
-          />
-        </Flex>
+          >
+            <Group justify="space-between" align="center">
+              <Text fw={700} fz={13} c="teal.9">
+                ✨ AI 优化后文章 (可直接编辑微调)
+              </Text>
+              <Text fz={12} c="teal.8" fw={600}>
+                {optWordCount.toLocaleString()} 字
+              </Text>
+            </Group>
+          </Paper>
+
+          <Box p="sm" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+            <Textarea
+              variant="unstyled"
+              value={currentOptimized}
+              onChange={(e) => setCurrentOptimized(e.target.value)}
+              styles={{
+                root: { flex: 1, display: "flex", flexDirection: "column" },
+                wrapper: { flex: 1, display: "flex", flexDirection: "column" },
+                input: {
+                  flex: 1,
+                  height: "100%",
+                  fontSize: 14,
+                  lineHeight: 1.8,
+                  color: "var(--mantine-color-teal-9)",
+                  padding: 0,
+                },
+              }}
+            />
+          </Box>
+        </Paper>
       </SimpleGrid>
-    </Box>
+    </Paper>
   );
 }
