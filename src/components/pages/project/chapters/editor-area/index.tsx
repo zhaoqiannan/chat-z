@@ -1,9 +1,9 @@
-// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、光标精准插入、记忆碎片与版本快照历史）
+// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、段落自动缩进与一键智能排版、光标精准插入、记忆碎片与版本快照历史）
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Progress, Menu } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock } from "react-icons/fi";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft } from "react-icons/fi";
 import { ChapterItem, createChapterVersion } from "@/rest/chapter";
 import DrawerVersionHistory from "../drawer-version-history";
 import DrawerMemoryFragments from "../drawer-memory-fragments";
@@ -82,6 +82,70 @@ export default function EditorArea({
   const liveWordCount = content.replace(/\s+/g, "").length;
   const progressPercent = Math.min(Math.round((liveWordCount / Math.max(targetWords, 1)) * 100), 100);
 
+  const handleFormatIndent = () => {
+    if (!content) return;
+    const formatted = content
+      .split("\n")
+      .map((line) => {
+        const trimmed = line.replace(/^[ 　\t]+/, "").trimEnd();
+        return trimmed ? `　　${trimmed}` : "";
+      })
+      .join("\n");
+    setContent(formatted);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.nativeEvent as any).isComposing || e.keyCode === 229) {
+      return;
+    }
+
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const el = textareaRef.current;
+      if (!el) return;
+      const start = el.selectionStart ?? content.length;
+      const end = el.selectionEnd ?? content.length;
+      const indent = "　　";
+      const nextContent = content.substring(0, start) + indent + content.substring(end);
+      setContent(nextContent);
+      const nextPos = start + indent.length;
+      lastCursorRef.current = { start: nextPos, end: nextPos };
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(nextPos, nextPos);
+      }, 0);
+      return;
+    }
+
+    if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const el = textareaRef.current;
+      if (!el) return;
+
+      const start = el.selectionStart ?? content.length;
+      const end = el.selectionEnd ?? content.length;
+
+      const beforeCursor = content.substring(0, start);
+      const currentLine = beforeCursor.split("\n").pop() || "";
+
+      let indent = "\n　　";
+      if (currentLine.trim() === "") {
+        indent = "\n";
+      }
+
+      const nextContent = content.substring(0, start) + indent + content.substring(end);
+      setContent(nextContent);
+
+      const nextPos = start + indent.length;
+      lastCursorRef.current = { start: nextPos, end: nextPos };
+
+      setTimeout(() => {
+        el.focus();
+        el.setSelectionRange(nextPos, nextPos);
+      }, 0);
+    }
+  };
+
   const handleManualSave = async () => {
     if (!chapter) return;
     try {
@@ -156,11 +220,23 @@ export default function EditorArea({
           <Text fz={13} fw={600} c="#334155">第{chapter.chapterNumber}章 · {title || chapter.title}</Text>
         </Group>
 
-        <Group gap="md" align="center">
-          <Group gap={6} align="center">
+        <Group gap="xs" align="center">
+          <Group gap={6} align="center" mr="xs">
             <Box style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#10b981" }} />
             <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字</Text>
           </Group>
+
+          <Tooltip label="一键智能排版（所有段首缩进2空格）" position="bottom">
+            <Button
+              size="xs"
+              variant="default"
+              leftSection={<FiAlignLeft size={13} color="#0891b2" />}
+              onClick={handleFormatIndent}
+              styles={{ root: { borderColor: "#e2e8f0" } }}
+            >
+              一键缩进
+            </Button>
+          </Tooltip>
 
           <Button
             size="xs"
@@ -180,6 +256,9 @@ export default function EditorArea({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Item leftSection={<FiAlignLeft size={13} color="#0891b2" />} onClick={handleFormatIndent}>
+                段首智能缩进排版
+              </Menu.Item>
               <Menu.Item leftSection={<FiZap size={13} color="#0284c7" />} onClick={onToggleAiPanel}>
                 唤起 AI 协同助手
               </Menu.Item>
@@ -229,12 +308,13 @@ export default function EditorArea({
               variant="unstyled"
               autosize
               minRows={22}
-              placeholder="在此开始撰写正文..."
+              placeholder="在此开始撰写正文（回车自动段首缩进两格）..."
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
                 handleTrackCursor();
               }}
+              onKeyDown={handleKeyDown}
               onSelect={handleTrackCursor}
               onMouseUp={handleTrackCursor}
               onKeyUp={handleTrackCursor}
@@ -264,7 +344,7 @@ export default function EditorArea({
         </Group>
 
         <Group gap="md" align="center">
-          <Text fz={11.5} c="#94a3b8">快捷键: 双击唤起 AI 助手 · Option + Enter 续写</Text>
+          <Text fz={11.5} c="#94a3b8">提示: 回车自动缩进 · 顶部提供「一键缩进」排版</Text>
           <Tooltip label="唤起/收起 AI 协同助手" position="top">
             <ActionIcon variant="subtle" color="cyan" size="sm" onClick={onToggleAiPanel}>
               <FiZap size={14} />

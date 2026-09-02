@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, SegmentedControl, Paper, Group, Card } from "@mantine/core";
-import { FiPlus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap } from "react-icons/fi";
+// 组件：地理空间与地点地标设定（70vw宽度、地图画布自由拖拽保存坐标、SVG拓扑关联关系连线、主属地标层级、10行Textarea支持换行格式化）
+"use client";
+
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, SegmentedControl, Paper, Group, Card, Tooltip, Badge, Switch } from "@mantine/core";
+import { FiPlus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2 } from "react-icons/fi";
 import { LocationRecord, getLocationList, createLocation, updateLocation, deleteLocation } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
 
@@ -11,10 +14,25 @@ interface LocationsTabProps {
 export default function LocationsTab({ workId }: LocationsTabProps) {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<LocationRecord[]>([]);
-  const [viewMode, setViewMode] = useState<"map" | "list">("list");
+  const [viewMode, setViewMode] = useState<"map" | "list">("map");
   const [searchKey, setSearchKey] = useState("");
+  const [showRelations, setShowRelations] = useState(true);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  const [savingPosId, setSavingPosId] = useState<number | null>(null);
 
   const mapRef = useRef<HTMLDivElement>(null);
+
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const dragInfoRef = useRef<{
+    id: number;
+    startX: number;
+    startY: number;
+    initialPosX: number;
+    initialPosY: number;
+    currentPosX: number;
+    currentPosY: number;
+    hasMoved: boolean;
+  } | null>(null);
 
   const [modalOpened, setModalOpened] = useState(false);
   const [editingItem, setEditingItem] = useState<LocationRecord | null>(null);
@@ -87,16 +105,92 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
     setDetailModalOpened(true);
   };
 
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMapCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!mapRef.current) return;
+    if (dragInfoRef.current && dragInfoRef.current.hasMoved) return;
+
     const rect = mapRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    const percentX = Math.round((clickX / rect.width) * 100);
-    const percentY = Math.round((clickY / rect.height) * 100);
+    const percentX = Math.max(3, Math.min(97, Math.round((clickX / rect.width) * 100)));
+    const percentY = Math.max(4, Math.min(96, Math.round((clickY / rect.height) * 100)));
 
     handleOpenCreate({ x: percentX, y: percentY });
+  };
+
+  const handleNodeMouseDown = (loc: LocationRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (e.button !== 0) return;
+
+    setDraggingId(loc.id);
+    dragInfoRef.current = {
+      id: loc.id,
+      startX: e.clientX,
+      startY: e.clientY,
+      initialPosX: loc.posX || 50,
+      initialPosY: loc.posY || 50,
+      currentPosX: loc.posX || 50,
+      currentPosY: loc.posY || 50,
+      hasMoved: false,
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!mapRef.current || !dragInfoRef.current) return;
+      const rect = mapRef.current.getBoundingClientRect();
+
+      const deltaX = moveEvent.clientX - dragInfoRef.current.startX;
+      const deltaY = moveEvent.clientY - dragInfoRef.current.startY;
+
+      if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) {
+        dragInfoRef.current.hasMoved = true;
+      }
+
+      const deltaPercentX = (deltaX / rect.width) * 100;
+      const deltaPercentY = (deltaY / rect.height) * 100;
+
+      let newX = Math.round(dragInfoRef.current.initialPosX + deltaPercentX);
+      let newY = Math.round(dragInfoRef.current.initialPosY + deltaPercentY);
+
+      newX = Math.max(3, Math.min(97, newX));
+      newY = Math.max(4, Math.min(96, newY));
+
+      dragInfoRef.current.currentPosX = newX;
+      dragInfoRef.current.currentPosY = newY;
+
+      setList((prev) =>
+        prev.map((item) => (item.id === loc.id ? { ...item, posX: newX, posY: newY } : item))
+      );
+    };
+
+    const handleMouseUp = async () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+
+      const info = dragInfoRef.current;
+      setDraggingId(null);
+      dragInfoRef.current = null;
+
+      if (info && info.hasMoved) {
+        try {
+          setSavingPosId(info.id);
+          await updateLocation({
+            id: info.id,
+            posX: info.currentPosX,
+            posY: info.currentPosY,
+          });
+          setTimeout(() => setSavingPosId(null), 1200);
+        } catch (err) {
+          console.error("保存位置失败:", err);
+          setSavingPosId(null);
+        }
+      } else if (info && !info.hasMoved) {
+        handleOpenDetail(loc);
+      }
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
   };
 
   const handleSubmit = async () => {
@@ -170,10 +264,28 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
     );
   });
 
+  const parentIdsWithChildren = new Set(
+    list.filter((l) => l.parentId).map((l) => Number(l.parentId))
+  );
+
+  const activeRelationIds = new Set<number>();
+  if (hoveredId) {
+    activeRelationIds.add(hoveredId);
+    const targetLoc = list.find((l) => l.id === hoveredId);
+    if (targetLoc && targetLoc.parentId) {
+      activeRelationIds.add(Number(targetLoc.parentId));
+    }
+    list.forEach((l) => {
+      if (l.parentId === hoveredId) {
+        activeRelationIds.add(l.id);
+      }
+    });
+  }
+
   return (
     <Box>
       <Group justify="space-between" align="center" mb="md" wrap="wrap">
-        <Group gap="sm" align="center" style={{ flex: 1, maxWidth: 480 }}>
+        <Group gap="sm" align="center" style={{ flex: 1, maxWidth: 520 }}>
           <TextInput
             placeholder="搜索地点名称、别名或风土特点..."
             leftSection={<FiSearch size={14} />}
@@ -188,15 +300,29 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
             value={viewMode}
             onChange={(v) => setViewMode(v as "map" | "list")}
             data={[
-              { label: "卡片列表", value: "list" },
               { label: "地图画布", value: "map" },
+              { label: "卡片列表", value: "list" },
             ]}
           />
         </Group>
 
-        <Button size="xs" leftSection={<FiPlus size={13} />} color="cyan" onClick={() => handleOpenCreate()}>
-          新建地点
-        </Button>
+        <Group gap="xs">
+          {viewMode === "map" && (
+            <Button
+              size="xs"
+              variant={showRelations ? "light" : "default"}
+              color="cyan"
+              leftSection={showRelations ? <FiEye size={12} /> : <FiEyeOff size={12} />}
+              onClick={() => setShowRelations((v) => !v)}
+            >
+              {showRelations ? "关联连线: 显示" : "关联连线: 隐藏"}
+            </Button>
+          )}
+
+          <Button size="xs" leftSection={<FiPlus size={13} />} color="cyan" onClick={() => handleOpenCreate()}>
+            新建地点
+          </Button>
+        </Group>
       </Group>
 
       <Box pos="relative">
@@ -204,61 +330,233 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
         {viewMode === "map" ? (
           <Box>
-            <Group justify="space-between" align="center" mb="xs" fz={12} c="#64748b">
-              <Text fz={12}>💡 提示：在画布任意位置单击可直接标记地标；点击地标可查看/编辑详情。</Text>
-              <Text fz={12}>当前已标注地标数：<Text span fw={700} c="#0f172a">{list.length}</Text> 个</Text>
-            </Group>
+            <Flex justify="space-between" align="center" mb="xs" wrap="wrap" gap="xs">
+              <Group gap="xs" align="center">
+                <Text fz={12} c="#64748b">
+                  💡 提示：按住地标卡片可<Text span fw={700} c="#0891b2">自由拖拽移动并自动保存坐标</Text>；在空白处单击可快速标记新地点。
+                </Text>
+                {savingPosId && (
+                  <Badge size="xs" color="teal" variant="light" leftSection={<FiCheck size={10} />}>
+                    位置已保存
+                  </Badge>
+                )}
+              </Group>
+
+              <Group gap="md" fz={11.5} c="#64748b">
+                <Group gap={4} align="center">
+                  <Box style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#0284c7" }} />
+                  <Text fz={11.5}>核心主地标</Text>
+                </Group>
+                <Group gap={4} align="center">
+                  <Box style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#06b6d4" }} />
+                  <Text fz={11.5}>从属属地 / 附属地标</Text>
+                </Group>
+                <Text fz={11.5}>
+                  总地标: <Text span fw={700} c="#0f172a">{list.length}</Text> 个
+                </Text>
+              </Group>
+            </Flex>
 
             <Paper
               ref={mapRef}
               withBorder
-              radius="sm"
-              shadow="xs"
-              onClick={handleMapClick}
+              radius="md"
+              shadow="sm"
+              onClick={handleMapCanvasClick}
               style={{
                 width: "100%",
-                height: 540,
+                height: 580,
                 backgroundColor: "#f8fafc",
                 position: "relative",
                 overflow: "hidden",
                 cursor: "crosshair",
-                backgroundImage: `radial-gradient(circle at 1px 1px, #cbd5e1 1px, transparent 0)`,
-                backgroundSize: "24px 24px",
+                backgroundImage: `radial-gradient(circle at 1px 1px, #cbd5e1 1.2px, transparent 0)`,
+                backgroundSize: "28px 28px",
+                userSelect: "none",
               }}
             >
+              {/* SVG 拓扑关联关系连线层 */}
+              {showRelations && (
+                <svg
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    pointerEvents: "none",
+                    zIndex: 2,
+                  }}
+                >
+                  <defs>
+                    <linearGradient id="rel-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#0284c7" stopOpacity="0.8" />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.8" />
+                    </linearGradient>
+                    <linearGradient id="rel-gradient-active" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="#0284c7" stopOpacity="1" />
+                      <stop offset="100%" stopColor="#06b6d4" stopOpacity="1" />
+                    </linearGradient>
+                    <marker
+                      id="arrow"
+                      viewBox="0 0 10 10"
+                      refX="18"
+                      refY="5"
+                      markerWidth="6"
+                      markerHeight="6"
+                      orient="auto-start-reverse"
+                    >
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#06b6d4" opacity="0.85" />
+                    </marker>
+                    <marker
+                      id="arrow-active"
+                      viewBox="0 0 10 10"
+                      refX="18"
+                      refY="5"
+                      markerWidth="7"
+                      markerHeight="7"
+                      orient="auto-start-reverse"
+                    >
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#0284c7" />
+                    </marker>
+                  </defs>
+
+                  {filteredList.map((loc) => {
+                    if (!loc.parentId) return null;
+                    const parentLoc = list.find((p) => p.id === loc.parentId);
+                    if (!parentLoc) return null;
+
+                    const isHighlighted =
+                      hoveredId &&
+                      (hoveredId === loc.id ||
+                        hoveredId === parentLoc.id ||
+                        activeRelationIds.has(loc.id));
+                    const isFaded = hoveredId && !isHighlighted;
+
+                    const x1 = `${parentLoc.posX || 50}%`;
+                    const y1 = `${parentLoc.posY || 50}%`;
+                    const x2 = `${loc.posX || 50}%`;
+                    const y2 = `${loc.posY || 50}%`;
+
+                    const px1 = parentLoc.posX || 50;
+                    const py1 = parentLoc.posY || 50;
+                    const px2 = loc.posX || 50;
+                    const py2 = loc.posY || 50;
+                    const cx = (px1 + px2) / 2;
+                    const cy = (py1 + py2) / 2 + (px2 > px1 ? -3 : 3);
+
+                    return (
+                      <g key={`rel-${parentLoc.id}-${loc.id}`} style={{ transition: "opacity 0.2s ease", opacity: isFaded ? 0.18 : 1 }}>
+                        <path
+                          d={`M ${px1} ${py1} Q ${cx} ${cy} ${px2} ${py2}`}
+                          fill="none"
+                          stroke={isHighlighted ? "url(#rel-gradient-active)" : "url(#rel-gradient)"}
+                          strokeWidth={isHighlighted ? 2.5 : 1.8}
+                          strokeDasharray={isHighlighted ? "none" : "5,4"}
+                          markerEnd={isHighlighted ? "url(#arrow-active)" : "url(#arrow)"}
+                        />
+                        {/* 连线中点关系徽标 */}
+                        <circle cx={`${cx}%`} cy={`${cy}%`} r={isHighlighted ? 4 : 3} fill={isHighlighted ? "#0284c7" : "#06b6d4"} />
+                      </g>
+                    );
+                  })}
+                </svg>
+              )}
+
+              {/* 地标节点 */}
               {filteredList.map((loc) => {
+                const isParentCore = parentIdsWithChildren.has(loc.id) || !loc.parentId;
+                const isDragging = draggingId === loc.id;
+                const isHighlighted =
+                  hoveredId &&
+                  (hoveredId === loc.id || activeRelationIds.has(loc.id));
+                const isFaded = hoveredId && !isHighlighted;
+
                 return (
                   <Box
                     key={loc.id}
-                    onClick={(e) => handleOpenEdit(loc, e)}
+                    onMouseDown={(e) => handleNodeMouseDown(loc, e)}
+                    onMouseEnter={() => setHoveredId(loc.id)}
+                    onMouseLeave={() => setHoveredId(null)}
                     style={{
                       position: "absolute",
-                      left: `${loc.posX}%`,
-                      top: `${loc.posY}%`,
-                      transform: "translate(-50%, -50%)",
-                      cursor: "pointer",
-                      zIndex: 10,
+                      left: `${loc.posX || 50}%`,
+                      top: `${loc.posY || 50}%`,
+                      transform: `translate(-50%, -50%) scale(${isDragging ? 1.08 : isHighlighted ? 1.04 : 1})`,
+                      cursor: isDragging ? "grabbing" : "grab",
+                      zIndex: isDragging ? 30 : isHighlighted ? 25 : isParentCore ? 15 : 10,
+                      transition: isDragging ? "none" : "transform 0.15s ease, opacity 0.2s ease",
+                      opacity: isFaded ? 0.35 : 1,
                     }}
                   >
                     <Paper
-                      shadow="xs"
+                      shadow={isDragging ? "lg" : isHighlighted ? "md" : "xs"}
                       radius="sm"
                       withBorder
                       px={10}
-                      py={4}
+                      py={6}
                       style={{
                         display: "flex",
                         alignItems: "center",
-                        gap: 6,
-                        backgroundColor: "#ffffff",
-                        borderColor: "#06b6d4",
-                        borderWidth: 1.5,
-                        transition: "all 0.15s ease",
+                        gap: 7,
+                        backgroundColor: isParentCore ? "#f0f9ff" : "#ffffff",
+                        borderColor: isDragging
+                          ? "#0284c7"
+                          : isHighlighted
+                          ? "#0284c7"
+                          : isParentCore
+                          ? "#38bdf8"
+                          : "#06b6d4",
+                        borderWidth: isParentCore || isHighlighted ? 2 : 1.5,
+                        boxShadow: isHighlighted ? "0 4px 14px rgba(2, 132, 199, 0.25)" : undefined,
                       }}
                     >
-                      <FiMapPin size={13} color="#06b6d4" />
-                      <Text fz={12} fw={700} c="#1e293b">{loc.name}</Text>
-                      {loc.parentName && <Text fz={10.5} c="#64748b">[{loc.parentName}]</Text>}
+                      <FiMapPin
+                        size={isParentCore ? 15 : 13}
+                        color={isParentCore ? "#0284c7" : "#06b6d4"}
+                      />
+
+                      <Box style={{ textAlign: "left" }}>
+                        <Flex align="center" gap={4}>
+                          <Text
+                            fz={isParentCore ? 12.5 : 12}
+                            fw={isParentCore ? 800 : 700}
+                            c={isParentCore ? "#0369a1" : "#1e293b"}
+                          >
+                            {loc.name}
+                          </Text>
+                          {loc.alias && (
+                            <Text fz={10.5} c="#64748b">
+                              ({loc.alias})
+                            </Text>
+                          )}
+                        </Flex>
+
+                        {loc.parentName ? (
+                          <Flex align="center" gap={2} mt={1}>
+                            <FiShare2 size={9} color="#0891b2" />
+                            <Text fz={9.5} c="#0891b2" fw={500}>
+                              隶属: {loc.parentName}
+                            </Text>
+                          </Flex>
+                        ) : parentIdsWithChildren.has(loc.id) ? (
+                          <Text fz={9.5} c="#0284c7" fw={600} mt={1}>
+                            🏛️ 核心主域
+                          </Text>
+                        ) : null}
+                      </Box>
+
+                      <Group gap={2} ml={4} onClick={(e) => e.stopPropagation()}>
+                        <ActionIcon
+                          size="xs"
+                          variant="subtle"
+                          color="gray"
+                          onClick={(e) => handleOpenEdit(loc, e)}
+                          title="编辑地点"
+                        >
+                          <FiEdit size={11} />
+                        </ActionIcon>
+                      </Group>
                     </Paper>
                   </Box>
                 );

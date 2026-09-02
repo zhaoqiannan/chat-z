@@ -1,10 +1,10 @@
-// 组件：右侧 AI 协同创作助手面板（多级上下文标签管理、快捷写作动作、智能推演流、一键采纳写入与存为记忆碎片）
+// 组件：右侧 AI 协同创作助手面板（选中文本引用浮层、指令预填确认发送、多级上下文标签、一键采纳写入与单条对话删除）
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Badge, TextInput, Textarea, ScrollArea, Group, Stack, Paper, Loader, Popover, Tooltip } from "@mantine/core";
-import { FiSend, FiPlus, FiX, FiRefreshCw, FiCheck, FiChevronRight, FiZap, FiStar, FiBook, FiUser, FiMapPin, FiShield, FiBox, FiCpu, FiBookmark } from "react-icons/fi";
-import { ChapterAiChatItem, ContextTagOption, getChapterAiChatList, sendChapterAiChat, applyChapterAiChat, getWorkContextTagOptions, createMemoryFragment } from "@/rest/chapter";
+import { FiSend, FiPlus, FiX, FiRefreshCw, FiCheck, FiChevronRight, FiZap, FiStar, FiBook, FiUser, FiMapPin, FiShield, FiBox, FiCpu, FiBookmark, FiTrash2, FiCornerDownLeft } from "react-icons/fi";
+import { ChapterAiChatItem, ContextTagOption, getChapterAiChatList, sendChapterAiChat, applyChapterAiChat, getWorkContextTagOptions, createMemoryFragment, deleteChapterAiChat } from "@/rest/chapter";
 
 interface PanelAiAssistantProps {
   workId: number | string;
@@ -31,6 +31,7 @@ export default function PanelAiAssistant({
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState("");
+  const [currentAction, setCurrentAction] = useState<string>("chat");
   const [selectedTags, setSelectedTags] = useState<ContextTagOption[]>([]);
   const [allTagOptions, setAllTagOptions] = useState<ContextTagOption[]>([]);
   const [tagSearch, setTagSearch] = useState("");
@@ -38,6 +39,7 @@ export default function PanelAiAssistant({
   const [fragmentSavedIds, setFragmentSavedIds] = useState<Record<number, boolean>>({});
 
   const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchChats = async () => {
     if (!chapterId) return;
@@ -94,9 +96,50 @@ export default function PanelAiAssistant({
     setSelectedTags((prev) => prev.filter((t) => !(t.id === tag.id && t.type === tag.type)));
   };
 
-  const handleSend = async (actionType: string = "chat", customPrompt?: string) => {
-    const promptToSend = customPrompt !== undefined ? customPrompt : inputText.trim();
-    if (!promptToSend && !selectedText && actionType === "chat") return;
+  const getActionPrompt = (actionType: string, text?: string) => {
+    const hasSelection = Boolean(text && text.trim());
+    switch (actionType) {
+      case "polish":
+        return hasSelection
+          ? "请根据上方引用的选中片段进行深度文学润色，提升文笔表现力、动作画面感与情绪张力，保持原有人设与语境。"
+          : "请对本章节当前全篇内容进行通篇文学润色，优化语句通顺度、行文节奏与环境氛围描写。";
+      case "expand":
+        return hasSelection
+          ? "请根据上方引用的选中片段进行细节场景扩写，丰富角色的微表情、心理博弈、动作细节与感官描写，增强冲突张力。"
+          : "请结合当前章节的高潮或核心场景进行深度细节扩写，充实细节描写与人物心理活动（约 500 字）。";
+      case "shorten":
+        return hasSelection
+          ? "请精炼浓缩上方引用的选中片段，剔除冗余修饰与水分废话，强化叙事节奏，使其紧凑干练。"
+          : "请对本章内容进行紧凑精简与去水，突出核心主线剧情推进。";
+      case "continue":
+        return hasSelection
+          ? "请以选中文本为情节转折与承接点，顺畅续写接下来的故事发展与角色对话，保持剧情连贯与戏剧悬念（约 500~800 字）。"
+          : "请根据前文剧情走势与大纲脉络，顺畅续写本章接下来的发展高潮（约 500~800 字）。";
+      case "tone":
+        return hasSelection
+          ? "请根据登场角色的性格特质与人设定位，重构上方引用片段中的对话与神态描写，使其更有辨识度与个性张力。"
+          : "请优化本章中的角色对白与口吻，增强人物个性张力与戏剧冲突。";
+      case "critique":
+        return hasSelection
+          ? "请仔细审查上方引用片段中的情节逻辑、前后伏笔与角色动机是否存在矛盾漏洞，并提供具体修改建议。"
+          : "请仔细检查本章的情节逻辑、战力体系与角色行为动机是否存在前后矛盾或漏洞，并提供优化方案。";
+      default:
+        return "";
+    }
+  };
+
+  const handleSelectAction = (actionType: string) => {
+    setCurrentAction(actionType);
+    const prompt = getActionPrompt(actionType, selectedText);
+    setInputText(prompt);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  };
+
+  const handleSend = async () => {
+    const promptToSend = inputText.trim();
+    if (!promptToSend && !selectedText) return;
 
     try {
       setSending(true);
@@ -106,7 +149,7 @@ export default function PanelAiAssistant({
         workId: Number(workId),
         chapterId: Number(chapterId),
         prompt: promptToSend,
-        actionType,
+        actionType: currentAction || "chat",
         selectedText: selectedText || undefined,
         currentContent: currentContent || undefined,
         contextTags: selectedTags,
@@ -122,13 +165,23 @@ export default function PanelAiAssistant({
     }
   };
 
+  const handleDeleteChat = async (id: number) => {
+    setChats((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await deleteChapterAiChat(id);
+    } catch (_) { }
+  };
+
   const handleAccept = (chat: ChapterAiChatItem) => {
     onAcceptText(chat.content, chat.selectedText);
     setChats((prev) => prev.map((c) => (c.id === chat.id ? { ...c, applied: 1 } : c)));
   };
 
   const handleRetry = (chat: ChapterAiChatItem) => {
-    handleSend(chat.actionType || "chat", chat.selectedText ? "" : chat.content);
+    setInputText(chat.content ? `重新推演：${chat.content.slice(0, 40)}...` : "请重新推演");
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   const handleSaveFragment = async (chat: ChapterAiChatItem) => {
@@ -183,7 +236,7 @@ export default function PanelAiAssistant({
       case "critique":
         return "逻辑纠错";
       default:
-        return "推演结果";
+        return "推演问答";
     }
   };
 
@@ -282,58 +335,51 @@ export default function PanelAiAssistant({
 
       <Box px="md" py={10} style={{ borderBottom: "1px solid #f8fafc" }}>
         <Flex gap={6} wrap="wrap">
-          <Button size="xs" variant="default" onClick={() => handleSend("polish")} disabled={sending} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("polish")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             智能润色
           </Button>
-          <Button size="xs" variant="default" onClick={() => handleSend("expand")} disabled={sending} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("expand")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             场景扩写
           </Button>
-          <Button size="xs" variant="default" onClick={() => handleSend("shorten")} disabled={sending} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("shorten")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             精简缩写
           </Button>
-          <Button size="xs" variant="default" onClick={() => handleSend("continue")} disabled={sending} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("continue")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             情节续写
           </Button>
-          <Button size="xs" variant="default" onClick={() => handleSend("tone")} disabled={sending} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("tone")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             语气改写
           </Button>
-          <Button size="xs" variant="default" onClick={() => handleSend("critique")} disabled={sending} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("critique")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             逻辑纠错
           </Button>
         </Flex>
       </Box>
-
-      {selectedText && (
-        <Box px="md" py={6} bg="#f0fdf4" style={{ borderBottom: "1px solid #dcfce7" }}>
-          <Flex justify="space-between" align="center">
-            <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
-              <Badge size="xs" color="teal" variant="light">已选文本</Badge>
-              <Text fz={11.5} c="#166534" truncate="end" style={{ flex: 1 }}>
-                "{selectedText}"
-              </Text>
-              <Text fz={10.5} c="#15803d">({selectedText.length} 字)</Text>
-            </Group>
-            {onClearSelection && (
-              <ActionIcon size="xs" variant="subtle" color="teal" onClick={onClearSelection} style={{ marginLeft: 6 }}>
-                <FiX size={12} />
-              </ActionIcon>
-            )}
-          </Flex>
-        </Box>
-      )}
 
       <ScrollArea style={{ flex: 1 }} px="md" py="xs" viewportRef={scrollViewportRef}>
         <Stack gap="md">
           {chats.map((item) => {
             if (item.role === "user") {
               return (
-                <Box key={item.id} style={{ alignSelf: "flex-end", maxWidth: "90%" }}>
-                  <Paper p="8px 12px" radius="md" bg="#f1f5f9" style={{ borderBottomRightRadius: 2 }}>
+                <Box key={item.id} style={{ alignSelf: "flex-end", maxWidth: "92%", position: "relative" }}>
+                  <Paper p="8px 12px" radius="md" bg="#f1f5f9" style={{ borderBottomRightRadius: 2, position: "relative" }}>
+                    {item.selectedText && (
+                      <Box p="4px 8px" mb={6} bg="#e2e8f0" style={{ borderRadius: 4, borderLeft: "3px solid #0284c7" }}>
+                        <Text fz={10.5} c="#475569" lineClamp={2}>
+                          引用: “{item.selectedText}”
+                        </Text>
+                      </Box>
+                    )}
                     <Text fz={12} c="#1e293b" style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
                       {item.content}
                     </Text>
                   </Paper>
-                  <Text fz={10} c="#94a3b8" ta="right" mt={2}>刚刚 · 作家</Text>
+                  <Flex justify="space-between" align="center" mt={2} px={2}>
+                    <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => handleDeleteChat(item.id)} title="删除提问">
+                      <FiTrash2 size={11} />
+                    </ActionIcon>
+                    <Text fz={10} c="#94a3b8">刚刚 · 作家</Text>
+                  </Flex>
                 </Box>
               );
             }
@@ -355,26 +401,32 @@ export default function PanelAiAssistant({
                     {item.content}
                   </Text>
 
-                  <Flex justify="flex-end" gap={6} mt={10} wrap="wrap">
-                    <Button
-                      size="compact-xs"
-                      variant="subtle"
-                      color={fragmentSavedIds[item.id] ? "teal" : "cyan"}
-                      leftSection={<FiBookmark size={11} />}
-                      onClick={() => handleSaveFragment(item)}
-                      disabled={Boolean(fragmentSavedIds[item.id])}
-                    >
-                      {fragmentSavedIds[item.id] ? "已存为碎片" : "存为碎片"}
-                    </Button>
-                    <Button size="compact-xs" color="teal" leftSection={<FiCheck size={11} />} onClick={() => handleAccept(item)}>
-                      采纳写入
-                    </Button>
-                    <Button size="compact-xs" variant="default" onClick={() => handleRetry(item)}>
-                      重试
-                    </Button>
+                  <Flex justify="space-between" align="center" mt={10}>
+                    <ActionIcon size="xs" variant="subtle" color="red" onClick={() => handleDeleteChat(item.id)} title="删除此条回答">
+                      <FiTrash2 size={12} />
+                    </ActionIcon>
+
+                    <Flex gap={6} wrap="wrap">
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        color={fragmentSavedIds[item.id] ? "teal" : "cyan"}
+                        leftSection={<FiBookmark size={11} />}
+                        onClick={() => handleSaveFragment(item)}
+                        disabled={Boolean(fragmentSavedIds[item.id])}
+                      >
+                        {fragmentSavedIds[item.id] ? "已存为碎片" : "存为碎片"}
+                      </Button>
+                      <Button size="compact-xs" color="teal" leftSection={<FiCheck size={11} />} onClick={() => handleAccept(item)}>
+                        采纳写入
+                      </Button>
+                      <Button size="compact-xs" variant="default" onClick={() => handleRetry(item)}>
+                        重试
+                      </Button>
+                    </Flex>
                   </Flex>
                 </Paper>
-                <Text fz={10} c="#94a3b8" mt={2}>刚刚 · Novel AI</Text>
+                <Text fz={10} c="#94a3b8" mt={2} px={2}>刚刚 · Novel AI</Text>
               </Box>
             );
           })}
@@ -392,19 +444,41 @@ export default function PanelAiAssistant({
         </Stack>
       </ScrollArea>
 
-      <Box p="xs" px="md" style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#ffffff" }}>
+      {selectedText && (
+        <Box px="md" py={6} bg="#f8fafc" style={{ borderTop: "1px solid #f1f5f9", borderBottom: "1px dashed #e2e8f0" }}>
+          <Flex justify="space-between" align="center">
+            <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
+              <Badge size="xs" color="cyan" variant="light">📌 选中文本</Badge>
+              <Text fz={11.5} c="#334155" truncate="end" style={{ flex: 1 }}>
+                “{selectedText}”
+              </Text>
+              <Text fz={10.5} c="#94a3b8">({selectedText.length} 字)</Text>
+            </Group>
+            {onClearSelection && (
+              <Tooltip label="清除选中引用">
+                <ActionIcon size="xs" variant="subtle" color="gray" onClick={onClearSelection} style={{ marginLeft: 6 }}>
+                  <FiX size={12} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+          </Flex>
+        </Box>
+      )}
+
+      <Box p="xs" px="md" style={{ borderTop: selectedText ? "none" : "1px solid #f1f5f9", backgroundColor: "#ffffff" }}>
         <Textarea
-          placeholder={selectedText ? "输入针对选中文本的补充指令 (如: 增加更多技术细节)..." : "输入协同指令或自由提问..."}
+          ref={inputRef}
+          placeholder={selectedText ? "针对选中文本输入指令，或直接点击上方动作填入指令后发送..." : "输入协同指令或提问，或点击上方动作预填指令..."}
           variant="unstyled"
           autosize
           minRows={2}
-          maxRows={4}
+          maxRows={5}
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleSend("chat");
+              handleSend();
             }
           }}
           styles={{
@@ -426,7 +500,8 @@ export default function PanelAiAssistant({
             variant="filled"
             disabled={!inputText.trim() && !selectedText}
             loading={sending}
-            onClick={() => handleSend("chat")}
+            onClick={handleSend}
+            title="发送指令 (Enter)"
           >
             <FiSend size={12} />
           </ActionIcon>
