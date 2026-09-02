@@ -1,24 +1,15 @@
+// API: 故事大纲与情节点管理（极简自然篇章、情节点增删改查、排序与批量写入）
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, outlines, works } from "@/db";
 import { eq, and, asc } from "drizzle-orm";
 
-/**
- * 校验作品是否属于当前用户
- */
 async function checkWorkOwnership(db: any, workId: number, userId: string) {
-  const work = await db
-    .select()
-    .from(works)
-    .where(and(eq(works.id, workId), eq(works.userId, userId)))
-    .get();
+  const work = await db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, userId))).get();
   return !!work;
 }
 
-/**
- * 规范解析关联章节为数字数组
- */
 function parseLinkedChapters(val: any): number[] {
   if (Array.isArray(val)) {
     return val.map((n) => Number(n)).filter((n) => !isNaN(n) && n > 0);
@@ -42,9 +33,6 @@ function parseLinkedChapters(val: any): number[] {
   return [];
 }
 
-/**
- * 获取指定作品的大纲节点列表
- */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -53,28 +41,16 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const rawWorkId = req.nextUrl.searchParams.get("workId");
     const workId = Number(rawWorkId);
     if (!workId || isNaN(workId)) {
-      return NextResponse.json(
-        { success: false, message: "无效的 workId" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "无效的 workId" }, { status: 400 });
     }
 
-    // 校验归属权
     const isOwner = await checkWorkOwnership(db, workId, user.userId);
     if (!isOwner) {
-      return NextResponse.json(
-        { success: false, message: "无权访问该作品的大纲" },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: "无权访问该作品的大纲" }, { status: 403 });
     }
 
-    const list = await db
-      .select()
-      .from(outlines)
-      .where(eq(outlines.workId, workId))
-      .orderBy(asc(outlines.orderIndex), asc(outlines.createdAt));
+    const list = await db.select().from(outlines).where(eq(outlines.workId, workId)).orderBy(asc(outlines.orderIndex), asc(outlines.createdAt));
 
-    // 服务端组装树形结构
     const nodeMap: Record<string, any> = {};
     const tree: any[] = [];
 
@@ -94,19 +70,13 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       success: true,
       result: tree,
       flatList: list,
-      message: "获取大纲树结构成功",
+      message: "获取大纲成功",
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, message: error?.message || "获取大纲失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "获取大纲失败" }, { status: 500 });
   }
 });
 
-/**
- * 新增单节点 或 批量新增节点
- */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -114,22 +84,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const body = await req.json();
 
-    // 1. 批量创建模式（用于 AI 采纳）
     if (body.batch && Array.isArray(body.nodes)) {
       const workId = Number(body.workId);
       if (!workId || isNaN(workId)) {
-        return NextResponse.json(
-          { success: false, message: "无效的作品ID" },
-          { status: 400 }
-        );
+        return NextResponse.json({ success: false, message: "无效的作品ID" }, { status: 400 });
       }
 
       const isOwner = await checkWorkOwnership(db, workId, user.userId);
       if (!isOwner) {
-        return NextResponse.json(
-          { success: false, message: "无权操作该作品" },
-          { status: 403 }
-        );
+        return NextResponse.json({ success: false, message: "无权操作该作品" }, { status: 403 });
       }
 
       const createdList = [];
@@ -138,12 +101,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           id: nodeData.id || crypto.randomUUID(),
           workId,
           parentId: nodeData.parentId || null,
+          volumeId: nodeData.volumeId || null,
           type: nodeData.type || "scene",
           pointType: nodeData.pointType || null,
           title: (nodeData.title || "未命名节点").trim(),
-          goal: (nodeData.goal || "达成剧情推进").trim(),
+          content: nodeData.content?.trim() || nodeData.eventDescription?.trim() || "",
+          goal: nodeData.goal?.trim() || (nodeData.title || "推进剧情").trim(),
           conflict: nodeData.conflict?.trim() || "",
-          eventDescription: nodeData.eventDescription?.trim() || "",
+          eventDescription: nodeData.eventDescription?.trim() || nodeData.content?.trim() || "",
           expectedOutcome: nodeData.expectedOutcome?.trim() || "",
           characters: nodeData.characters?.trim() || "",
           locations: nodeData.locations?.trim() || "",
@@ -165,13 +130,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       });
     }
 
-    // 2. 单节点创建模式
     const {
       workId: rawWorkId,
       parentId,
+      volumeId,
       type,
       pointType,
       title,
+      content,
       goal,
       conflict,
       eventDescription,
@@ -186,73 +152,63 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const workId = Number(rawWorkId);
     if (!workId || isNaN(workId)) {
-      return NextResponse.json(
-        { success: false, message: "无效的作品ID" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "无效的作品ID" }, { status: 400 });
     }
 
     if (!title || !title.trim()) {
-      return NextResponse.json(
-        { success: false, message: "节点标题不能为空" },
-        { status: 400 }
-      );
-    }
-
-    if (!goal || !goal.trim()) {
-      return NextResponse.json(
-        { success: false, message: "节点目标为必填项" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "节点标题不能为空" }, { status: 400 });
     }
 
     const isOwner = await checkWorkOwnership(db, workId, user.userId);
     if (!isOwner) {
-      return NextResponse.json(
-        { success: false, message: "无权操作该作品" },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: "无权操作该作品" }, { status: 403 });
     }
 
-    const newNode = {
-      id: crypto.randomUUID(),
+    let nextOrder = typeof orderIndex === "number" ? orderIndex : 0;
+    if (orderIndex === undefined) {
+      const brothers = await db.select().from(outlines).where(and(eq(outlines.workId, workId), parentId ? eq(outlines.parentId, parentId) : eq(outlines.type, type || "scene"))).all();
+      nextOrder = brothers.length;
+    }
+
+    const newNodeId = crypto.randomUUID();
+    const finalContent = content?.trim() || eventDescription?.trim() || "";
+    const finalGoal = goal?.trim() || title.trim();
+
+    const insertPayload = {
+      id: newNodeId,
       workId,
       parentId: parentId || null,
+      volumeId: volumeId || null,
       type: type || "scene",
       pointType: pointType || null,
       title: title.trim(),
-      goal: goal.trim(),
+      content: finalContent,
+      goal: finalGoal,
       conflict: conflict?.trim() || "",
-      eventDescription: eventDescription?.trim() || "",
+      eventDescription: finalContent,
+      expectedOutcome: expectedOutcome?.trim() || "",
       characters: characters?.trim() || "",
       locations: locations?.trim() || "",
       foreshadowing: foreshadowing?.trim() || "",
-      expectedOutcome: expectedOutcome?.trim() || "",
       linkedChapters: parseLinkedChapters(linkedChapters),
       remarks: remarks?.trim() || "",
-      orderIndex: typeof orderIndex === "number" ? orderIndex : 0,
+      orderIndex: nextOrder,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
-    await db.insert(outlines).values(newNode);
+    await db.insert(outlines).values(insertPayload);
 
     return NextResponse.json({
       success: true,
-      result: newNode,
-      message: "创建节点成功",
+      result: insertPayload,
+      message: "大纲节点创建成功",
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, message: error?.message || "创建节点失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "创建大纲节点失败" }, { status: 500 });
   }
 });
 
-/**
- * 编辑节点
- */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -262,8 +218,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const {
       id,
       title,
-      type,
-      pointType,
+      content,
       goal,
       conflict,
       eventDescription,
@@ -273,144 +228,95 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       expectedOutcome,
       linkedChapters,
       remarks,
-      parentId,
       orderIndex,
+      type,
+      pointType,
+      parentId,
+      volumeId,
     } = body;
 
-    if (!id || !id.trim()) {
-      return NextResponse.json(
-        { success: false, message: "节点ID不能为空" },
-        { status: 400 }
-      );
+    if (!id) {
+      return NextResponse.json({ success: false, message: "缺少节点 ID" }, { status: 400 });
     }
 
-    const node = await db
-      .select()
-      .from(outlines)
-      .where(eq(outlines.id, id))
-      .get();
-
-    if (!node) {
-      return NextResponse.json(
-        { success: false, message: "节点不存在" },
-        { status: 404 }
-      );
+    const existingNode = await db.select().from(outlines).where(eq(outlines.id, id)).get();
+    if (!existingNode) {
+      return NextResponse.json({ success: false, message: "大纲节点不存在" }, { status: 404 });
     }
 
-    const isOwner = await checkWorkOwnership(db, node.workId, user.userId);
+    const isOwner = await checkWorkOwnership(db, existingNode.workId, user.userId);
     if (!isOwner) {
-      return NextResponse.json(
-        { success: false, message: "无权编辑该节点" },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: "无权修改该节点" }, { status: 403 });
     }
 
-    const updatedNode = {
-      title: title !== undefined ? title.trim() : node.title,
-      type: type || node.type,
-      pointType: pointType !== undefined ? pointType : node.pointType,
-      goal: goal !== undefined ? goal.trim() : node.goal,
-      conflict: conflict !== undefined ? conflict.trim() : node.conflict,
-      eventDescription: eventDescription !== undefined ? eventDescription.trim() : node.eventDescription,
-      characters: characters !== undefined ? characters.trim() : node.characters,
-      locations: locations !== undefined ? locations.trim() : node.locations,
-      foreshadowing: foreshadowing !== undefined ? foreshadowing.trim() : node.foreshadowing,
-      expectedOutcome: expectedOutcome !== undefined ? expectedOutcome.trim() : node.expectedOutcome,
-      linkedChapters: linkedChapters !== undefined ? parseLinkedChapters(linkedChapters) : node.linkedChapters,
-      remarks: remarks !== undefined ? remarks.trim() : node.remarks,
-      parentId: parentId !== undefined ? parentId : node.parentId,
-      orderIndex: typeof orderIndex === "number" ? orderIndex : node.orderIndex,
+    const updatePayload: Record<string, any> = {
       updatedAt: new Date(),
     };
 
-    await db.update(outlines).set(updatedNode).where(eq(outlines.id, id));
+    if (title !== undefined) updatePayload.title = title.trim();
+    if (content !== undefined) {
+      updatePayload.content = content.trim();
+      updatePayload.eventDescription = content.trim();
+    }
+    if (goal !== undefined) updatePayload.goal = goal.trim();
+    if (conflict !== undefined) updatePayload.conflict = conflict.trim();
+    if (eventDescription !== undefined && content === undefined) {
+      updatePayload.eventDescription = eventDescription.trim();
+      updatePayload.content = eventDescription.trim();
+    }
+    if (characters !== undefined) updatePayload.characters = characters.trim();
+    if (locations !== undefined) updatePayload.locations = locations.trim();
+    if (foreshadowing !== undefined) updatePayload.foreshadowing = foreshadowing.trim();
+    if (expectedOutcome !== undefined) updatePayload.expectedOutcome = expectedOutcome.trim();
+    if (remarks !== undefined) updatePayload.remarks = remarks.trim();
+    if (orderIndex !== undefined) updatePayload.orderIndex = orderIndex;
+    if (type !== undefined) updatePayload.type = type;
+    if (pointType !== undefined) updatePayload.pointType = pointType;
+    if (parentId !== undefined) updatePayload.parentId = parentId || null;
+    if (volumeId !== undefined) updatePayload.volumeId = volumeId || null;
+    if (linkedChapters !== undefined) {
+      updatePayload.linkedChapters = parseLinkedChapters(linkedChapters);
+    }
+
+    await db.update(outlines).set(updatePayload).where(eq(outlines.id, id));
 
     return NextResponse.json({
       success: true,
-      result: { id, ...updatedNode },
-      message: "更新节点成功",
+      result: { ...existingNode, ...updatePayload },
+      message: "大纲节点更新成功",
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, message: error?.message || "更新节点失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "更新大纲节点失败" }, { status: 500 });
   }
 });
 
-/**
- * 删除节点 (递归删除其所有子节点)
- */
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    let id = req.nextUrl.searchParams.get("id");
+    const id = req.nextUrl.searchParams.get("id");
     if (!id) {
-      try {
-        const body = await req.json();
-        id = body?.id;
-      } catch {}
+      return NextResponse.json({ success: false, message: "缺少待删除节点 ID" }, { status: 400 });
     }
 
-    if (!id || !id.trim()) {
-      return NextResponse.json(
-        { success: false, message: "节点ID不能为空" },
-        { status: 400 }
-      );
+    const existingNode = await db.select().from(outlines).where(eq(outlines.id, id)).get();
+    if (!existingNode) {
+      return NextResponse.json({ success: false, message: "节点不存在" }, { status: 404 });
     }
 
-    const node = await db
-      .select()
-      .from(outlines)
-      .where(eq(outlines.id, id))
-      .get();
-
-    if (!node) {
-      return NextResponse.json(
-        { success: false, message: "节点不存在" },
-        { status: 404 }
-      );
-    }
-
-    const isOwner = await checkWorkOwnership(db, node.workId, user.userId);
+    const isOwner = await checkWorkOwnership(db, existingNode.workId, user.userId);
     if (!isOwner) {
-      return NextResponse.json(
-        { success: false, message: "无权删除该节点" },
-        { status: 403 }
-      );
+      return NextResponse.json({ success: false, message: "无权删除该节点" }, { status: 403 });
     }
 
-    // 递归获取所有后代节点 ID
-    const allWorkNodes = await db
-      .select()
-      .from(outlines)
-      .where(eq(outlines.workId, node.workId));
-
-    const idsToDelete: string[] = [id];
-    const findChildren = (pid: string) => {
-      const children = allWorkNodes.filter((n: any) => n.parentId === pid);
-      for (const child of children) {
-        idsToDelete.push(child.id);
-        findChildren(child.id);
-      }
-    };
-    findChildren(id);
-
-    // 删除所有收集到的节点
-    for (const deleteId of idsToDelete) {
-      await db.delete(outlines).where(eq(outlines.id, deleteId));
-    }
+    await db.delete(outlines).where(eq(outlines.id, id));
 
     return NextResponse.json({
       success: true,
-      message: `成功删除节点及 ${idsToDelete.length - 1} 个子节点`,
+      message: "大纲节点删除成功",
     });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, message: error?.message || "删除节点失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "删除大纲节点失败" }, { status: 500 });
   }
 });

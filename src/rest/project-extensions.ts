@@ -88,7 +88,7 @@ export const updateMaterial = async (data: Partial<MaterialData> & { id: number 
 };
 
 export const deleteMaterial = async (id: number | string) => {
-  return del(`/api/materials`, { id });
+  return del(`/api/materials?id=${id}`, { id });
 };
 
 export const extractMaterialAiSummary = async (data: { title: string; content?: string; sourceUrl?: string }) => {

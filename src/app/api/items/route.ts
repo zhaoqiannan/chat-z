@@ -1,16 +1,27 @@
+// API: 物品道具管理（支持自由文本类型、所属角色与关联阵营）
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, items, works } from "@/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
-/**
- * GET: 获取指定作品的物品道具列表
- */
+async function ensureItemColumns(db: any) {
+  try {
+    await db.run(sql`ALTER TABLE items ADD COLUMN owner_id INTEGER;`);
+  } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE items ADD COLUMN owner_name TEXT;`);
+  } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE items ADD COLUMN faction TEXT;`);
+  } catch (_) {}
+}
+
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureItemColumns(db);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
@@ -20,49 +31,28 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少有效作品ID" }, { status: 400 });
     }
 
-    const work = await db
-      .select()
-      .from(works)
-      .where(and(eq(works.id, workId), eq(works.userId, user.userId)))
-      .get();
-
+    const work = await db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, user.userId))).get();
     if (!work) {
       return NextResponse.json({ success: false, message: "作品不存在或无权限访问" }, { status: 403 });
     }
 
     if (itemId) {
-      const item = await db
-        .select()
-        .from(items)
-        .where(and(eq(items.id, itemId), eq(items.workId, workId)))
-        .get();
+      const item = await db.select().from(items).where(and(eq(items.id, itemId), eq(items.workId, workId))).get();
       return NextResponse.json({ success: true, result: item });
     }
 
-    const list = await db
-      .select()
-      .from(items)
-      .where(eq(items.workId, workId))
-      .orderBy(desc(items.createdAt))
-      .all();
-
+    const list = await db.select().from(items).where(eq(items.workId, workId)).orderBy(desc(items.createdAt)).all();
     return NextResponse.json({ success: true, result: list });
   } catch (error: any) {
-    console.error("GET items error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "获取物品失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "获取物品失败" }, { status: 500 });
   }
 });
 
-/**
- * POST: 创建新物品
- */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureItemColumns(db);
 
     const body = await req.json();
     const {
@@ -70,6 +60,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       name,
       category,
       tier,
+      ownerId,
+      ownerName,
+      faction,
       appearance,
       effects,
       drawbacks,
@@ -89,100 +82,120 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "物品名称不能为空" }, { status: 400 });
     }
 
-    if (!effects || !effects.trim()) {
-      return NextResponse.json({ success: false, message: "核心功能与异能机理不能为空" }, { status: 400 });
-    }
+    const finalEffects = effects?.trim() || description?.trim() || "暂无描述";
+    const finalDesc = description?.trim() || effects?.trim() || "暂无描述";
 
     const newItemData = {
       workId,
       name: name.trim(),
-      category: category || "treasure",
+      category: category?.trim() || null,
       tier: tier?.trim() || null,
+      ownerId: ownerId ? Number(ownerId) : null,
+      ownerName: ownerName?.trim() || currentHolder?.trim() || null,
       appearance: appearance?.trim() || null,
-      effects: effects.trim(),
+      effects: finalEffects,
       drawbacks: drawbacks?.trim() || null,
-      currentHolder: currentHolder?.trim() || null,
+      currentHolder: ownerName?.trim() || currentHolder?.trim() || null,
       history: history?.trim() || null,
-      description: description?.trim() || null,
+      description: finalDesc,
       imageUrl: imageUrl || null,
-      extra: typeof extra === "object" ? extra : {},
+      extra: typeof extra === "object" ? { ...extra, faction } : { faction },
       createdAt: new Date(),
       updatedAt: new Date(),
     };
 
     const inserted = await db.insert(items).values(newItemData).returning().get();
 
-    let resultItem: any = inserted;
-    if (!resultItem || !resultItem.id) {
-      resultItem = await db
-        .select()
-        .from(items)
-        .where(eq(items.workId, workId))
-        .orderBy(desc(items.id))
-        .limit(1)
-        .get();
-    }
-
     return NextResponse.json({
       success: true,
-      result: resultItem || newItemData,
+      result: inserted || newItemData,
       message: "创建物品成功",
     });
   } catch (error: any) {
-    console.error("POST items error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "创建物品失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "创建物品失败" }, { status: 500 });
   }
 });
 
-/**
- * PUT: 编辑物品
- */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureItemColumns(db);
 
     const body = await req.json();
-    const { id: rawId, ...updateData } = body;
-    const id = Number(rawId);
+    const {
+      id: rawId,
+      name,
+      category,
+      tier,
+      ownerId,
+      ownerName,
+      faction,
+      appearance,
+      effects,
+      drawbacks,
+      currentHolder,
+      history,
+      description,
+      imageUrl,
+      extra,
+    } = body;
 
+    const id = Number(rawId);
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少物品ID" }, { status: 400 });
     }
 
-    const payload = {
-      ...updateData,
-      updatedAt: new Date(),
-    };
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+    if (name !== undefined) updateData.name = name.trim();
+    if (category !== undefined) updateData.category = category?.trim() || null;
+    if (tier !== undefined) updateData.tier = tier?.trim() || null;
+    if (ownerId !== undefined) updateData.ownerId = ownerId ? Number(ownerId) : null;
+    if (ownerName !== undefined) {
+      updateData.ownerName = ownerName?.trim() || null;
+      updateData.currentHolder = ownerName?.trim() || null;
+    }
+    if (appearance !== undefined) updateData.appearance = appearance?.trim() || null;
+    if (effects !== undefined) updateData.effects = effects.trim();
+    if (drawbacks !== undefined) updateData.drawbacks = drawbacks?.trim() || null;
+    if (currentHolder !== undefined && ownerName === undefined) updateData.currentHolder = currentHolder?.trim() || null;
+    if (history !== undefined) updateData.history = history?.trim() || null;
+    if (description !== undefined) {
+      updateData.description = description?.trim() || null;
+      if (effects === undefined) updateData.effects = description.trim();
+    }
+    if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
+    if (extra !== undefined || faction !== undefined) {
+      updateData.extra = { ...(extra || {}), ...(faction ? { faction } : {}) };
+    }
 
-    await db.update(items).set(payload).where(eq(items.id, id)).run();
+    const updated = await db.update(items).set(updateData).where(eq(items.id, id)).returning().get();
 
     return NextResponse.json({
       success: true,
-      message: "编辑物品成功",
+      result: updated,
+      message: "物品更新成功",
     });
   } catch (error: any) {
-    console.error("PUT items error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "编辑物品失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "更新物品失败" }, { status: 500 });
   }
 });
 
-/**
- * DELETE: 删除物品
- */
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
+    await ensureItemColumns(db);
 
     const { searchParams } = new URL(req.url);
-    const id = Number(searchParams.get("id"));
+    let id = Number(searchParams.get("id"));
+
+    if (!id || isNaN(id)) {
+      try {
+        const body = await req.json();
+        id = Number(body?.id);
+      } catch (_) {}
+    }
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少物品ID" }, { status: 400 });
@@ -190,15 +203,8 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     await db.delete(items).where(eq(items.id, id)).run();
 
-    return NextResponse.json({
-      success: true,
-      message: "删除物品成功",
-    });
+    return NextResponse.json({ success: true, message: "物品删除成功" });
   } catch (error: any) {
-    console.error("DELETE items error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "删除物品失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: error?.message || "删除物品失败" }, { status: 500 });
   }
 });

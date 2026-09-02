@@ -207,7 +207,14 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     await ensureMaterialsColumns(db);
 
     const { searchParams } = new URL(req.url);
-    const id = Number(searchParams.get("id"));
+    let id = Number(searchParams.get("id"));
+
+    if (!id || isNaN(id)) {
+      try {
+        const body = await req.json();
+        id = Number(body?.id);
+      } catch (_) {}
+    }
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "无效的 id" }, { status: 400 });

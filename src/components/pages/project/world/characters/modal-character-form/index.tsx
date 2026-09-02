@@ -1,10 +1,8 @@
-// 组件：角色档案新建与编辑弹窗（极简线条表单排版、清晰分段与立绘上传）
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
-import { Box, Flex, Text, Button, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Group, ScrollArea, Avatar } from "@mantine/core";
-import { FiUploadCloud } from "react-icons/fi";
+import { Box, Flex, Text, Button, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Group, ScrollArea, Avatar, ActionIcon } from "@mantine/core";
+import { FiUploadCloud, FiZap } from "react-icons/fi";
 import { CharacterItem, createCharacter, updateCharacter, uploadImageFile } from "@/rest/world";
+import NameGeneratorModal from "@/components/common/name-generator";
 
 interface ModalCharacterFormProps {
   opened: boolean;
@@ -22,6 +20,7 @@ export default function ModalCharacterForm({
   onSuccess,
 }: ModalCharacterFormProps) {
   const [formLoading, setFormLoading] = useState(false);
+  const [nameGenOpened, setNameGenOpened] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
@@ -160,14 +159,28 @@ export default function ModalCharacterForm({
       <ScrollArea style={{ maxHeight: "72vh" }} p={4}>
         <Stack gap="sm">
           <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-            <TextInput
-              label="角色姓名"
-              placeholder="请输入"
-              size="xs"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+            <Box>
+              <Flex justify="space-between" align="center" mb={2}>
+                <Text fz={12} fw={500} c="#475569">角色姓名 *</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="cyan"
+                  leftSection={<FiZap size={10} />}
+                  onClick={() => setNameGenOpened(true)}
+                  styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
+                >
+                  智能起名
+                </Button>
+              </Flex>
+              <TextInput
+                placeholder="请输入"
+                size="xs"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </Box>
             <TextInput
               label="尊号 / 别名 / 称号"
               placeholder="请输入"
@@ -341,6 +354,12 @@ export default function ModalCharacterForm({
           保存角色档案
         </Button>
       </Flex>
+
+      <NameGeneratorModal
+        opened={nameGenOpened}
+        onClose={() => setNameGenOpened(false)}
+        onSelectName={(chosenName) => setName(chosenName)}
+      />
     </Modal>
   );
 }

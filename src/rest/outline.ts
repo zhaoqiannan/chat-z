@@ -1,3 +1,4 @@
+// REST: 故事大纲管理、情节点维护与 AI 剧情推演接口封装
 import { get, post, put, del } from "@/utils/rest";
 
 export const OutlineApi = {
@@ -7,29 +8,25 @@ export const OutlineApi = {
   delete: "/api/outlines",
   aiAssistant: "/api/ai/outline",
   history: "/api/ai/outline/history",
+  deductAi: "/api/ai/plot-deduction",
+  deductions: "/api/plot-deductions",
 };
 
-/** 大纲节点层级类型：故事主线 | 卷 | 幕 | 情节点 | 支线 | 事件 */
-export type OutlineNodeType = "story" | "volume" | "act" | "scene" | "branch" | "event";
+export type OutlineNodeType = "story" | "volume" | "act" | "scene" | "branch" | "event" | "point";
 
-/** 情节点细分类型：冲突 | 转折 | 铺垫 | 高潮 | 过渡 | 揭示 */
-export type PlotPointType =
-  | "conflict"
-  | "twist"
-  | "foreshadow"
-  | "climax"
-  | "transition"
-  | "reveal";
+export type PlotPointType = "conflict" | "twist" | "foreshadow" | "climax" | "transition" | "reveal";
 
 export interface OutlineNode {
   id: string;
   workId: number | string;
   parentId?: string | null;
+  volumeId?: string | null;
   type: OutlineNodeType;
   pointType?: PlotPointType | null;
   title: string;
+  content?: string | null;
   orderIndex: number;
-  goal: string;
+  goal?: string | null;
   conflict?: string | null;
   eventDescription?: string | null;
   expectedOutcome?: string | null;
@@ -46,11 +43,13 @@ export interface OutlineNode {
 export interface CreateOutlinePayload {
   workId: number | string;
   parentId?: string | null;
-  type: OutlineNodeType;
+  volumeId?: string | null;
+  type?: OutlineNodeType;
   pointType?: PlotPointType | null;
   title: string;
+  content?: string;
   orderIndex?: number;
-  goal: string;
+  goal?: string;
   conflict?: string;
   eventDescription?: string;
   expectedOutcome?: string;
@@ -65,19 +64,88 @@ export interface UpdateOutlinePayload extends Partial<CreateOutlinePayload> {
   id: string;
 }
 
-export type OutlineAiAction =
-  | "generate_from_premise"
-  | "plan_chapters"
-  | "expand_node"
-  | "split_node"
-  | "find_plot_holes"
-  | "polish_rhythm"
-  | "generate_alternatives"
-  | "alternative_plots"
-  | "check_mainline"
-  | "check_conflict"
-  | "check_pacing"
-  | "diagnose";
+export interface PlotDeductionStep {
+  stepIndex?: number;
+  title: string;
+  content: string;
+  keyConflict?: string;
+  characterAction?: string;
+}
+
+export interface PlotDeductionPath {
+  id: number;
+  title: string;
+  style: string;
+  summary: string;
+  steps: PlotDeductionStep[];
+}
+
+export interface PlotDeductionResult {
+  paths: PlotDeductionPath[];
+}
+
+export interface PlotDeductionPayload {
+  workId: number | string;
+  startPoint: string;
+  targetPoint: string;
+  involvedCharacters?: string;
+  pacePreference?: "standard" | "twist" | "dark" | string;
+  stepCount?: number;
+}
+
+export interface PlotDeductionRecord {
+  id: number;
+  workId: number;
+  userId: string;
+  startPoint: string;
+  targetPoint: string;
+  involvedCharacters?: string | null;
+  pacePreference?: string | null;
+  stepCount?: number;
+  generatedPaths: PlotDeductionPath[];
+  selectedPathIndex?: number | null;
+  status: string;
+  createdAt: string | number;
+  updatedAt: string | number;
+}
+
+export const getOutlineList = async (workId: number | string) => {
+  return get(OutlineApi.list, { workId });
+};
+
+export const createOutlineNode = async (data: CreateOutlinePayload) => {
+  return post(OutlineApi.create, data);
+};
+
+export const batchCreateOutlineNodes = async (data: { workId: number | string; nodes: any[]; batch: true }) => {
+  return post(OutlineApi.create, data);
+};
+
+export const updateOutlineNode = async (data: UpdateOutlinePayload) => {
+  return put(OutlineApi.update, data);
+};
+
+export const deleteOutlineNode = async (id: string) => {
+  return del(OutlineApi.delete, { id });
+};
+
+export const deductPlot = async (payload: PlotDeductionPayload): Promise<{ success: boolean; result?: PlotDeductionResult; message?: string }> => {
+  return post(OutlineApi.deductAi, payload);
+};
+
+export const getPlotDeductions = async (workId: number | string): Promise<{ success: boolean; result?: PlotDeductionRecord[]; message?: string }> => {
+  return get(OutlineApi.deductions, { workId });
+};
+
+export const savePlotDeduction = async (payload: Partial<PlotDeductionRecord>): Promise<{ success: boolean; result?: PlotDeductionRecord; message?: string }> => {
+  return post(OutlineApi.deductions, payload);
+};
+
+export const deletePlotDeduction = async (id: number) => {
+  return del(OutlineApi.deductions, { id });
+};
+
+export type OutlineAiAction = "generate_from_premise" | "plan_chapters" | "expand_node" | "split_node" | "find_plot_holes" | "polish_rhythm" | "generate_alternatives" | "alternative_plots" | "check_mainline" | "check_conflict" | "check_pacing" | "diagnose";
 
 export interface OutlineAiPayload {
   workId: number | string;
@@ -99,58 +167,17 @@ export interface OutlineAiHistoryRecord {
   createdAt: string | number;
 }
 
-/**
- * 获取指定作品的大纲节点列表
- */
-export const getOutlineList = async (workId: string | number) => {
-  return get(OutlineApi.list, { workId });
-};
-
-/**
- * 创建新大纲节点
- */
-export const createOutlineNode = async (data: CreateOutlinePayload) => {
-  return post(OutlineApi.create, data);
-};
-
-/**
- * 批量创建大纲节点（用于 AI 采纳时一键写入多节点）
- */
-export const batchCreateOutlineNodes = async (workId: number | string, nodes: Partial<CreateOutlinePayload>[]) => {
-  return post(OutlineApi.create, { batch: true, workId, nodes });
-};
-
-/**
- * 编辑大纲节点
- */
-export const updateOutlineNode = async (data: UpdateOutlinePayload) => {
-  return put(OutlineApi.update, data);
-};
-
-/**
- * 删除节点 (递归级联删除子节点)
- */
-export const deleteOutlineNode = async (id: string) => {
-  return del(OutlineApi.delete, { id });
-};
-
-/**
- * 请求大纲 AI 工作台处理
- */
 export const requestOutlineAi = async (data: OutlineAiPayload) => {
   return post(OutlineApi.aiAssistant, data);
 };
 
-/**
- * 获取 AI 推演历史记录
- */
-export const getOutlineAiHistoryList = async (workId: string | number, nodeId?: string) => {
+export const getOutlineAiHistory = async (workId: number | string, nodeId?: string) => {
   return get(OutlineApi.history, { workId, nodeId });
 };
 
-/**
- * 删除指定 AI 推演历史记录
- */
+export const getOutlineAiHistoryList = getOutlineAiHistory;
+
 export const deleteOutlineAiHistoryRecord = async (id: number) => {
   return del(OutlineApi.history, { id });
 };
+

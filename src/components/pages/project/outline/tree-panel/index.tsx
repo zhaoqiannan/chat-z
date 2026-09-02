@@ -133,7 +133,7 @@ export default function TreePanel({
       .map((node) => {
         const matchesSelf =
           node.title.toLowerCase().includes(q) ||
-          node.goal.toLowerCase().includes(q) ||
+          (node.goal || "").toLowerCase().includes(q) ||
           (node.conflict && node.conflict.toLowerCase().includes(q));
 
         const filteredChildren = node.children ? filterTree(node.children) : [];

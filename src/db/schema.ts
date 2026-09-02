@@ -115,7 +115,11 @@ export const outlines = sqliteTable('outlines', {
   /** 同级排序索引 */
   orderIndex: integer('order_index').default(0),
   /** 节点目标 (*必填项，解决什么问题) */
-  goal: text('goal').notNull(),
+  goal: text('goal'),
+  /** 剧情内容 / 发生经过 / 内容梗概 */
+  content: text('content'),
+  /** 归属分卷 / 篇章 ID */
+  volumeId: text('volume_id'),
   /** 主要冲突（人物或力量之间的矛盾） */
   conflict: text('conflict'),
   /** 事件描述（发生什么） */
@@ -270,18 +274,24 @@ export const factions = sqliteTable('factions', {
   workId: integer('work_id').notNull(),
   /** 阵营/势力名称 */
   name: text('name').notNull(),
-  /** 势力领袖 / 掌门人 */
+  /** 势力领袖 / 掌门人姓名 */
   leader: text('leader'),
+  /** 势力领袖角色 ID */
+  leaderId: integer('leader_id'),
   /** 势力徽章/旗帜图 URL */
   badgeUrl: text('badge_url'),
-  /** 势力等级/规模: 超级巨头 | 一流大派 | 中小势力 | 隐世密教 */
-  scale: text('scale'),
+  /** 势力等级/规模: p0 ~ p10 */
+  scale: text('scale').default('p3'),
   /** 势力宗旨/纲领/立派信条 */
   doctrine: text('doctrine'),
   /** 控制区域与根据地 */
   controlledLocations: text('controlled_locations'),
-  /** 阵营立场: 正道 | 魔道 | 中立 | 混乱邪恶 | 科技保守 */
-  alignment: text('alignment'),
+  /** 控制区域地点 ID */
+  locationId: integer('location_id'),
+  /** 阵营立场: positive(正派) | negative(反派) | neutral(中立) */
+  alignment: text('alignment').default('neutral'),
+  /** 发展走势 (如: 蒸蒸日上, 内部分裂, 走向覆灭, 韬光养晦) */
+  trend: text('trend'),
   /** 外交关系网 (JSON: [{ targetFaction: "青云门", type: "ally" | "enemy" | "neutral", desc: "世仇" }]) */
   relations: text('relations', { mode: 'json' }).$type<{ targetFaction: string; type: string; desc?: string }[]>(),
   /** 详细背景与历史 */
@@ -304,10 +314,14 @@ export const items = sqliteTable('items', {
   workId: integer('work_id').notNull(),
   /** 物品名称 */
   name: text('name').notNull(),
-  /** 类别: weapon(神兵武器) | treasure(法宝圣物) | consumable(丹药耗材) | tech(科技装置) | forbidden(禁忌邪物) | token(信物关键道具) */
+  /** 类别: treasure(法宝秘宝) | weapon(神兵武器) | consumable(丹药药剂) | material(天材地宝) | tech(科技机甲) | book(功法典籍) | curse(诅咒之物) | misc(特殊道具/信物) */
   category: text('category').default('treasure'),
   /** 品阶等级 (如: 天阶极品 | 稀有级 | 奇点级) */
   tier: text('tier'),
+  /** 所属人物 ID */
+  ownerId: integer('owner_id'),
+  /** 所属人物姓名 */
+  ownerName: text('owner_name'),
   /** 外形描写 */
   appearance: text('appearance'),
   /** 核心异能与功能机理 */
@@ -340,12 +354,16 @@ export const worldRules = sqliteTable('world_rules', {
   workId: integer('work_id').notNull(),
   /** 体系/法则名称 (如: 仙道修炼境界体系 | 纳米基因跃迁法) */
   name: text('name').notNull(),
-  /** 规则分类: power_system(力量/战力体系) | physics_magic(物理/魔法运行机理) | society_law(社会律法/公约) | taboo(世界禁忌/天道因果) */
+  /** 规则分类: power_system(力量/战力体系) | physics_magic(物理/魔法运行机理) | society_law(社会律法/公约) | taboo(世界禁忌/天道因果) | custom(自定义设定) */
   category: text('category').default('power_system'),
-  /** 境界等级阶梯结构 (JSON 数组: [{ order: 1, name: "练气期", lifespan: "120年", breakthrough: "引气入体", bottleneck: "经脉阻塞", powers: "基础五行术法" }]) */
+  /** 境界等级阶梯结构 */
   levelTree: text('level_tree', { mode: 'json' }).$type<{ order: number; name: string; lifespan?: string; breakthrough?: string; bottleneck?: string; powers?: string }[]>(),
-  /** 底层运转机制与公式 */
+  /** 底层运转机制与核心描述 */
   mechanisms: text('mechanisms'),
+  /** 影响范围与适用对象 */
+  effects: text('effects'),
+  /** 反噬代价与例外限制 */
+  drawbacks: text('drawbacks'),
   /** 禁忌法则与走火入魔风险 */
   taboos: text('taboos'),
   /** 详细文字说明 */
@@ -590,7 +608,26 @@ export const memoryFragments = sqliteTable('memory_fragments', {
 });
 
 // ============================================================================
-// 19. TypeScript 类型导出 (强类型提示)
+// 19. 剧情推演记录表 (plot_deductions)
+// ============================================================================
+export const plotDeductions = sqliteTable('plot_deductions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull(),
+  userId: text('user_id').notNull(),
+  startPoint: text('start_point').notNull(),
+  targetPoint: text('target_point').notNull(),
+  involvedCharacters: text('involved_characters'),
+  pacePreference: text('pace_preference').default('standard'),
+  stepCount: integer('step_count').default(3),
+  generatedPaths: text('generated_paths', { mode: 'json' }).$type<{ id: number; title: string; summary: string; steps: { title: string; content: string; keyConflict?: string; characterAction?: string }[] }[]>(),
+  selectedPathIndex: integer('selected_path_index'),
+  status: text('status').default('completed'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 20. TypeScript 类型导出 (强类型提示)
 // ============================================================================
 
 /** 用户查询类型 (SELECT) */
@@ -668,6 +705,11 @@ export type NewChapterVersion = typeof chapterVersions.$inferInsert;
 /** 记忆碎片类型 */
 export type MemoryFragment = typeof memoryFragments.$inferSelect;
 export type NewMemoryFragment = typeof memoryFragments.$inferInsert;
+
+/** 剧情推演记录类型 */
+export type PlotDeduction = typeof plotDeductions.$inferSelect;
+export type NewPlotDeduction = typeof plotDeductions.$inferInsert;
+
 
 
 

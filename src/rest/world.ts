@@ -1,4 +1,4 @@
-import { get, post, put, del } from "@/utils/rest";
+import { get, post, put, patch, del } from "@/utils/rest";
 
 // ============================================================================
 // 1. 角色 API 与类型 (Characters)
@@ -48,11 +48,7 @@ export const updateCharacter = async (data: Partial<CharacterItem> & { id: numbe
 };
 
 export const togglePinCharacter = async (id: number | string, isPinned: boolean) => {
-  return fetch("/api/characters", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, isPinned }),
-  }).then((r) => r.json());
+  return patch("/api/characters", { id, isPinned });
 };
 
 export const deleteCharacter = async (id: number | string) => {
@@ -112,11 +108,14 @@ export interface FactionItem {
   workId: number;
   name: string;
   leader?: string | null;
+  leaderId?: number | null;
   badgeUrl?: string | null;
   scale?: string | null;
   doctrine?: string | null;
   controlledLocations?: string | null;
-  alignment?: string | null;
+  locationId?: number | null;
+  alignment?: "positive" | "negative" | "neutral" | string | null;
+  trend?: string | null;
   relations?: { targetFaction: string; type: string; desc?: string }[] | null;
   description?: string | null;
   extra?: Record<string, any> | null;
@@ -141,7 +140,7 @@ export const updateFaction = async (data: Partial<FactionItem> & { id: number | 
 };
 
 export const deleteFaction = async (id: number | string) => {
-  return del("/api/factions", { id });
+  return del(`/api/factions?id=${id}`, { id });
 };
 
 // ============================================================================
@@ -151,14 +150,17 @@ export interface ItemData {
   id: number;
   workId: number;
   name: string;
-  category: "weapon" | "treasure" | "consumable" | "tech" | "forbidden" | "token" | string;
+  category?: string | null;
+  ownerId?: number | null;
+  ownerName?: string | null;
+  faction?: string | null;
+  description?: string | null;
+  effects?: string | null;
   tier?: string | null;
   appearance?: string | null;
-  effects: string;
   drawbacks?: string | null;
   currentHolder?: string | null;
   history?: string | null;
-  description?: string | null;
   imageUrl?: string | null;
   extra?: Record<string, any> | null;
   createdAt?: string;
@@ -173,7 +175,7 @@ export const getItemDetail = async (workId: number | string, id: number | string
   return get("/api/items", { workId, id });
 };
 
-export const createItem = async (data: Partial<ItemData> & { workId: number | string; name: string; effects: string }) => {
+export const createItem = async (data: Partial<ItemData> & { workId: number | string; name: string }) => {
   return post("/api/items", data);
 };
 
@@ -182,11 +184,11 @@ export const updateItem = async (data: Partial<ItemData> & { id: number | string
 };
 
 export const deleteItem = async (id: number | string) => {
-  return del("/api/items", { id });
+  return del(`/api/items?id=${id}`, { id });
 };
 
 // ============================================================================
-// 5. 世界法则与境界体系 API 与类型 (World Rules)
+// 5. 世界法则与规则设定 API 与类型 (World Rules)
 // ============================================================================
 export interface LevelTreeNode {
   order: number;
@@ -201,11 +203,15 @@ export interface WorldRuleItem {
   id: number;
   workId: number;
   name: string;
-  category: "power_system" | "physics_magic" | "society_law" | "taboo" | string;
-  levelTree?: LevelTreeNode[] | null;
-  mechanisms?: string | null;
-  taboos?: string | null;
+  category?: string | null;
+  characters?: string | null;
+  factions?: string | null;
   description?: string | null;
+  mechanisms?: string | null;
+  effects?: string | null;
+  drawbacks?: string | null;
+  taboos?: string | null;
+  levelTree?: LevelTreeNode[] | null;
   extra?: Record<string, any> | null;
   createdAt?: string;
   updatedAt?: string;
@@ -228,7 +234,7 @@ export const updateWorldRule = async (data: Partial<WorldRuleItem> & { id: numbe
 };
 
 export const deleteWorldRule = async (id: number | string) => {
-  return del("/api/rules", { id });
+  return del(`/api/rules?id=${id}`, { id });
 };
 
 // ============================================================================

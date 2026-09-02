@@ -297,6 +297,15 @@ const put = (url: string, params?: any, config?: RequestConfig): Promise<Unified
     });
 };
 
+const patch = (url: string, params?: any, config?: RequestConfig): Promise<UnifiedResponse> => {
+    return request({
+        ...config,
+        url,
+        method: 'patch',
+        data: params || {},
+    });
+};
+
 const del = (url: string, params?: any, config?: RequestConfig): Promise<UnifiedResponse> => {
     return request({
         ...config,
@@ -450,6 +459,7 @@ export {
     get,
     post,
     put,
+    patch,
     del,
     request,
     refreshSession,

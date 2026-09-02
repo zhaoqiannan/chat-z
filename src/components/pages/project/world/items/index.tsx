@@ -1,41 +1,10 @@
+// 组件：物品道具管理（自由文本类型/标签、所属角色与关联阵营下拉选择、极简线条卡片流）
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Modal,
-  TextInput,
-  Textarea,
-  Select,
-  Stack,
-  SimpleGrid,
-  LoadingOverlay,
-  Paper,
-  Group,
-  Card,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiEdit,
-  FiTrash2,
-  FiBox,
-  FiSearch,
-  FiUser,
-  FiAlertTriangle,
-  FiZap,
-} from "react-icons/fi";
-import {
-  ItemData,
-  getItemList,
-  createItem,
-  updateItem,
-  deleteItem,
-} from "@/rest/world";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Paper, Group, Card } from "@mantine/core";
+import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield } from "react-icons/fi";
+import { ItemData, getItemList, createItem, updateItem, deleteItem, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
 
 interface ItemsTabProps {
   workId: string;
@@ -44,53 +13,58 @@ interface ItemsTabProps {
 export default function ItemsTab({ workId }: ItemsTabProps) {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<ItemData[]>([]);
+  const [characters, setCharacters] = useState<CharacterItem[]>([]);
+  const [factions, setFactions] = useState<FactionItem[]>([]);
   const [searchKey, setSearchKey] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const [modalOpened, setModalOpened] = useState(false);
   const [editingItem, setEditingItem] = useState<ItemData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  // 表单状态
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("weapon");
-  const [tier, setTier] = useState("天阶极品");
-  const [appearance, setAppearance] = useState("");
-  const [effects, setEffects] = useState("");
-  const [drawbacks, setDrawbacks] = useState("");
-  const [currentHolder, setCurrentHolder] = useState("");
-  const [history, setHistory] = useState("");
+  const [category, setCategory] = useState("");
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [ownerName, setOwnerName] = useState("");
+  const [faction, setFaction] = useState("");
   const [description, setDescription] = useState("");
 
-  const fetchList = async () => {
+  const fetchData = async () => {
     if (!workId) return;
     try {
       setLoading(true);
-      const res = await getItemList(workId);
-      if (res && res.success && Array.isArray(res.result)) {
-        setList(res.result);
+      const [itemRes, charRes, facRes] = await Promise.all([
+        getItemList(workId),
+        getCharacterList(workId),
+        getFactionList(workId),
+      ]);
+
+      if (itemRes && itemRes.success && Array.isArray(itemRes.result)) {
+        setList(itemRes.result);
+      }
+      if (charRes && charRes.success && Array.isArray(charRes.result)) {
+        setCharacters(charRes.result);
+      }
+      if (facRes && facRes.success && Array.isArray(facRes.result)) {
+        setFactions(facRes.result);
       }
     } catch (e) {
-      console.error("获取物品列表失败:", e);
+      console.error(e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchList();
+    fetchData();
   }, [workId]);
 
   const handleOpenCreate = () => {
     setEditingItem(null);
     setName("");
-    setCategory("weapon");
-    setTier("天阶极品");
-    setAppearance("");
-    setEffects("");
-    setDrawbacks("");
-    setCurrentHolder("");
-    setHistory("");
+    setCategory("");
+    setOwnerId(null);
+    setOwnerName("");
+    setFaction("");
     setDescription("");
     setModalOpened(true);
   };
@@ -98,54 +72,44 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
   const handleOpenEdit = (item: ItemData) => {
     setEditingItem(item);
     setName(item.name || "");
-    setCategory(item.category || "weapon");
-    setTier(item.tier || "极品");
-    setAppearance(item.appearance || "");
-    setEffects(item.effects || "");
-    setDrawbacks(item.drawbacks || "");
-    setCurrentHolder(item.currentHolder || "");
-    setHistory(item.history || "");
-    setDescription(item.description || "");
+    setCategory(item.category || "");
+    setOwnerId(item.ownerId ? String(item.ownerId) : null);
+    setOwnerName(item.ownerName || item.currentHolder || "");
+    setFaction(item.faction || (item.extra?.faction as string) || "");
+    setDescription(item.description || item.effects || "");
     setModalOpened(true);
   };
 
-  const handleSubmit = async () => {
+  const handleSave = async () => {
     if (!name.trim()) {
-      alert("请输入物品道具名称！");
+      alert("请输入物品名称");
       return;
     }
 
     try {
       setFormLoading(true);
+      const selectedChar = characters.find((c) => String(c.id) === ownerId);
+      const finalOwner = selectedChar ? selectedChar.name : ownerName.trim();
+
+      const payload = {
+        name: name.trim(),
+        category: category.trim() || undefined,
+        ownerId: ownerId ? Number(ownerId) : undefined,
+        ownerName: finalOwner || undefined,
+        currentHolder: finalOwner || undefined,
+        faction: faction.trim() || undefined,
+        description: description.trim() || undefined,
+        effects: description.trim() || undefined,
+      };
+
       if (editingItem) {
-        await updateItem({
-          id: editingItem.id,
-          name: name.trim(),
-          category,
-          tier: tier.trim() || undefined,
-          appearance: appearance.trim() || undefined,
-          effects: effects.trim() || undefined,
-          drawbacks: drawbacks.trim() || undefined,
-          currentHolder: currentHolder.trim() || undefined,
-          history: history.trim() || undefined,
-          description: description.trim() || undefined,
-        });
+        await updateItem({ id: editingItem.id, ...payload });
       } else {
-        await createItem({
-          workId: Number(workId),
-          name: name.trim(),
-          category,
-          tier: tier.trim() || undefined,
-          appearance: appearance.trim() || undefined,
-          effects: effects.trim(),
-          drawbacks: drawbacks.trim() || undefined,
-          currentHolder: currentHolder.trim() || undefined,
-          history: history.trim() || undefined,
-          description: description.trim() || undefined,
-        });
+        await createItem({ workId: Number(workId), ...payload });
       }
+
       setModalOpened(false);
-      await fetchList();
+      await fetchData();
     } catch (e: any) {
       alert("保存物品失败: " + (e?.message || "网络异常"));
     } finally {
@@ -153,243 +117,215 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (confirm("确定要删除该物品道具吗？此操作不可撤销。")) {
-      const res = await deleteItem(id);
-      if (res && res.success) {
-        await fetchList();
+  const handleDelete = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("确定要删除该物品道具吗？")) {
+      try {
+        await deleteItem(id);
+        setList((prev) => prev.filter((item) => item.id !== id));
+      } catch (e: any) {
+        alert("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };
 
   const filteredList = list.filter((item) => {
-    const matchSearch =
-      !searchKey ||
-      item.name.toLowerCase().includes(searchKey.toLowerCase()) ||
-      (item.effects && item.effects.toLowerCase().includes(searchKey.toLowerCase())) ||
-      (item.currentHolder && item.currentHolder.toLowerCase().includes(searchKey.toLowerCase()));
-
-    const matchCategory = categoryFilter === "all" || item.category === categoryFilter;
-
-    return matchSearch && matchCategory;
+    if (!searchKey) return true;
+    const q = searchKey.toLowerCase();
+    const itemFaction = item.faction || (item.extra?.faction as string) || "";
+    return (
+      item.name.toLowerCase().includes(q) ||
+      (item.category && item.category.toLowerCase().includes(q)) ||
+      (item.ownerName && item.ownerName.toLowerCase().includes(q)) ||
+      (itemFaction && itemFaction.toLowerCase().includes(q)) ||
+      (item.description && item.description.toLowerCase().includes(q)) ||
+      (item.effects && item.effects.toLowerCase().includes(q))
+    );
   });
 
+  const charSelectData = [
+    { value: "", label: "暂无归属角色" },
+    ...characters.map((c) => ({ value: String(c.id), label: c.name })),
+  ];
+
+  const factionSelectData = [
+    { value: "", label: "暂无关联阵营" },
+    ...factions.map((f) => ({ value: f.name, label: f.name })),
+  ];
+
   return (
-    <Box>
-      <Group justify="space-between" align="center" mb="lg" wrap="wrap">
-        <Group gap="sm" align="center" style={{ flex: 1, maxWidth: 500 }}>
-          <TextInput
-            placeholder="搜索物品名称、异能或持有者..."
-            leftSection={<FiSearch size={14} />}
-            value={searchKey}
-            onChange={(e) => setSearchKey(e.target.value)}
-            style={{ flex: 1 }}
-          />
+    <Box p="md" pos="relative" style={{ minHeight: 400 }}>
+      <LoadingOverlay visible={loading} />
 
-          <Select
-            value={categoryFilter}
-            onChange={(val) => setCategoryFilter(val || "all")}
-            data={[
-              { value: "all", label: "全部类别" },
-              { value: "weapon", label: "⚔️ 神兵武器" },
-              { value: "treasure", label: "🔮 法宝圣物" },
-              { value: "consumable", label: "💊 灵丹耗材" },
-              { value: "tech", label: "⚙️ 科技装置" },
-              { value: "forbidden", label: "💀 禁忌邪物" },
-              { value: "token", label: "🗝️ 信物道具" },
-            ]}
-            style={{ width: 140 }}
-          />
-        </Group>
+      <Flex justify="space-between" align="center" mb="md" gap="sm">
+        <TextInput
+          placeholder="请输入关键词搜索物品..."
+          size="xs"
+          leftSection={<FiSearch size={13} color="#94a3b8" />}
+          value={searchKey}
+          onChange={(e) => setSearchKey(e.target.value)}
+          style={{ width: 260 }}
+        />
 
-        <Button leftSection={<FiPlus size={14} />} color="cyan" onClick={handleOpenCreate}>
-          新建物品道具
+        <Button size="xs" color="cyan" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
+          新增物品道具
         </Button>
-      </Group>
+      </Flex>
 
-      <Box pos="relative" style={{ minHeight: 300 }}>
-        <LoadingOverlay visible={loading} />
+      {filteredList.length === 0 && !loading && (
+        <Paper p="xl" withBorder radius="sm" ta="center" c="#94a3b8">
+          <FiBox size={36} strokeWidth={1.2} style={{ marginBottom: 8 }} />
+          <Text fz={13}>暂无物品道具，点击右上角「新增物品道具」开始添加</Text>
+        </Paper>
+      )}
 
-        {filteredList.length === 0 && !loading ? (
-          <Stack align="center" justify="center" p={60} c="dimmed" gap="xs">
-            <FiBox size={40} strokeWidth={1.2} />
-            <Text fz={15} fw={600}>暂无物品道具数据</Text>
-            <Text fz={13}>点击右上角「新建物品道具」设定神兵、法宝与奇物</Text>
-          </Stack>
-        ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
-            {filteredList.map((item) => (
-              <Card
-                key={item.id}
-                shadow="sm"
-                radius="md"
-                withBorder
-                p="md"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <Group justify="space-between" align="flex-start" mb="xs">
-                  <Group gap="xs" align="center">
-                    <FiBox size={18} color="#06b6d4" />
-                    <Text fz={17} fw={700} c="dark.7">
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
+        {filteredList.map((item) => {
+          const ownerDisplay = item.ownerName || item.currentHolder;
+          const factionDisplay = item.faction || (item.extra?.faction as string);
+
+          return (
+            <Card
+              key={item.id}
+              p="12px 14px"
+              radius="sm"
+              withBorder
+              bg="#ffffff"
+              style={{
+                borderColor: "#f1f5f9",
+                display: "flex",
+                flexDirection: "column",
+                height: 140,
+                justifyContent: "space-between",
+              }}
+            >
+              <Box>
+                <Flex justify="space-between" align="flex-start" mb={4}>
+                  <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
+                    <Text fz={14} fw={700} c="#0f172a" truncate="end">
                       {item.name}
                     </Text>
+                    {item.category && (
+                      <Badge size="xs" color="cyan" variant="light">
+                        {item.category}
+                      </Badge>
+                    )}
                   </Group>
-                  <Badge color="cyan" variant="light" size="sm">
-                    {item.tier || "极品"}
-                  </Badge>
-                </Group>
-
-                {item.currentHolder && (
-                  <Group gap={6} fz={12} c="dimmed" mb="xs">
-                    <FiUser size={13} />
-                    <Text fz={12}>当前持有者：<Text span fw={600} c="dark.5">{item.currentHolder}</Text></Text>
+                  <Group gap={2}>
+                    <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => handleOpenEdit(item)}>
+                      <FiEdit2 size={12} />
+                    </ActionIcon>
+                    <ActionIcon size="xs" variant="subtle" color="red" onClick={(e) => handleDelete(item.id, e)}>
+                      <FiTrash2 size={12} />
+                    </ActionIcon>
                   </Group>
-                )}
+                </Flex>
 
-                {item.effects && (
-                  <Paper mb="xs" p="xs" bg="teal.0" radius="sm" style={{ border: "1px solid var(--mantine-color-teal-2)" }}>
-                    <Group gap={4} c="teal.9" fz={11} fw={700} mb={2}>
-                      <FiZap size={12} />
-                      <Text fz={11} fw={700}>核心异能机理</Text>
+                <Text fz={11.5} c="#334155" lineClamp={2} style={{ lineHeight: 1.5 }}>
+                  {item.description || item.effects || "暂无描述"}
+                </Text>
+              </Box>
+
+              <Flex justify="space-between" align="center" pt={4} style={{ borderTop: "1px solid #f8fafc" }}>
+                <Group gap={8} fz={11} c="#64748b">
+                  {ownerDisplay && (
+                    <Group gap={3}>
+                      <FiUser size={10} color="#94a3b8" />
+                      <Text fz={10.5}>{ownerDisplay}</Text>
                     </Group>
-                    <Text fz={12} c="teal.9" lineClamp={2} style={{ lineHeight: 1.5 }}>
-                      {item.effects}
-                    </Text>
-                  </Paper>
-                )}
-
-                {item.drawbacks && (
-                  <Paper mb="xs" p="xs" bg="red.0" radius="sm" style={{ border: "1px solid var(--mantine-color-red-2)" }}>
-                    <Group gap={4} c="red.9" fz={11} fw={700} mb={2}>
-                      <FiAlertTriangle size={12} />
-                      <Text fz={11} fw={700}>代价与负面限制</Text>
+                  )}
+                  {factionDisplay && (
+                    <Group gap={3}>
+                      <FiShield size={10} color="#94a3b8" />
+                      <Text fz={10.5}>{factionDisplay}</Text>
                     </Group>
-                    <Text fz={12} c="red.9" lineClamp={2} style={{ lineHeight: 1.5 }}>
-                      {item.drawbacks}
-                    </Text>
-                  </Paper>
-                )}
-
-                <Group justify="flex-end" gap="xs" mt="auto" pt="xs" style={{ borderTop: "1px solid var(--mantine-color-gray-2)" }}>
-                  <ActionIcon variant="subtle" color="cyan" size="sm" onClick={() => handleOpenEdit(item)}>
-                    <FiEdit size={14} />
-                  </ActionIcon>
-                  <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDelete(item.id)}>
-                    <FiTrash2 size={14} />
-                  </ActionIcon>
+                  )}
+                  {!ownerDisplay && !factionDisplay && (
+                    <Text fz={10.5} c="#94a3b8">无归属绑定</Text>
+                  )}
                 </Group>
-              </Card>
-            ))}
-          </SimpleGrid>
-        )}
-      </Box>
+              </Flex>
+            </Card>
+          );
+        })}
+      </SimpleGrid>
 
-      {/* 70vw 宽屏舒适创建/编辑物品 Modal */}
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
-        title={
-          <Group gap="xs" align="center">
-            <FiBox color="#06b6d4" size={18} />
-            <Text fw={700} fz={16}>
-              {editingItem ? `编辑物品 - ${editingItem.name}` : "新建物品 / 神兵法宝设定"}
-            </Text>
-          </Group>
-        }
+        title={<Text fw={700} fz={15} c="#0f172a">{editingItem ? "编辑物品道具" : "新建物品道具"}</Text>}
+        size="md"
         centered
-        size="70vw"
-        radius="md"
+        radius="sm"
+        styles={{
+          header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
+          body: { paddingTop: 14 },
+        }}
       >
-        <Stack gap="md">
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+        <Stack gap="xs">
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
             <TextInput
               label="物品名称"
-              placeholder="例如：诛仙古剑 / 掌天瓶"
+              placeholder="请输入"
+              size="xs"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
             />
-            <Select
-              label="物品类别"
+            <TextInput
+              label="类型 / 标签"
+              placeholder="请输入 (如: 飞剑/灵丹/机甲/信物)"
+              size="xs"
               value={category}
-              onChange={(val) => setCategory(val || "weapon")}
-              data={[
-                { value: "weapon", label: "⚔️ 神兵武器 / 飞剑宝刀" },
-                { value: "treasure", label: "🔮 法宝圣物 / 先天灵宝" },
-                { value: "consumable", label: "💊 灵丹妙药 / 符箓耗材" },
-                { value: "tech", label: "⚙️ 机械科技 / 装置图纸" },
-                { value: "forbidden", label: "💀 禁忌邪物 / 诅咒奇物" },
-                { value: "token", label: "🗝️ 宗门信物 / 密钥令牌" },
-              ]}
-            />
-            <TextInput
-              label="品阶 / 品级"
-              placeholder="例如：天阶极品 / 荒古圣器"
-              value={tier}
-              onChange={(e) => setTier(e.target.value)}
+              onChange={(e) => setCategory(e.target.value)}
             />
           </SimpleGrid>
 
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            <TextInput
-              label="当前持有者 / 所处位置"
-              placeholder="例如：主角林肆 / 封印在剑冢底层"
-              value={currentHolder}
-              onChange={(e) => setCurrentHolder(e.target.value)}
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+            <Select
+              label="所属角色"
+              placeholder="请输入或选择角色"
+              size="xs"
+              value={ownerId || ""}
+              onChange={(val) => {
+                setOwnerId(val || null);
+                const found = characters.find((c) => String(c.id) === val);
+                if (found) setOwnerName(found.name);
+              }}
+              data={charSelectData}
+              clearable
+              searchable
             />
-            <TextInput
-              label="外形外观与材质描写"
-              placeholder="例如：通体赤红如血，剑身铭刻上古雷纹..."
-              value={appearance}
-              onChange={(e) => setAppearance(e.target.value)}
-            />
-          </SimpleGrid>
-
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            <Textarea
-              label="核心特殊功能 / 异能神通"
-              placeholder="例如：挥剑可引九霄神雷，无视物理护甲直接震荡神魂..."
-              value={effects}
-              onChange={(e) => setEffects(e.target.value)}
-              minRows={3}
-            />
-            <Textarea
-              label="负面代价 / 缺陷与使用限制 (选填)"
-              placeholder="例如：使用后需抽取宿主三年寿命，且极易引来天道反噬..."
-              value={drawbacks}
-              onChange={(e) => setDrawbacks(e.target.value)}
-              minRows={3}
+            <Select
+              label="关联阵营 / 势力"
+              placeholder="请输入或选择阵营"
+              size="xs"
+              value={faction}
+              onChange={(val) => setFaction(val || "")}
+              data={factionSelectData}
+              clearable
+              searchable
             />
           </SimpleGrid>
 
           <Textarea
-            label="来历源流与历史传说 (选填)"
-            placeholder="例如：上古大能渡劫遗落在此界的神物，曾斩杀十位大乘仙尊..."
-            value={history}
-            onChange={(e) => setHistory(e.target.value)}
-            minRows={2}
-          />
-
-          <Textarea
-            label="详细补充说明"
-            placeholder="记录其他设定备忘..."
+            label="物品效果与详细描述"
+            placeholder="请输入"
+            size="xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            minRows={2}
+            minRows={3}
+            autosize
           />
 
-          <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="outline" color="gray" onClick={() => setModalOpened(false)}>
+          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+            <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
               取消
             </Button>
-            <Button color="cyan" loading={formLoading} onClick={handleSubmit}>
-              {editingItem ? "保存修改" : "确认创建物品"}
+            <Button color="cyan" size="xs" loading={formLoading} onClick={handleSave}>
+              保存物品
             </Button>
-          </Group>
+          </Flex>
         </Stack>
       </Modal>
     </Box>
