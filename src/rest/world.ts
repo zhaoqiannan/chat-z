@@ -16,8 +16,11 @@ export interface CharacterItem {
   appearance?: string | null;
   avatarUrl?: string | null;
   personality?: string | null;
+  personalIntro?: string | null;
   description?: string | null;
+  background?: string | null;
   experiences?: string | null;
+  inspirationFragments?: string | null;
   relationships?: { targetName: string; relation: string; description?: string }[] | null;
   organizations?: string | null;
   abilities?: string | null;
@@ -63,10 +66,15 @@ export interface LocationRecord {
   workId: number;
   name: string;
   alias?: string | null;
+  parentId?: number | null;
+  parentName?: string | null;
   region?: string | null;
   posX: number;
   posY: number;
-  type: "city" | "sect" | "dungeon" | "natural" | "landmark" | string;
+  type?: "city" | "sect" | "dungeon" | "natural" | "landmark" | string;
+  background?: string | null;
+  geography?: string | null;
+  customs?: string | null;
   climate?: string | null;
   terrain?: string | null;
   features?: string | null;

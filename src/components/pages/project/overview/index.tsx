@@ -106,7 +106,7 @@ export default function ProjectOverviewPage() {
             </Flex>
           </Flex>
 
-          <Text fz={13} c="#64748b" mt={12} lh={1.6}>
+          <Text fz={13} c="#64748b" mt={12} lh={1.6} style={{ whiteSpace: "pre-wrap" }}>
             {work?.description || "暂无作品简介与大纲概要"}
           </Text>
         </Paper>

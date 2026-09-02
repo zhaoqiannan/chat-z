@@ -192,15 +192,21 @@ export const characters = sqliteTable('characters', {
   avatarUrl: text('avatar_url'),
   /** 性格侧写/心理动机/行为准则 */
   personality: text('personality'),
+  /** 个人介绍 */
+  personalIntro: text('personal_intro'),
   /** 人物详细介绍/背景生平 */
   description: text('description'),
   /** 人物经历/重大人生事件 */
   experiences: text('experiences'),
+  /** 人物背景 */
+  background: text('background'),
+  /** 灵感片段 */
+  inspirationFragments: text('inspiration_fragments'),
   /** 关联人物网 (JSON 数组格式: [{ targetName: "张三", relation: "生死之交" }]) */
   relationships: text('relationships', { mode: 'json' }).$type<{ targetName: string; relation: string; description?: string }[]>(),
   /** 关联组织与社会网络 */
   organizations: text('organizations'),
-  /** 拥有的能力/功法/专属装备 */
+  /** 拥有的能力/功法/技能点 */
   abilities: text('abilities'),
   /** 人物标签 (逗号分隔，如：剑修, 重生, 高冷) */
   tags: text('tags'),
@@ -230,21 +236,31 @@ export const locations = sqliteTable('locations', {
   workId: integer('work_id').notNull(),
   /** 地点名称 */
   name: text('name').notNull(),
-  /** 地点别名/古称 */
+  /** 别名/古称 */
   alias: text('alias'),
+  /** 上级地点 ID (关联 locations.id) */
+  parentId: integer('parent_id'),
+  /** 上级地点名称 */
+  parentName: text('parent_name'),
   /** 所属大区域/大洲/星系/势力范围 */
   region: text('region'),
   /** 地图画布 X 轴相对坐标 (0 ~ 100 之间百分比或绝对像素) */
   posX: integer('pos_x').default(50),
   /** 地图画布 Y 轴相对坐标 (0 ~ 100 之间百分比或绝对像素) */
   posY: integer('pos_y').default(50),
-  /** 地点类型: city(城池/都市) | sect(宗门/基地) | dungeon(秘境/遗迹) | natural(山川荒野) | landmark(特殊地标) */
+  /** 地点类型 */
   type: text('type').default('city'),
-  /** 气候环境 */
+  /** 背景 */
+  background: text('background'),
+  /** 地貌描述 */
+  geography: text('geography'),
+  /** 风土设定 */
+  customs: text('customs'),
+  /** 气候特点 */
   climate: text('climate'),
-  /** 地形地貌 */
+  /** 地形地貌 (历史兼容) */
   terrain: text('terrain'),
-  /** 标志性风俗与特点 */
+  /** 标志性风俗与特点 (历史兼容) */
   features: text('features'),
   /** 特产物产与矿产资源 */
   specialties: text('specialties'),

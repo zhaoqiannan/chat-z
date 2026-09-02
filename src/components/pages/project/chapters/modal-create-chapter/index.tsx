@@ -94,8 +94,9 @@ export default function ModalCreateChapter({
       size="md"
       radius="sm"
       styles={{
-        header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
-        body: { paddingTop: 14 },
+        content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+        header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+        body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
       }}
     >
       <Stack gap="xs">
@@ -152,7 +153,7 @@ export default function ModalCreateChapter({
 
         {error && <Text c="red" fz="xs">{error}</Text>}
 
-        <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+        <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
           <Button variant="default" size="xs" onClick={onClose} disabled={loading}>
             取消
           </Button>

@@ -1,25 +1,34 @@
-// API: 角色档案库管理（自动迁移补齐字段、增删改查、置顶与成长设定维护）
+// API: 角色档案库管理（自动迁移补齐字段、增删改查、置顶与个人介绍/背景/灵感片段维护）
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, characters, works } from "@/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 const ensureCharacterColumns = async (db: any) => {
   try {
-    await db.run(`ALTER TABLE characters ADD COLUMN tags TEXT`);
+    await db.run(sql`ALTER TABLE characters ADD COLUMN tags TEXT;`);
   } catch (_) {}
   try {
-    await db.run(`ALTER TABLE characters ADD COLUMN appearance_chapters TEXT`);
+    await db.run(sql`ALTER TABLE characters ADD COLUMN appearance_chapters TEXT;`);
   } catch (_) {}
   try {
-    await db.run(`ALTER TABLE characters ADD COLUMN character_arc TEXT`);
+    await db.run(sql`ALTER TABLE characters ADD COLUMN character_arc TEXT;`);
   } catch (_) {}
   try {
-    await db.run(`ALTER TABLE characters ADD COLUMN is_pinned INTEGER DEFAULT 0`);
+    await db.run(sql`ALTER TABLE characters ADD COLUMN is_pinned INTEGER DEFAULT 0;`);
   } catch (_) {}
   try {
-    await db.run(`ALTER TABLE characters ADD COLUMN pinned_at INTEGER`);
+    await db.run(sql`ALTER TABLE characters ADD COLUMN pinned_at INTEGER;`);
+  } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE characters ADD COLUMN personal_intro TEXT;`);
+  } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE characters ADD COLUMN background TEXT;`);
+  } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE characters ADD COLUMN inspiration_fragments TEXT;`);
   } catch (_) {}
 };
 
@@ -51,7 +60,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     return NextResponse.json({ success: true, result: list });
   } catch (error: any) {
-    console.error("GET characters error:", error);
     return NextResponse.json({ success: false, message: error?.message || "获取角色失败" }, { status: 500 });
   }
 });
@@ -75,8 +83,11 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       appearance,
       avatarUrl,
       personality,
+      personalIntro,
       description,
+      background,
       experiences,
+      inspirationFragments,
       relationships,
       organizations,
       abilities,
@@ -96,6 +107,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "角色姓名不能为空" }, { status: 400 });
     }
 
+    const finalIntro = personalIntro !== undefined ? personalIntro : (description || null);
+    const finalBg = background !== undefined ? background : (experiences || null);
+
     const newCharData = {
       workId,
       name: name.trim(),
@@ -105,17 +119,20 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       identity: identity?.trim() || null,
       faction: faction?.trim() || null,
       roleType: roleType || "major",
-      appearance: appearance?.trim() || null,
+      appearance: appearance !== undefined ? (appearance || null) : null,
       avatarUrl: avatarUrl || null,
-      personality: personality?.trim() || null,
-      description: description?.trim() || null,
-      experiences: experiences?.trim() || null,
+      personality: personality !== undefined ? (personality || null) : null,
+      personalIntro: finalIntro,
+      description: finalIntro,
+      background: finalBg,
+      experiences: finalBg,
+      inspirationFragments: inspirationFragments !== undefined ? (inspirationFragments || null) : null,
       relationships: Array.isArray(relationships) ? relationships : [],
       organizations: organizations?.trim() || null,
-      abilities: abilities?.trim() || null,
+      abilities: abilities !== undefined ? (abilities || null) : null,
       tags: tags?.trim() || null,
       appearanceChapters: appearanceChapters?.trim() || null,
-      characterArc: characterArc?.trim() || null,
+      characterArc: characterArc !== undefined ? (characterArc || null) : null,
       isPinned: isPinned ? 1 : 0,
       pinnedAt: isPinned ? new Date() : null,
       extra: typeof extra === "object" ? extra : {},
@@ -131,7 +148,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       message: "角色创建成功",
     });
   } catch (error: any) {
-    console.error("POST characters error:", error);
     return NextResponse.json({ success: false, message: error?.message || "创建角色失败" }, { status: 500 });
   }
 });
@@ -155,8 +171,11 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       appearance,
       avatarUrl,
       personality,
+      personalIntro,
       description,
+      background,
       experiences,
+      inspirationFragments,
       relationships,
       organizations,
       abilities,
@@ -183,17 +202,30 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (identity !== undefined) updateData.identity = identity?.trim() || null;
     if (faction !== undefined) updateData.faction = faction?.trim() || null;
     if (roleType !== undefined) updateData.roleType = roleType;
-    if (appearance !== undefined) updateData.appearance = appearance?.trim() || null;
+    if (appearance !== undefined) updateData.appearance = appearance;
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl || null;
-    if (personality !== undefined) updateData.personality = personality?.trim() || null;
-    if (description !== undefined) updateData.description = description?.trim() || null;
-    if (experiences !== undefined) updateData.experiences = experiences?.trim() || null;
+    if (personality !== undefined) updateData.personality = personality;
+    if (personalIntro !== undefined) {
+      updateData.personalIntro = personalIntro;
+      updateData.description = personalIntro;
+    } else if (description !== undefined) {
+      updateData.personalIntro = description;
+      updateData.description = description;
+    }
+    if (background !== undefined) {
+      updateData.background = background;
+      updateData.experiences = background;
+    } else if (experiences !== undefined) {
+      updateData.background = experiences;
+      updateData.experiences = experiences;
+    }
+    if (inspirationFragments !== undefined) updateData.inspirationFragments = inspirationFragments;
     if (relationships !== undefined) updateData.relationships = relationships;
     if (organizations !== undefined) updateData.organizations = organizations?.trim() || null;
-    if (abilities !== undefined) updateData.abilities = abilities?.trim() || null;
+    if (abilities !== undefined) updateData.abilities = abilities;
     if (tags !== undefined) updateData.tags = tags?.trim() || null;
     if (appearanceChapters !== undefined) updateData.appearanceChapters = appearanceChapters?.trim() || null;
-    if (characterArc !== undefined) updateData.characterArc = characterArc?.trim() || null;
+    if (characterArc !== undefined) updateData.characterArc = characterArc;
     if (isPinned !== undefined) {
       updateData.isPinned = isPinned ? 1 : 0;
       if (isPinned) {
@@ -210,7 +242,6 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       message: "角色更新成功",
     });
   } catch (error: any) {
-    console.error("PUT characters error:", error);
     return NextResponse.json({ success: false, message: error?.message || "更新角色失败" }, { status: 500 });
   }
 });
@@ -248,7 +279,14 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     await ensureCharacterColumns(db);
 
     const { searchParams } = new URL(req.url);
-    const id = Number(searchParams.get("id"));
+    let id = Number(searchParams.get("id"));
+
+    if (!id || isNaN(id)) {
+      try {
+        const body = await req.json();
+        id = Number(body?.id);
+      } catch (_) {}
+    }
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少角色ID" }, { status: 400 });
@@ -258,7 +296,6 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     return NextResponse.json({ success: true, message: "角色删除成功" });
   } catch (error: any) {
-    console.error("DELETE characters error:", error);
     return NextResponse.json({ success: false, message: error?.message || "删除角色失败" }, { status: 500 });
   }
 });

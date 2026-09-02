@@ -100,8 +100,9 @@ export default function ModalSimpleNode({
       size="md"
       radius="sm"
       styles={{
-        header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
-        body: { paddingTop: 14 },
+        content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+        header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+        body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
       }}
     >
       <Stack gap="xs">
@@ -116,7 +117,7 @@ export default function ModalSimpleNode({
 
         {volumes.length > 0 && (
           <Select
-            label="所属分卷 / 篇章"
+            label="所属分卷"
             size="xs"
             placeholder="选择归属篇章（可选）"
             value={volumeId || ""}
@@ -127,7 +128,7 @@ export default function ModalSimpleNode({
         )}
 
         <TextInput
-          label="涉及主要人物 (选填)"
+          label="涉及主要人物"
           placeholder="例如：林尘, 萧长老, 柳若曦"
           size="xs"
           value={characters}
@@ -135,7 +136,7 @@ export default function ModalSimpleNode({
         />
 
         <Textarea
-          label="剧情发生经过 / 内容梗概"
+          label="内容梗概"
           placeholder="在此记录本情节点的核心事件、动机与推进过程..."
           size="xs"
           value={content}
@@ -144,7 +145,7 @@ export default function ModalSimpleNode({
           autosize
         />
 
-        <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+        <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
           <Button variant="default" size="xs" onClick={onClose}>
             取消
           </Button>

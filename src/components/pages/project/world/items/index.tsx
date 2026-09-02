@@ -1,10 +1,8 @@
-// 组件：物品道具管理（自由文本类型/标签、所属角色与关联阵营下拉选择、极简线条卡片流）
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Paper, Group, Card } from "@mantine/core";
-import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield, FiZap } from "react-icons/fi";
 import { ItemData, getItemList, createItem, updateItem, deleteItem, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
+import NameGeneratorModal from "@/components/common/name-generator";
 
 interface ItemsTabProps {
   workId: string;
@@ -20,6 +18,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
   const [modalOpened, setModalOpened] = useState(false);
   const [editingItem, setEditingItem] = useState<ItemData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [nameGenOpened, setNameGenOpened] = useState(false);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -258,23 +257,38 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
         centered
         radius="sm"
         styles={{
-          header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
-          body: { paddingTop: 14 },
+          content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+          header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+          body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
         }}
       >
         <Stack gap="xs">
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+            <Box>
+              <Flex justify="space-between" align="center" mb={2}>
+                <Text fz={12} fw={500} c="#475569">物品名称 *</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="cyan"
+                  leftSection={<FiZap size={10} />}
+                  onClick={() => setNameGenOpened(true)}
+                  styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
+                >
+                  智能起名
+                </Button>
+              </Flex>
+              <TextInput
+                placeholder="请输入"
+                size="xs"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </Box>
             <TextInput
-              label="物品名称"
+              label="分类"
               placeholder="请输入"
-              size="xs"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <TextInput
-              label="类型 / 标签"
-              placeholder="请输入 (如: 飞剑/灵丹/机甲/信物)"
               size="xs"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -297,7 +311,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
               searchable
             />
             <Select
-              label="关联阵营 / 势力"
+              label="关联阵营"
               placeholder="请输入或选择阵营"
               size="xs"
               value={faction}
@@ -309,16 +323,16 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
           </SimpleGrid>
 
           <Textarea
-            label="物品效果与详细描述"
+            label="物品效果"
             placeholder="请输入"
             size="xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            minRows={3}
+            minRows={5}
             autosize
           />
 
-          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
             <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
               取消
             </Button>
@@ -328,6 +342,13 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
           </Flex>
         </Stack>
       </Modal>
+
+      <NameGeneratorModal
+        opened={nameGenOpened}
+        onClose={() => setNameGenOpened(false)}
+        onSelectName={(val) => setName(val)}
+        type="item"
+      />
     </Box>
   );
 }

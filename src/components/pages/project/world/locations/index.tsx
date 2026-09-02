@@ -1,41 +1,8 @@
-"use client";
-
 import React, { useState, useEffect, useRef } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Modal,
-  TextInput,
-  Textarea,
-  Select,
-  Stack,
-  SimpleGrid,
-  LoadingOverlay,
-  SegmentedControl,
-  Paper,
-  Group,
-  Card,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiEdit,
-  FiTrash2,
-  FiMapPin,
-  FiSearch,
-  FiSun,
-  FiCompass,
-} from "react-icons/fi";
-import {
-  LocationRecord,
-  getLocationList,
-  createLocation,
-  updateLocation,
-  deleteLocation,
-} from "@/rest/world";
+import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, SegmentedControl, Paper, Group, Card } from "@mantine/core";
+import { FiPlus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap } from "react-icons/fi";
+import { LocationRecord, getLocationList, createLocation, updateLocation, deleteLocation } from "@/rest/world";
+import NameGeneratorModal from "@/components/common/name-generator";
 
 interface LocationsTabProps {
   workId: string;
@@ -44,28 +11,28 @@ interface LocationsTabProps {
 export default function LocationsTab({ workId }: LocationsTabProps) {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState<LocationRecord[]>([]);
-  const [viewMode, setViewMode] = useState<"map" | "list">("map");
+  const [viewMode, setViewMode] = useState<"map" | "list">("list");
   const [searchKey, setSearchKey] = useState("");
 
   const mapRef = useRef<HTMLDivElement>(null);
 
-  // 编辑/新建 Modal
   const [modalOpened, setModalOpened] = useState(false);
   const [editingItem, setEditingItem] = useState<LocationRecord | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [nameGenOpened, setNameGenOpened] = useState(false);
 
-  // 表单状态
   const [name, setName] = useState("");
   const [alias, setAlias] = useState("");
-  const [region, setRegion] = useState("");
-  const [type, setType] = useState("city");
+  const [parentId, setParentId] = useState<string | null>(null);
+  const [background, setBackground] = useState("");
+  const [geography, setGeography] = useState("");
+  const [customs, setCustoms] = useState("");
   const [climate, setClimate] = useState("");
-  const [terrain, setTerrain] = useState("");
-  const [features, setFeatures] = useState("");
-  const [plotPoints, setPlotPoints] = useState("");
-  const [description, setDescription] = useState("");
   const [posX, setPosX] = useState(50);
   const [posY, setPosY] = useState(50);
+
+  const [detailModalOpened, setDetailModalOpened] = useState(false);
+  const [detailItem, setDetailItem] = useState<LocationRecord | null>(null);
 
   const fetchList = async () => {
     if (!workId) return;
@@ -90,13 +57,11 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
     setEditingItem(null);
     setName("");
     setAlias("");
-    setRegion("");
-    setType("city");
+    setParentId(null);
+    setBackground("");
+    setGeography("");
+    setCustoms("");
     setClimate("");
-    setTerrain("");
-    setFeatures("");
-    setPlotPoints("");
-    setDescription("");
     setPosX(coords ? coords.x : Math.floor(Math.random() * 60) + 20);
     setPosY(coords ? coords.y : Math.floor(Math.random() * 60) + 20);
     setModalOpened(true);
@@ -105,21 +70,23 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
   const handleOpenEdit = (item: LocationRecord, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setEditingItem(item);
-    setName(item.name);
+    setName(item.name || "");
     setAlias(item.alias || "");
-    setRegion(item.region || "");
-    setType(item.type || "city");
+    setParentId(item.parentId ? String(item.parentId) : null);
+    setBackground(item.background || item.description || "");
+    setGeography(item.geography || item.terrain || "");
+    setCustoms(item.customs || item.features || "");
     setClimate(item.climate || "");
-    setTerrain(item.terrain || "");
-    setFeatures(item.features || "");
-    setPlotPoints(item.plotPoints || "");
-    setDescription(item.description || "");
     setPosX(item.posX || 50);
     setPosY(item.posY || 50);
     setModalOpened(true);
   };
 
-  // 点击地图空白区域添加新地标
+  const handleOpenDetail = (item: LocationRecord) => {
+    setDetailItem(item);
+    setDetailModalOpened(true);
+  };
+
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!mapRef.current) return;
     const rect = mapRef.current.getBoundingClientRect();
@@ -140,37 +107,29 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
     try {
       setFormLoading(true);
+      const selectedParent = list.find((loc) => String(loc.id) === parentId);
+      const parentName = selectedParent ? selectedParent.name : null;
+
+      const payload = {
+        name: name.trim(),
+        alias: alias.trim() || undefined,
+        parentId: parentId ? Number(parentId) : null,
+        parentName: parentName || undefined,
+        background: background || undefined,
+        description: background || undefined,
+        geography: geography || undefined,
+        customs: customs || undefined,
+        climate: climate || undefined,
+        posX,
+        posY,
+      };
+
       if (editingItem) {
-        await updateLocation({
-          id: editingItem.id,
-          name: name.trim(),
-          alias: alias.trim() || undefined,
-          region: region.trim() || undefined,
-          type,
-          climate: climate.trim() || undefined,
-          terrain: terrain.trim() || undefined,
-          features: features.trim() || undefined,
-          plotPoints: plotPoints.trim() || undefined,
-          description: description.trim() || undefined,
-          posX,
-          posY,
-        });
+        await updateLocation({ id: editingItem.id, ...payload });
       } else {
-        await createLocation({
-          workId: Number(workId),
-          name: name.trim(),
-          alias: alias.trim() || undefined,
-          region: region.trim() || undefined,
-          type,
-          climate: climate.trim() || undefined,
-          terrain: terrain.trim() || undefined,
-          features: features.trim() || undefined,
-          plotPoints: plotPoints.trim() || undefined,
-          description: description.trim() || undefined,
-          posX,
-          posY,
-        });
+        await createLocation({ workId: Number(workId), ...payload });
       }
+
       setModalOpened(false);
       await fetchList();
     } catch (e: any) {
@@ -190,54 +149,52 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
     }
   };
 
-  const getTypeColor = (locType: string) => {
-    switch (locType) {
-      case "sect":
-        return "#8b5cf6";
-      case "dungeon":
-        return "#ef4444";
-      case "natural":
-        return "#10b981";
-      case "landmark":
-        return "#f59e0b";
-      default:
-        return "#06b6d4";
-    }
-  };
+  const parentOptions = [
+    { value: "", label: "无上级地点（根级地点）" },
+    ...list
+      .filter((item) => !editingItem || item.id !== editingItem.id)
+      .map((item) => ({
+        value: String(item.id),
+        label: item.name + (item.alias ? ` (${item.alias})` : ""),
+      })),
+  ];
 
   const filteredList = list.filter((item) => {
     return (
       !searchKey ||
       item.name.toLowerCase().includes(searchKey.toLowerCase()) ||
-      (item.region && item.region.toLowerCase().includes(searchKey.toLowerCase())) ||
-      (item.features && item.features.toLowerCase().includes(searchKey.toLowerCase()))
+      (item.alias && item.alias.toLowerCase().includes(searchKey.toLowerCase())) ||
+      (item.parentName && item.parentName.toLowerCase().includes(searchKey.toLowerCase())) ||
+      (item.geography && item.geography.toLowerCase().includes(searchKey.toLowerCase())) ||
+      (item.customs && item.customs.toLowerCase().includes(searchKey.toLowerCase()))
     );
   });
 
   return (
     <Box>
-      {/* 顶部操作与模式切换 */}
       <Group justify="space-between" align="center" mb="md" wrap="wrap">
         <Group gap="sm" align="center" style={{ flex: 1, maxWidth: 480 }}>
           <TextInput
-            placeholder="搜索地点名称、大区或地形特点..."
+            placeholder="搜索地点名称、别名或风土特点..."
             leftSection={<FiSearch size={14} />}
             value={searchKey}
             onChange={(e) => setSearchKey(e.target.value)}
             style={{ flex: 1 }}
+            size="xs"
           />
 
           <SegmentedControl
+            size="xs"
             value={viewMode}
             onChange={(v) => setViewMode(v as "map" | "list")}
             data={[
-              { label: "🗺️ 地图画布", value: "map" },
-              { label: "📋 卡片列表", value: "list" },
+              { label: "卡片列表", value: "list" },
+              { label: "地图画布", value: "map" },
             ]}
           />
         </Group>
 
-        <Button leftSection={<FiPlus size={14} />} color="cyan" onClick={() => handleOpenCreate()}>
+        <Button size="xs" leftSection={<FiPlus size={13} />} color="cyan" onClick={() => handleOpenCreate()}>
           新建地点
         </Button>
       </Group>
@@ -245,23 +202,22 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
       <Box pos="relative">
         <LoadingOverlay visible={loading} />
 
-        {/* 视图模式 1: 可视化交互世界地图画布 */}
         {viewMode === "map" ? (
           <Box>
-            <Group justify="space-between" align="center" mb="xs" fz={12} c="dimmed">
-              <Text fz={12}>💡 提示：在画布任意位置<Text span fw={700} c="dark.6">单击</Text>可直接快速标记地标；点击地标可查看/编辑详情。</Text>
-              <Text fz={12}>当前已标注地标数：<Text span fw={700} c="dark.6">{list.length}</Text> 个</Text>
+            <Group justify="space-between" align="center" mb="xs" fz={12} c="#64748b">
+              <Text fz={12}>💡 提示：在画布任意位置单击可直接标记地标；点击地标可查看/编辑详情。</Text>
+              <Text fz={12}>当前已标注地标数：<Text span fw={700} c="#0f172a">{list.length}</Text> 个</Text>
             </Group>
 
             <Paper
               ref={mapRef}
               withBorder
-              radius="md"
-              shadow="sm"
+              radius="sm"
+              shadow="xs"
               onClick={handleMapClick}
               style={{
                 width: "100%",
-                height: 520,
+                height: 540,
                 backgroundColor: "#f8fafc",
                 position: "relative",
                 overflow: "hidden",
@@ -270,9 +226,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                 backgroundSize: "24px 24px",
               }}
             >
-              {/* 各地点地标 Pin */}
               {filteredList.map((loc) => {
-                const pinColor = getTypeColor(loc.type);
                 return (
                   <Box
                     key={loc.id}
@@ -287,8 +241,8 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                     }}
                   >
                     <Paper
-                      shadow="md"
-                      radius="xl"
+                      shadow="xs"
+                      radius="sm"
                       withBorder
                       px={10}
                       py={4}
@@ -297,14 +251,14 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                         alignItems: "center",
                         gap: 6,
                         backgroundColor: "#ffffff",
-                        borderColor: pinColor,
-                        borderWidth: 2,
+                        borderColor: "#06b6d4",
+                        borderWidth: 1.5,
                         transition: "all 0.15s ease",
                       }}
                     >
-                      <FiMapPin size={13} color={pinColor} />
-                      <Text fz={12} fw={700} c="dark.7">{loc.name}</Text>
-                      {loc.region && <Text fz={11} c="dimmed">({loc.region})</Text>}
+                      <FiMapPin size={13} color="#06b6d4" />
+                      <Text fz={12} fw={700} c="#1e293b">{loc.name}</Text>
+                      {loc.parentName && <Text fz={10.5} c="#64748b">[{loc.parentName}]</Text>}
                     </Paper>
                   </Box>
                 );
@@ -312,71 +266,80 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
             </Paper>
           </Box>
         ) : (
-          /* 视图模式 2: 卡片网格列表 */
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="lg">
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
             {filteredList.map((item) => (
               <Card
                 key={item.id}
-                shadow="sm"
-                radius="md"
+                radius="sm"
                 withBorder
-                p="md"
+                p="sm"
+                bg="#ffffff"
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  transition: "all 0.2s ease",
+                  justifyContent: "space-between",
+                  borderColor: "#e2e8f0",
+                  transition: "all 0.15s ease",
+                  cursor: "pointer",
+                  minHeight: 120,
                 }}
+                onClick={() => handleOpenDetail(item)}
               >
-                <Group justify="space-between" align="center" mb="xs">
-                  <Group gap="xs" align="center">
-                    <FiMapPin size={16} color={getTypeColor(item.type)} />
-                    <Text fz={16} fw={700} c="dark.7">
-                      {item.name} {item.alias ? `(${item.alias})` : ""}
+                <Box>
+                  <Flex justify="space-between" align="center" mb={6}>
+                    <Group gap={6} align="center">
+                      <FiMapPin size={14} color="#06b6d4" />
+                      <Text fz={14.5} fw={700} c="#0f172a">
+                        {item.name}
+                      </Text>
+                      {item.alias ? (
+                        <Text fz={11.5} c="#64748b">
+                          「{item.alias}」
+                        </Text>
+                      ) : null}
+                    </Group>
+
+                    {item.parentName && (
+                      <Group gap={4} align="center">
+                        <FiLayers size={11} color="#64748b" />
+                        <Text fz={10.5} c="#64748b" style={{ border: "1px solid #f1f5f9", padding: "1px 5px", borderRadius: 3 }}>
+                          {item.parentName}
+                        </Text>
+                      </Group>
+                    )}
+                  </Flex>
+
+                  {(item.background || item.description) && (
+                    <Text fz={12} c="#475569" lineClamp={2} mb={6} style={{ whiteSpace: "pre-wrap" }}>
+                      {item.background || item.description}
                     </Text>
-                  </Group>
-                  <Badge color="cyan" variant="light" size="sm">
-                    {item.type || "城池"}
-                  </Badge>
-                </Group>
+                  )}
 
-                {item.region && (
-                  <Text fz={12} c="dimmed" mb={4}>
-                    所属大区：<Text span fw={600} c="dark.5">{item.region}</Text> · 坐标 ({item.posX}%, {item.posY}%)
-                  </Text>
-                )}
+                  {item.geography && (
+                    <Text fz={11.5} c="#64748b" lineClamp={1} mb={4}>
+                      地貌：{item.geography}
+                    </Text>
+                  )}
 
-                {item.climate && (
-                  <Group gap={6} fz={12} c="dark.5" mb={4}>
-                    <FiSun size={12} color="#f59e0b" />
-                    <Text fz={12}>气候环境：{item.climate}</Text>
-                  </Group>
-                )}
+                  {item.customs && (
+                    <Text fz={11.5} c="#64748b" lineClamp={1} mb={4}>
+                      风土：{item.customs}
+                    </Text>
+                  )}
 
-                {item.terrain && (
-                  <Text fz={12} c="dark.5" mb="xs">
-                    🏔️ 地形地貌：{item.terrain}
-                  </Text>
-                )}
+                  {item.climate && (
+                    <Text fz={11.5} c="#64748b" lineClamp={1}>
+                      气候：{item.climate}
+                    </Text>
+                  )}
+                </Box>
 
-                {item.features && (
-                  <Paper mb="xs" p="xs" bg="gray.0" radius="sm">
-                    <Text fz={11} fw={700} c="dimmed">标志特点</Text>
-                    <Text fz={12} c="dark.6" lineClamp={2}>{item.features}</Text>
-                  </Paper>
-                )}
-
-                {item.plotPoints && (
-                  <Text fz={12} c="red.7" mb="xs" lineClamp={1}>
-                    💥 核心剧情点：{item.plotPoints}
-                  </Text>
-                )}
-
-                <Group justify="flex-end" gap="xs" mt="auto" pt="xs" style={{ borderTop: "1px solid var(--mantine-color-gray-2)" }}>
-                  <ActionIcon variant="subtle" color="cyan" size="sm" onClick={(e) => handleOpenEdit(item, e)}>
-                    <FiEdit size={14} />
+                <Group justify="flex-end" gap="xs" mt="xs" pt={6} style={{ borderTop: "1px solid #f1f5f9" }}>
+                  <ActionIcon variant="subtle" color="cyan" size="xs" onClick={(e) => handleOpenEdit(item, e)}>
+                    <FiEdit size={13} />
                   </ActionIcon>
-                  <ActionIcon variant="subtle" color="red" size="sm" onClick={(e) => handleDelete(item.id, e)}>
-                    <FiTrash2 size={14} />
+                  <ActionIcon variant="subtle" color="red" size="xs" onClick={(e) => handleDelete(item.id, e)}>
+                    <FiTrash2 size={13} />
                   </ActionIcon>
                 </Group>
               </Card>
@@ -385,107 +348,223 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
         )}
       </Box>
 
-      {/* 70vw 宽屏舒适创建/编辑地点 Modal */}
+      {/* 70vw 宽屏创建/编辑地点 Modal */}
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
         title={
           <Group gap="xs" align="center">
-            <FiCompass color="#06b6d4" size={18} />
-            <Text fw={700} fz={16}>
-              {editingItem ? `编辑地点设定 - ${editingItem.name}` : "新建地理空间与地标"}
+            <FiCompass color="#06b6d4" size={16} />
+            <Text fw={700} fz={15} c="#0f172a">
+              {editingItem ? `编辑地点 - ${editingItem.name}` : "新建地点"}
             </Text>
           </Group>
         }
         centered
         size="70vw"
-        radius="md"
+        radius="sm"
+        styles={{
+          content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+          header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+          body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
+        }}
       >
         <Stack gap="md">
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+            <Box>
+              <Flex justify="space-between" align="center" mb={2}>
+                <Text fz={12} fw={500} c="#475569">地点名称 *</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="cyan"
+                  leftSection={<FiZap size={10} />}
+                  onClick={() => setNameGenOpened(true)}
+                  styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
+                >
+                  智能起名
+                </Button>
+              </Flex>
+              <TextInput
+                placeholder="请输入"
+                size="xs"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </Box>
             <TextInput
-              label="地点名称"
-              placeholder="例如：万剑城 / 黑石要塞"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <TextInput
-              label="别名 / 古称"
-              placeholder="例如：剑祖故里 / 绝望深渊"
+              label="别名"
+              placeholder="请输入"
+              size="xs"
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
             />
-            <TextInput
-              label="所属大区 / 州界 / 星域"
-              placeholder="例如：东荒神洲 / 天南九国"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-            />
-          </SimpleGrid>
-
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
             <Select
-              label="地理空间类型"
-              value={type}
-              onChange={(val) => setType(val || "city")}
-              data={[
-                { value: "city", label: "🏰 城池 / 聚落 / 帝国帝都" },
-                { value: "sect", label: "⛩️ 宗门圣地 / 学院道场" },
-                { value: "dungeon", label: "💀 禁地秘境 / 遗迹深渊" },
-                { value: "natural", label: "🌲 自然风貌 / 荒原山脉" },
-                { value: "landmark", label: "⭐ 特殊地标 / 奇观通天塔" },
-              ]}
-            />
-            <TextInput
-              label="气候 / 天气特点"
-              placeholder="例如：常年暴雪冰封 / 烈阳不落 / 瘴气弥漫"
-              value={climate}
-              onChange={(e) => setClimate(e.target.value)}
-            />
-            <TextInput
-              label="地形 / 地貌结构"
-              placeholder="例如：悬空浮岛群 / 熔岩裂谷 / 绝壁天堑"
-              value={terrain}
-              onChange={(e) => setTerrain(e.target.value)}
-            />
-          </SimpleGrid>
-
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            <Textarea
-              label="标志性建筑 / 核心特点"
-              placeholder="例如：城中央屹立三千丈诛仙剑雕像，全城由不朽玄晶铸就..."
-              value={features}
-              onChange={(e) => setFeatures(e.target.value)}
-              minRows={3}
-            />
-            <Textarea
-              label="关键剧情发展点 / 故事关联 (选填)"
-              placeholder="例如：第三卷主角在此遭遇退婚风波，引发两派圣战..."
-              value={plotPoints}
-              onChange={(e) => setPlotPoints(e.target.value)}
-              minRows={3}
+              label="关联上级地点"
+              placeholder="请选择上级地点（可选）"
+              size="xs"
+              value={parentId || ""}
+              onChange={(val) => setParentId(val || null)}
+              data={parentOptions}
+              searchable
+              clearable
             />
           </SimpleGrid>
 
           <Textarea
-            label="详细背景风土人情设定"
-            placeholder="描写该地点的历史渊源、常住人口、势力割据、物产资源等细节..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            minRows={3}
+            label="背景"
+            placeholder="请输入"
+            size="xs"
+            value={background}
+            onChange={(e) => setBackground(e.target.value)}
+            minRows={10}
+            autosize
           />
 
-          <Group justify="flex-end" gap="sm" mt="md">
-            <Button variant="outline" color="gray" onClick={() => setModalOpened(false)}>
-              取消
-            </Button>
-            <Button color="cyan" loading={formLoading} onClick={handleSubmit}>
-              {editingItem ? "保存修改" : "确认创建地点"}
-            </Button>
-          </Group>
+          <Textarea
+            label="地貌描述"
+            placeholder="请输入"
+            size="xs"
+            value={geography}
+            onChange={(e) => setGeography(e.target.value)}
+            minRows={10}
+            autosize
+          />
+
+          <Textarea
+            label="风土设定"
+            placeholder="请输入"
+            size="xs"
+            value={customs}
+            onChange={(e) => setCustoms(e.target.value)}
+            minRows={10}
+            autosize
+          />
+
+          <Textarea
+            label="气候特点"
+            placeholder="请输入"
+            size="xs"
+            value={climate}
+            onChange={(e) => setClimate(e.target.value)}
+            minRows={10}
+            autosize
+          />
         </Stack>
+
+        <Group justify="flex-end" gap="xs" mt="md" pt={12} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
+          <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
+            取消
+          </Button>
+          <Button color="cyan" size="xs" loading={formLoading} onClick={handleSubmit}>
+            {editingItem ? "保存地点设定" : "创建地点"}
+          </Button>
+        </Group>
       </Modal>
+
+      {/* 70vw 宽屏地点详情查看 Modal */}
+      <Modal
+        opened={detailModalOpened}
+        onClose={() => setDetailModalOpened(false)}
+        title={
+          <Group gap="xs" align="center">
+            <FiMapPin color="#06b6d4" size={16} />
+            <Text fw={700} fz={15} c="#0f172a">
+              {detailItem?.name} 详情
+            </Text>
+          </Group>
+        }
+        centered
+        size="70vw"
+        radius="sm"
+        styles={{
+          content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+          header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+          body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
+        }}
+      >
+        {detailItem && (
+          <Stack gap="md">
+            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
+              <Box p="8px 12px" style={{ border: "1px solid #f1f5f9", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                <Text fz={11} c="#94a3b8" mb={2}>地点名称</Text>
+                <Text fz={13} fw={700} c="#0f172a">{detailItem.name}</Text>
+              </Box>
+              <Box p="8px 12px" style={{ border: "1px solid #f1f5f9", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                <Text fz={11} c="#94a3b8" mb={2}>别名</Text>
+                <Text fz={13} fw={500} c="#334155">{detailItem.alias || "无"}</Text>
+              </Box>
+              <Box p="8px 12px" style={{ border: "1px solid #f1f5f9", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                <Text fz={11} c="#94a3b8" mb={2}>关联上级地点</Text>
+                <Text fz={13} fw={500} c="#0891b2">{detailItem.parentName || "无上级地点"}</Text>
+              </Box>
+            </SimpleGrid>
+
+            {(detailItem.background || detailItem.description) && (
+              <Box>
+                <Text fz={12} fw={600} c="#64748b" mb={3}>背景</Text>
+                <Text fz={12.5} c="#334155" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 10px", border: "1px solid #f8fafc", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                  {detailItem.background || detailItem.description}
+                </Text>
+              </Box>
+            )}
+
+            {(detailItem.geography || detailItem.terrain) && (
+              <Box>
+                <Text fz={12} fw={600} c="#64748b" mb={3}>地貌描述</Text>
+                <Text fz={12.5} c="#334155" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 10px", border: "1px solid #f8fafc", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                  {detailItem.geography || detailItem.terrain}
+                </Text>
+              </Box>
+            )}
+
+            {(detailItem.customs || detailItem.features) && (
+              <Box>
+                <Text fz={12} fw={600} c="#64748b" mb={3}>风土设定</Text>
+                <Text fz={12.5} c="#334155" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 10px", border: "1px solid #f8fafc", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                  {detailItem.customs || detailItem.features}
+                </Text>
+              </Box>
+            )}
+
+            {detailItem.climate && (
+              <Box>
+                <Text fz={12} fw={600} c="#64748b" mb={3}>气候特点</Text>
+                <Text fz={12.5} c="#334155" style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 10px", border: "1px solid #f8fafc", borderRadius: 4, backgroundColor: "#fafbfc" }}>
+                  {detailItem.climate}
+                </Text>
+              </Box>
+            )}
+          </Stack>
+        )}
+
+        <Group justify="flex-end" gap="xs" mt="md" pt={12} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
+          <Button variant="default" size="xs" onClick={() => setDetailModalOpened(false)}>
+            关闭
+          </Button>
+          {detailItem && (
+            <Button
+              color="cyan"
+              size="xs"
+              leftSection={<FiEdit size={11} />}
+              onClick={() => {
+                setDetailModalOpened(false);
+                handleOpenEdit(detailItem);
+              }}
+            >
+              编辑地点
+            </Button>
+          )}
+        </Group>
+      </Modal>
+
+      <NameGeneratorModal
+        opened={nameGenOpened}
+        onClose={() => setNameGenOpened(false)}
+        onSelectName={(val) => setName(val)}
+        type="location"
+      />
     </Box>
   );
 }

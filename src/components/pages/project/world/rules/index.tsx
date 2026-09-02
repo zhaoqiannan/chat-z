@@ -253,14 +253,15 @@ export default function RulesTab({ workId }: RulesTabProps) {
         centered
         radius="sm"
         styles={{
-          header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
-          body: { paddingTop: 14 },
+          content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+          header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+          body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
         }}
       >
         <Stack gap="xs">
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
             <TextInput
-              label="规则 / 设定名称"
+              label="规则名称"
               placeholder="请输入"
               size="xs"
               value={name}
@@ -268,8 +269,8 @@ export default function RulesTab({ workId }: RulesTabProps) {
               required
             />
             <TextInput
-              label="分类 / 领域"
-              placeholder="请输入 (如: 力量境界/魔法机理/天道禁忌/公约)"
+              label="领域分类"
+              placeholder="请输入"
               size="xs"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -278,7 +279,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
 
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
             <Select
-              label="关联角色 / 受限人物"
+              label="关联角色"
               placeholder="请输入或选择角色"
               size="xs"
               value={characterName}
@@ -288,7 +289,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
               searchable
             />
             <Select
-              label="关联阵营 / 适用势力"
+              label="关联阵营"
               placeholder="请输入或选择阵营"
               size="xs"
               value={factionName}
@@ -300,16 +301,16 @@ export default function RulesTab({ workId }: RulesTabProps) {
           </SimpleGrid>
 
           <Textarea
-            label="规则描述与运转机制"
+            label="规则描述"
             placeholder="请输入"
             size="xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            minRows={4}
+            minRows={5}
             autosize
           />
 
-          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
             <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
               取消
             </Button>

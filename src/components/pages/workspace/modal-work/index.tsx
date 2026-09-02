@@ -122,9 +122,13 @@ export default function ModalWork({
         </Text>
       }
       centered
-      radius="md"
-      padding="xl"
+      radius="sm"
       size="50vw"
+      styles={{
+        content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+        header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+        body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
+      }}
     >
       <form onSubmit={handleSubmit}>
         <Stack gap={16} className="form-box">

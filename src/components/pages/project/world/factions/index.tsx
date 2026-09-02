@@ -1,10 +1,8 @@
-// 组件：阵营与势力管理（极简线条卡片流、P0-P10规模等级、正反中立立场、角色领袖与地点关联、发展走势）
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Group, Card, Paper } from "@mantine/core";
-import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp, FiZap } from "react-icons/fi";
 import { FactionItem, getFactionList, createFaction, updateFaction, deleteFaction, getCharacterList, CharacterItem, getLocationList, LocationRecord } from "@/rest/world";
+import NameGeneratorModal from "@/components/common/name-generator";
 
 interface FactionsTabProps {
   workId: string;
@@ -48,6 +46,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
   const [modalOpened, setModalOpened] = useState(false);
   const [editingItem, setEditingItem] = useState<FactionItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [nameGenOpened, setNameGenOpened] = useState(false);
 
   const [name, setName] = useState("");
   const [leaderId, setLeaderId] = useState<string | null>(null);
@@ -311,20 +310,35 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
         centered
         radius="sm"
         styles={{
-          header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
-          body: { paddingTop: 14 },
+          content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
+          header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
+          body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
         }}
       >
         <Stack gap="xs">
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-            <TextInput
-              label="阵营名称"
-              placeholder="请输入"
-              size="xs"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
+            <Box>
+              <Flex justify="space-between" align="center" mb={2}>
+                <Text fz={12} fw={500} c="#475569">阵营名称 *</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="cyan"
+                  leftSection={<FiZap size={10} />}
+                  onClick={() => setNameGenOpened(true)}
+                  styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
+                >
+                  智能起名
+                </Button>
+              </Flex>
+              <TextInput
+                placeholder="请输入"
+                size="xs"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </Box>
             <Select
               label="规模与等级"
               size="xs"
@@ -354,7 +368,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
             <Select
-              label="最高领袖 (从角色库选择)"
+              label="最高领袖"
               placeholder="请输入或选择角色"
               size="xs"
               value={leaderId || ""}
@@ -368,7 +382,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
               searchable
             />
             <Select
-              label="控制区域 (从地点库选择)"
+              label="控制区域"
               placeholder="请输入或选择地点"
               size="xs"
               value={locationId || ""}
@@ -384,7 +398,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
           </SimpleGrid>
 
           <TextInput
-            label="势力宗旨 / 门规信条"
+            label="势力宗旨"
             placeholder="请输入"
             size="xs"
             value={doctrine}
@@ -392,7 +406,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
           />
 
           <Textarea
-            label="详细背景与历史渊源"
+            label="背景设定"
             placeholder="请输入"
             size="xs"
             value={description}
@@ -401,7 +415,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
             autosize
           />
 
-          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
+          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
             <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
               取消
             </Button>
@@ -411,6 +425,13 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
           </Flex>
         </Stack>
       </Modal>
+
+      <NameGeneratorModal
+        opened={nameGenOpened}
+        onClose={() => setNameGenOpened(false)}
+        onSelectName={(val) => setName(val)}
+        type="faction"
+      />
     </Box>
   );
 }

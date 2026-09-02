@@ -207,7 +207,7 @@ export default function DetailPanel({
           <Text fz={14} fw={700} c="#1e293b" mb={8}>
             📖 核心梗概与故事设定
           </Text>
-          <Text fz={13} c="#475569" lh={1.7}>
+          <Text fz={13} c="#475569" lh={1.7} style={{ whiteSpace: "pre-wrap" }}>
             {work?.description || "暂未填写小说核心大纲简介。您可以点击右上方 AI 辅助快速推演生成完整主线与分卷体系。"}
           </Text>
 

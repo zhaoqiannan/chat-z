@@ -162,7 +162,19 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       updatedAt: new Date(),
     };
 
-    const inserted = await db.insert(chapters).values(newChapterData).returning().get();
+    let inserted: any = null;
+    try {
+      inserted = await db.insert(chapters).values(newChapterData).returning().get();
+    } catch (insertErr: any) {
+      if (insertErr?.message?.includes("no column named subtitle") || insertErr?.message?.includes("subtitle")) {
+        try {
+          await env.DB.prepare("ALTER TABLE chapters ADD COLUMN subtitle TEXT;").run();
+        } catch (_) {}
+        inserted = await db.insert(chapters).values(newChapterData).returning().get();
+      } else {
+        throw insertErr;
+      }
+    }
 
     // 重新统计作品总字数与章节总数
     if (!isVol) {
