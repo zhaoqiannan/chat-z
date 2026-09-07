@@ -163,7 +163,7 @@ export default function PanelMaterialDetail({
                 <Text fz={12} fw={700} c="#0284c7">AI 智能摘要</Text>
               </Group>
               <Tooltip label="调用 AI 重新解析与提炼" position="top">
-                <ActionIcon size="xs" variant="subtle" color="cyan" loading={aiExtracting} onClick={handleAiAutoSummary}>
+                <ActionIcon size="xs" variant="subtle" loading={aiExtracting} onClick={handleAiAutoSummary}>
                   <FiRefreshCw size={11} />
                 </ActionIcon>
               </Tooltip>
@@ -235,7 +235,7 @@ export default function PanelMaterialDetail({
               </Group>
               <Switch
                 size="xs"
-                color="cyan"
+
                 checked={includeInAi}
                 onChange={(e) => setIncludeInAi(e.currentTarget.checked)}
               />
@@ -248,7 +248,7 @@ export default function PanelMaterialDetail({
         <Button size="xs" variant="default" onClick={onClose}>
           关闭
         </Button>
-        <Button size="xs" color="cyan" leftSection={<FiSave size={12} />} loading={saving} onClick={handleSave}>
+        <Button size="xs" leftSection={<FiSave size={12} />} loading={saving} onClick={handleSave}>
           保存更改
         </Button>
       </Flex>

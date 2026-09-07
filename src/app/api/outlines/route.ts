@@ -49,7 +49,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无权访问该作品的大纲" }, { status: 403 });
     }
 
-    const list = await db.select().from(outlines).where(eq(outlines.workId, workId)).orderBy(asc(outlines.orderIndex), asc(outlines.createdAt));
+    const list = await db.select().from(outlines).where(eq(outlines.workId, workId)).orderBy(asc(outlines.orderIndex), asc(outlines.createdAt)).all();
 
     const nodeMap: Record<string, any> = {};
     const tree: any[] = [];
@@ -68,7 +68,8 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     return NextResponse.json({
       success: true,
-      result: tree,
+      result: list,
+      tree,
       flatList: list,
       message: "获取大纲成功",
     });
@@ -173,12 +174,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const newNodeId = crypto.randomUUID();
     const finalContent = content?.trim() || eventDescription?.trim() || "";
     const finalGoal = goal?.trim() || title.trim();
+    const effectiveParent = parentId || volumeId || null;
 
     const insertPayload = {
       id: newNodeId,
       workId,
-      parentId: parentId || null,
-      volumeId: volumeId || null,
+      parentId: effectiveParent,
+      volumeId: effectiveParent,
       type: type || "scene",
       pointType: pointType || null,
       title: title.trim(),
@@ -272,8 +274,11 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (orderIndex !== undefined) updatePayload.orderIndex = orderIndex;
     if (type !== undefined) updatePayload.type = type;
     if (pointType !== undefined) updatePayload.pointType = pointType;
-    if (parentId !== undefined) updatePayload.parentId = parentId || null;
-    if (volumeId !== undefined) updatePayload.volumeId = volumeId || null;
+    if (parentId !== undefined || volumeId !== undefined) {
+      const targetParent = parentId !== undefined ? (parentId || null) : (volumeId || null);
+      updatePayload.parentId = targetParent;
+      updatePayload.volumeId = targetParent;
+    }
     if (linkedChapters !== undefined) {
       updatePayload.linkedChapters = parseLinkedChapters(linkedChapters);
     }

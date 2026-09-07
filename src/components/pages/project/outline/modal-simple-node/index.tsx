@@ -149,7 +149,7 @@ export default function ModalSimpleNode({
           <Button variant="default" size="xs" onClick={onClose}>
             取消
           </Button>
-          <Button color="cyan" size="xs" loading={loading} onClick={handleSave}>
+          <Button size="xs" loading={loading} onClick={handleSave}>
             保存情节点
           </Button>
         </Flex>

@@ -136,7 +136,7 @@ export default function DrawerMemoryFragments({
             </Text>
             <Button
               size="xs"
-              color="cyan"
+
               leftSection={<FiPlus size={12} />}
               onClick={() => setCreateModalOpened(true)}
             >
@@ -216,7 +216,7 @@ export default function DrawerMemoryFragments({
                           <Button
                             size="compact-xs"
                             variant="subtle"
-                            color="cyan"
+
                             leftSection={<FiCornerDownLeft size={10} />}
                             onClick={() => {
                               onInsertToContent(frag.content);
@@ -275,7 +275,7 @@ export default function DrawerMemoryFragments({
           />
           <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
             <Button variant="default" size="xs" onClick={() => setCreateModalOpened(false)}>取消</Button>
-            <Button color="cyan" size="xs" loading={saving} onClick={handleCreateSubmit}>确认保存碎片</Button>
+            <Button size="xs" loading={saving} onClick={handleCreateSubmit}>确认保存碎片</Button>
           </Flex>
         </Stack>
       </Modal>

@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, SimpleGrid, Paper, TextInput, Textarea, Select, SegmentedControl, LoadingOverlay, Group, ScrollArea, Tabs, Card } from "@mantine/core";
+import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, SimpleGrid, Paper, TextInput, Textarea, Select, LoadingOverlay, Group, ScrollArea, Tabs, Card } from "@mantine/core";
 import { FiZap, FiPlus, FiArrowRight, FiCheck, FiCornerDownRight, FiBookmark, FiCopy, FiTrash2, FiClock, FiLayers } from "react-icons/fi";
 import { OutlineNode, PlotDeductionPath, PlotDeductionRecord, deductPlot, getPlotDeductions, savePlotDeduction, deletePlotDeduction, batchCreateOutlineNodes } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
@@ -290,42 +290,42 @@ export default function DrawerPlotDeduction({
               </Box>
 
               <Box>
-                <Text fz={11.5} fw={600} c="#64748b" mb={3}>转折演进偏好</Text>
-                <SegmentedControl
+                <Select
+                  label="转折演进偏好"
                   size="xs"
                   value={pacePreference}
-                  onChange={setPacePreference}
+                  onChange={(v) => v && setPacePreference(v)}
                   data={[
-                    { label: "稳健因果", value: "standard" },
-                    { label: "惊天逆转", value: "twist" },
-                    { label: "极限突破", value: "dark" },
+                    { label: "稳健因果 (层层递进)", value: "standard" },
+                    { label: "惊天逆转 (伏笔爆发)", value: "twist" },
+                    { label: "极限突破 (绝境逢生)", value: "dark" },
                   ]}
                 />
               </Box>
 
               <Box>
-                <Flex justify="space-between" align="center">
-                  <Box>
-                    <Text fz={11.5} fw={600} c="#64748b" mb={3}>过渡步数</Text>
-                    <SegmentedControl
+                <Flex justify="space-between" align="flex-end" gap="xs">
+                  <Box style={{ flex: 1 }}>
+                    <Select
+                      label="过渡步数"
                       size="xs"
                       value={String(stepCount)}
-                      onChange={(v) => setStepCount(Number(v))}
+                      onChange={(v) => v && setStepCount(Number(v))}
                       data={[
-                        { label: "2步", value: "2" },
-                        { label: "3步", value: "3" },
-                        { label: "4步", value: "4" },
-                        { label: "5步", value: "5" },
+                        { label: "2 步过渡转折", value: "2" },
+                        { label: "3 步过渡转折", value: "3" },
+                        { label: "4 步过渡转折", value: "4" },
+                        { label: "5 步过渡转折", value: "5" },
                       ]}
                     />
                   </Box>
                   <Button
                     size="xs"
-                    color="cyan"
+
                     leftSection={<FiZap size={13} />}
                     loading={loading}
                     onClick={handleStartDeduction}
-                    style={{ alignSelf: "flex-end", height: 28 }}
+                    style={{ height: 30 }}
                   >
                     开始智能推演
                   </Button>
@@ -363,7 +363,7 @@ export default function DrawerPlotDeduction({
                     >
                       <Flex justify="space-between" align="center" mb={6}>
                         <Group gap={6}>
-                          <Badge size="xs" color="cyan" variant="filled">
+                          <Badge size="xs" variant="filled">
                             {path.style}
                           </Badge>
                           <Text fz={13.5} fw={700} c="#1e293b">
@@ -425,7 +425,7 @@ export default function DrawerPlotDeduction({
 
                         <Button
                           size="compact-xs"
-                          color="cyan"
+
                           leftSection={<FiPlus size={10} />}
                           loading={adopting}
                           onClick={(e) => { e.stopPropagation(); handleAdoptPath(path); }}
@@ -448,7 +448,7 @@ export default function DrawerPlotDeduction({
                 <Paper key={hist.id} p="md" withBorder radius="sm" bg="#ffffff" style={{ borderColor: "#f1f5f9" }}>
                   <Flex justify="space-between" align="center" mb={6}>
                     <Group gap={8}>
-                      <Badge size="xs" color="cyan">{hist.pacePreference || "标准"}</Badge>
+                      <Badge size="xs" >{hist.pacePreference || "标准"}</Badge>
                       <Text fz={13} fw={700} c="#1e293b">
                         {hist.startPoint} <FiArrowRight size={11} style={{ verticalAlign: "middle" }} /> {hist.targetPoint}
                       </Text>
@@ -464,7 +464,7 @@ export default function DrawerPlotDeduction({
                         <Box key={p.id} p="8px" bg="#fafbfc" style={{ border: "1px solid #f1f5f9", borderRadius: 4 }}>
                           <Text fz={12} fw={700} c="#0284c7" mb={2}>{p.title}</Text>
                           <Text fz={11} c="#64748b" lineClamp={2} mb={4}>{p.summary}</Text>
-                          <Button size="compact-xs" variant="light" color="cyan" onClick={() => handleAdoptPath(p)}>
+                          <Button size="compact-xs" variant="light" onClick={() => handleAdoptPath(p)}>
                             重新采纳此方案
                           </Button>
                         </Box>

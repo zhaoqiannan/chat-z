@@ -1,12 +1,12 @@
-// 组件：灵感随笔与小说笔记系统（三栏工作台整合调度：分类导航、列表流与沉浸编辑区）
+// 组件：灵感随笔与小说笔记系统（左侧树状菜单 + Splitter 拖拽调节 + 沉浸式编辑区）
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
 import { NoteData, NoteListResult, getNoteList, createNote, updateNote, deleteNote } from "@/rest/project-extensions";
-import CategorySidebar from "./category-sidebar";
-import NotesList from "./notes-list";
+import NoteTreeMenu from "./note-tree-menu";
+import NoteSplitter from "./splitter";
 import NoteEditor from "./note-editor";
 
 export default function NotesPage() {
@@ -16,23 +16,21 @@ export default function NotesPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState<NoteData[]>([]);
-  const [counts, setCounts] = useState({ all: 0, idea: 0, plot: 0, character: 0, world: 0, research: 0, archived: 0 });
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [searchKey, setSearchKey] = useState("");
   const [activeNote, setActiveNote] = useState<NoteData | null>(null);
 
-  const fetchNotes = async (categoryToFetch = selectedCategory, keyword = searchKey) => {
+  // 侧边树状菜单宽度与折叠状态
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const fetchNotes = async () => {
     if (!workId) return;
     try {
       setLoading(true);
-      const res = await getNoteList(workId, categoryToFetch, keyword);
+      const res = await getNoteList(workId, "all", "");
       if (res && res.success && res.result) {
         const resultData = res.result as NoteListResult;
         const list = Array.isArray(resultData.list) ? resultData.list : [];
         setNotes(list);
-        if (resultData.counts) {
-          setCounts(resultData.counts);
-        }
 
         if (activeNote) {
           const matched = list.find((n) => n.id === activeNote.id);
@@ -44,26 +42,25 @@ export default function NotesPage() {
         }
       }
     } catch (e) {
-      console.error(e);
+      console.error("获取笔记失败:", e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchNotes(selectedCategory, searchKey);
-  }, [workId, selectedCategory]);
+    fetchNotes();
+  }, [workId]);
 
-  const handleCreateNewNote = async () => {
+  const handleCreateNewNote = async (category: string = "idea") => {
     if (!workId) return;
     try {
       setSaving(true);
-      const newCategory = selectedCategory !== "all" && selectedCategory !== "archived" ? selectedCategory : "idea";
       const res = await createNote({
         workId: Number(workId),
-        title: "未命名灵感笔记",
+        title: "未命名灵感随笔",
         content: "",
-        category: newCategory,
+        category: category || "idea",
       });
 
       if (res && res.success && res.result) {
@@ -121,35 +118,54 @@ export default function NotesPage() {
         height: "calc(100vh - 64px)",
         backgroundColor: "#ffffff",
         overflow: "hidden",
+        position: "relative",
       }}
     >
       <LoadingOverlay visible={loading && notes.length === 0} />
 
-      <CategorySidebar
-        selectedCategory={selectedCategory}
-        counts={counts}
-        onSelectCategory={setSelectedCategory}
-        onCreateNewNote={handleCreateNewNote}
+      {/* 1. 左侧树状菜单 */}
+      {!sidebarCollapsed && (
+        <Box
+          style={{
+            width: sidebarWidth,
+            minWidth: sidebarWidth,
+            maxWidth: sidebarWidth,
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+            flexShrink: 0,
+            overflow: "hidden",
+          }}
+        >
+          <NoteTreeMenu
+            notes={notes}
+            activeNoteId={activeNote?.id || null}
+            loading={loading}
+            onSelectNote={(n) => setActiveNote(n)}
+            onCreateNewNote={handleCreateNewNote}
+          />
+        </Box>
+      )}
+
+      {/* 2. Splitter 拖拽调节器 */}
+      <NoteSplitter
+        width={sidebarWidth}
+        onResize={setSidebarWidth}
+        minWidth={220}
+        maxWidth={480}
+        defaultWidth={280}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      <NotesList
-        category={selectedCategory}
-        notes={notes}
-        activeNoteId={activeNote?.id || null}
-        searchKey={searchKey}
-        loading={loading}
-        onSearchChange={(val) => {
-          setSearchKey(val);
-          fetchNotes(selectedCategory, val);
-        }}
-        onSelectNote={(n) => setActiveNote(n)}
-      />
-
+      {/* 3. 右侧沉浸式编辑与多维实体转换区 */}
       <NoteEditor
         workId={workId}
         activeNote={activeNote}
         saving={saving}
-        onUpdateSuccess={() => fetchNotes()}
+        categorySidebarCollapsed={sidebarCollapsed}
+        onToggleCategorySidebar={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onUpdateSuccess={fetchNotes}
         onTogglePin={handleTogglePin}
         onToggleArchive={handleToggleArchive}
         onDelete={handleDelete}

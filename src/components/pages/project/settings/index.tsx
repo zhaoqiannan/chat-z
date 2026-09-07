@@ -127,53 +127,53 @@ export default function ProjectSettingsPage() {
   const progressPercent = targetWords > 0 ? Math.min(100, Math.round((currentWords / targetWords) * 100)) : 0;
 
   return (
-    <Box p="24px 36px 80px" style={{ maxWidth: 960, margin: "0 auto", minHeight: "calc(100vh - 64px)" }}>
+    <Box p="16px 20px 48px" style={{ maxWidth: 880, margin: "0 auto", minHeight: "calc(100vh - 64px)" }}>
       <LoadingOverlay visible={loading} />
 
-      <Flex align="center" gap={10} mb={24}>
-        <FiSettings size={22} color="#00c9ff" />
-        <Text fw={700} fz={20} c="#1e293b">
+      <Flex align="center" gap={8} mb={14}>
+        <FiSettings size={18} color="#00c9ff" />
+        <Text fw={700} fz={16} c="#1e293b">
           项目设置与数据导出
         </Text>
       </Flex>
 
-      <Stack gap="24px">
+      <Stack gap="12px">
         {/* 1. 创作字数与进度目标看板 */}
-        <Paper p="20px 24px" withBorder radius="md" bg="#ffffff">
-          <Text fw={700} fz={15} c="#1e293b" mb={14}>
+        <Paper p="14px 18px" withBorder radius="sm" bg="#ffffff">
+          <Text fw={700} fz={13} c="#1e293b" mb={10}>
             📊 创作字数与进度看板
           </Text>
 
-          <Flex align="center" justify="space-between" gap={20} wrap="wrap">
-            <Flex align="center" gap={16}>
+          <Flex align="center" justify="space-between" gap={16} wrap="wrap">
+            <Flex align="center" gap={12}>
               <RingProgress
-                size={80}
+                size={60}
                 roundCaps
-                thickness={8}
+                thickness={6}
                 sections={[{ value: progressPercent, color: "cyan" }]}
                 label={
-                  <Text ta="center" fz={12} fw={700} c="cyan">
+                  <Text ta="center" fz={11} fw={700} c="cyan">
                     {progressPercent}%
                   </Text>
                 }
               />
               <div>
-                <Text fz={12} c="#64748b">当前全书实际总字数</Text>
-                <Text fz={22} fw={800} c="#00c9ff">
-                  {currentWords.toLocaleString()} <span style={{ fontSize: 13, fontWeight: 500 }}>字</span>
+                <Text fz={11} c="#64748b">全书实际总字数</Text>
+                <Text fz={18} fw={800} c="#00c9ff" lh={1.2}>
+                  {currentWords.toLocaleString()} <span style={{ fontSize: 12, fontWeight: 500 }}>字</span>
                 </Text>
-                <Text fz={12} c="#94a3b8">目标总字数：{(targetWords || 0).toLocaleString()} 字</Text>
+                <Text fz={11} c="#94a3b8">目标：{(targetWords || 0).toLocaleString()} 字</Text>
               </div>
             </Flex>
 
-            <Flex gap={20}>
-              <Paper p="10px 16px" bg="#f8fafc" withBorder radius="md">
-                <Text fz={11} c="#94a3b8">全书总章节数</Text>
-                <Text fz={18} fw={700} c="#334155">{workData?.chapterCount || 0} 章</Text>
+            <Flex gap={10}>
+              <Paper p="6px 12px" bg="#f8fafc" withBorder radius="sm">
+                <Text fz={10} c="#94a3b8">全书总章节数</Text>
+                <Text fz={14} fw={700} c="#334155">{workData?.chapterCount || 0} 章</Text>
               </Paper>
-              <Paper p="10px 16px" bg="#f8fafc" withBorder radius="md">
-                <Text fz={11} c="#94a3b8">作品状态</Text>
-                <Badge color={status === "completed" ? "green" : "yellow"} variant="light" mt={4}>
+              <Paper p="6px 12px" bg="#f8fafc" withBorder radius="sm">
+                <Text fz={10} c="#94a3b8">作品状态</Text>
+                <Badge size="sm" color={status === "completed" ? "green" : "yellow"} variant="light" mt={2}>
                   {status === "completed" ? "已完结" : status === "revising" ? "连载大修中" : "正在连载创作"}
                 </Badge>
               </Paper>
@@ -182,14 +182,15 @@ export default function ProjectSettingsPage() {
         </Paper>
 
         {/* 2. 基本信息设置 */}
-        <Paper p="20px 24px" withBorder radius="md" bg="#ffffff">
-          <Text fw={700} fz={15} c="#1e293b" mb={16}>
+        <Paper p="14px 18px" withBorder radius="sm" bg="#ffffff">
+          <Text fw={700} fz={13} c="#1e293b" mb={12}>
             📝 小说基本信息与目标
           </Text>
 
-          <Stack gap="16px">
-            <SimpleGrid cols={3}>
+          <Stack gap="10px">
+            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="10px">
               <TextInput
+                size="xs"
                 label="作品书名"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -197,6 +198,7 @@ export default function ProjectSettingsPage() {
               />
 
               <TextInput
+                size="xs"
                 label="题材类型 / 核心标签"
                 placeholder="例如：科幻都市 / 玄幻修仙"
                 value={tag}
@@ -204,6 +206,7 @@ export default function ProjectSettingsPage() {
               />
 
               <TextInput
+                size="xs"
                 label="目标总字数设定"
                 type="number"
                 value={targetWords}
@@ -212,6 +215,7 @@ export default function ProjectSettingsPage() {
             </SimpleGrid>
 
             <Select
+              size="xs"
               label="连载/创作阶段"
               value={status}
               onChange={(v) => setStatus(v || "draft")}
@@ -220,21 +224,23 @@ export default function ProjectSettingsPage() {
                 { value: "revising", label: "✍️ 精修打磨中" },
                 { value: "completed", label: "🎉 全本已完结" },
               ]}
-              style={{ maxWidth: 300 }}
+              style={{ maxWidth: 240 }}
             />
 
             <Textarea
+              size="xs"
               label="核心梗概与一句话主旨介绍"
               placeholder="记录故事的起点、主线金手指与终极目标..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              minRows={4}
+              minRows={3}
             />
 
-            <Flex justify="flex-end" mt={10}>
+            <Flex justify="flex-end" mt={4}>
               <Button
-                color="cyan"
-                leftSection={<FiSave size={14} />}
+                size="xs"
+
+                leftSection={<FiSave size={13} />}
                 loading={saveLoading}
                 onClick={handleSaveSettings}
               >
@@ -245,37 +251,40 @@ export default function ProjectSettingsPage() {
         </Paper>
 
         {/* 3. 全书一键导出备份 */}
-        <Paper p="20px 24px" withBorder radius="md" bg="#ffffff">
-          <Text fw={700} fz={15} c="#1e293b" mb={8}>
+        <Paper p="14px 18px" withBorder radius="sm" bg="#ffffff">
+          <Text fw={700} fz={13} c="#1e293b" mb={4}>
             📦 全书作品数据导出与备份
           </Text>
-          <Text fz={13} c="#64748b" mb={16}>
+          <Text fz={12} c="#64748b" mb={10}>
             一键将全书正文、卷目录、大纲及世界观设定汇总导出为本地文件：
           </Text>
 
-          <Group gap={14}>
+          <Group gap={8}>
             <Button
+              size="xs"
               variant="light"
               color="teal"
-              leftSection={<FiFileText size={14} />}
+              leftSection={<FiFileText size={13} />}
               onClick={() => handleExport("export_txt")}
             >
               导出为 TXT 纯文本全书
             </Button>
 
             <Button
+              size="xs"
               variant="light"
               color="indigo"
-              leftSection={<FiBookOpen size={14} />}
+              leftSection={<FiBookOpen size={13} />}
               onClick={() => handleExport("export_md")}
             >
               导出为 Markdown 格式稿件
             </Button>
 
             <Button
+              size="xs"
               variant="light"
-              color="cyan"
-              leftSection={<FiCode size={14} />}
+
+              leftSection={<FiCode size={13} />}
               onClick={() => handleExport("export_json")}
             >
               导出全量 JSON 备份 (含世界观与大纲)
@@ -284,20 +293,24 @@ export default function ProjectSettingsPage() {
         </Paper>
 
         {/* 4. 危险区域 */}
-        <Paper p="20px 24px" withBorder radius="md" bg="#fff1f2" style={{ borderColor: "#fecdd3" }}>
-          <Flex align="center" gap={8} mb={6} c="#991b1b">
-            <FiAlertTriangle size={18} />
-            <Text fw={700} fz={15}>
-              危险操作区域
-            </Text>
-          </Flex>
-          <Text fz={13} c="#7f1d1d" mb={14}>
-            删除作品将会永久销毁此小说的所有章节正文、大纲节点、世界观知识库及时间线数据，此操作无法撤销。
-          </Text>
+        <Paper p="12px 18px" withBorder radius="sm" bg="#fff1f2" style={{ borderColor: "#fecdd3" }}>
+          <Flex align="center" justify="space-between" wrap="wrap" gap={10}>
+            <div>
+              <Flex align="center" gap={6} mb={2} c="#991b1b">
+                <FiAlertTriangle size={15} />
+                <Text fw={700} fz={13}>
+                  危险操作区域
+                </Text>
+              </Flex>
+              <Text fz={11} c="#7f1d1d">
+                删除作品将会永久销毁此小说的所有章节正文、大纲节点、世界观知识库及时间线数据，此操作无法撤销。
+              </Text>
+            </div>
 
-          <Button color="red" variant="filled" leftSection={<FiTrash2 size={14} />} onClick={handleDeleteProject}>
-            彻底删除该作品
-          </Button>
+            <Button size="xs" color="red" variant="filled" leftSection={<FiTrash2 size={13} />} onClick={handleDeleteProject}>
+              彻底删除该作品
+            </Button>
+          </Flex>
         </Paper>
       </Stack>
     </Box>

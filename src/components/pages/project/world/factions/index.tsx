@@ -1,6 +1,9 @@
+// 组件：阵营势力设定管理（表格视图，清晰呈现阵营规模、立场、领袖、据点、宗旨与描述）
+"use client";
+
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Group, Card, Paper } from "@mantine/core";
-import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp, FiZap } from "react-icons/fi";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Group, Paper, Table } from "@mantine/core";
+import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp } from "react-icons/fi";
 import { FactionItem, getFactionList, createFaction, updateFaction, deleteFaction, getCharacterList, CharacterItem, getLocationList, LocationRecord } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
 
@@ -9,17 +12,13 @@ interface FactionsTabProps {
 }
 
 const SCALE_OPTIONS = [
-  { value: "p0", label: "P0" },
-  { value: "p1", label: "P1" },
-  { value: "p2", label: "P2" },
-  { value: "p3", label: "P3" },
-  { value: "p4", label: "P4" },
-  { value: "p5", label: "P5" },
-  { value: "p6", label: "P6" },
-  { value: "p7", label: "P7" },
-  { value: "p8", label: "P8" },
-  { value: "p9", label: "P9" },
-  { value: "p10", label: "P10" },
+  { value: "p0", label: "P0 - 顶级" },
+  { value: "p1", label: "P1 - 巨头" },
+  { value: "p2", label: "P2 - 一流" },
+  { value: "p3", label: "P3 - 中坚" },
+  { value: "p4", label: "P4 - 区域豪强" },
+  { value: "p5", label: "P5 - 地方帮派" },
+  { value: "p6", label: "P6 - 小型散门" },
 ];
 
 const ALIGNMENT_OPTIONS = [
@@ -79,7 +78,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
         setLocations(locRes.result);
       }
     } catch (e) {
-      console.error(e);
+      console.error("获取阵营失败:", e);
     } finally {
       setLoading(false);
     }
@@ -107,11 +106,13 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
   const handleOpenEdit = (item: FactionItem) => {
     setEditingItem(item);
     setName(item.name || "");
-    setLeaderId(item.leaderId ? String(item.leaderId) : null);
+    const foundChar = characters.find((c) => c.name === item.leader);
+    setLeaderId(foundChar ? String(foundChar.id) : null);
     setLeaderName(item.leader || "");
     setScale(item.scale || "p3");
     setAlignment(item.alignment || "neutral");
-    setLocationId(item.locationId ? String(item.locationId) : null);
+    const foundLoc = locations.find((l) => l.name === item.controlledLocations);
+    setLocationId(foundLoc ? String(foundLoc.id) : null);
     setControlledLocations(item.controlledLocations || "");
     setTrend(item.trend || "蒸蒸日上");
     setDoctrine(item.doctrine || "");
@@ -127,21 +128,19 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
     try {
       setFormLoading(true);
-      const selectedLeader = characters.find((c) => String(c.id) === leaderId);
-      const finalLeader = selectedLeader ? selectedLeader.name : leaderName.trim();
+      const selChar = characters.find((c) => String(c.id) === leaderId);
+      const finalLeader = selChar ? selChar.name : leaderName.trim();
 
-      const selectedLoc = locations.find((l) => String(l.id) === locationId);
-      const finalLoc = selectedLoc ? selectedLoc.name : controlledLocations.trim();
+      const selLoc = locations.find((l) => String(l.id) === locationId);
+      const finalLoc = selLoc ? selLoc.name : controlledLocations.trim();
 
       const payload = {
         name: name.trim(),
         leader: finalLeader || undefined,
-        leaderId: leaderId ? Number(leaderId) : undefined,
-        scale,
-        alignment,
-        locationId: locationId ? Number(locationId) : undefined,
+        scale: scale || undefined,
+        alignment: alignment || undefined,
         controlledLocations: finalLoc || undefined,
-        trend: trend?.trim() || undefined,
+        trend: trend || undefined,
         doctrine: doctrine.trim() || undefined,
         description: description.trim() || undefined,
       };
@@ -163,7 +162,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该阵营势力吗？")) {
+    if (confirm("确定要删除该阵营势力吗？此操作不可撤销。")) {
       try {
         await deleteFaction(id);
         setList((prev) => prev.filter((item) => item.id !== id));
@@ -189,7 +188,9 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
     return (
       item.name.toLowerCase().includes(q) ||
       (item.leader && item.leader.toLowerCase().includes(q)) ||
-      (item.doctrine && item.doctrine.toLowerCase().includes(q))
+      (item.controlledLocations && item.controlledLocations.toLowerCase().includes(q)) ||
+      (item.doctrine && item.doctrine.toLowerCase().includes(q)) ||
+      (item.description && item.description.toLowerCase().includes(q))
     );
   });
 
@@ -204,104 +205,136 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
   ];
 
   return (
-    <Box p="md" pos="relative" style={{ minHeight: 400 }}>
+    <Box pos="relative" style={{ minHeight: 400 }}>
       <LoadingOverlay visible={loading} />
 
       <Flex justify="space-between" align="center" mb="md" gap="sm">
         <TextInput
-          placeholder="请输入关键词搜索阵营..."
+          placeholder="搜索势力名称、领袖、据点、宗旨或背景..."
           size="xs"
           leftSection={<FiSearch size={13} color="#94a3b8" />}
           value={searchKey}
           onChange={(e) => setSearchKey(e.target.value)}
-          style={{ width: 260 }}
+          style={{ width: 320 }}
         />
-        <Button size="xs" color="cyan" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
+        <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
           新增势力阵营
         </Button>
       </Flex>
 
-      {filteredList.length === 0 && !loading && (
-        <Paper p="xl" withBorder radius="sm" ta="center" c="#94a3b8">
+      {filteredList.length === 0 && !loading ? (
+        <Paper p="xl" withBorder radius="sm" ta="center" c="#94a3b8" bg="#ffffff">
           <FiShield size={36} strokeWidth={1.2} style={{ marginBottom: 8 }} />
           <Text fz={13}>暂无阵营势力，点击右上角「新增势力阵营」开始构建</Text>
         </Paper>
+      ) : (
+        <Paper withBorder radius="sm" bg="#ffffff" style={{ overflow: "hidden", borderColor: "#e2e8f0" }}>
+          <Table verticalSpacing="sm" horizontalSpacing="md" highlightOnHover striped>
+            <Table.Thead bg="#f8fafc">
+              <Table.Tr>
+                <Table.Th style={{ width: "22%", minWidth: 180, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  阵营势力名称
+                </Table.Th>
+                <Table.Th style={{ width: "13%", minWidth: 100, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  领袖掌舵人
+                </Table.Th>
+                <Table.Th style={{ width: "14%", minWidth: 110, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  核心据点 / 区域
+                </Table.Th>
+                <Table.Th style={{ width: "11%", minWidth: 90, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  发展态势
+                </Table.Th>
+                <Table.Th style={{ width: "30%", minWidth: 200, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  宗旨信条与核心设定
+                </Table.Th>
+                <Table.Th style={{ width: "10%", minWidth: 90, textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  操作
+                </Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {filteredList.map((item) => {
+                return (
+                  <Table.Tr key={item.id} style={{ transition: "background-color 0.15s ease" }}>
+                    <Table.Td>
+                      <Group gap={8} wrap="nowrap">
+                        <Box style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: "#e0f2fe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <FiShield size={13} color="#0284c7" />
+                        </Box>
+                        <Box>
+                          <Text fz={13.5} fw={700} c="#0f172a" style={{ wordBreak: "break-word" }}>
+                            {item.name}
+                          </Text>
+                          <Group gap={4} mt={2}>
+                            <Badge size="xs" variant="outline">
+                              {getScaleLabel(item.scale)}
+                            </Badge>
+                            {getAlignmentBadge(item.alignment)}
+                          </Group>
+                        </Box>
+                      </Group>
+                    </Table.Td>
+
+                    <Table.Td>
+                      {item.leader ? (
+                        <Badge size="sm" variant="outline" color="blue" leftSection={<FiUser size={10} />} styles={{ root: { maxWidth: 120 } }}>
+                          {item.leader}
+                        </Badge>
+                      ) : (
+                        <Text fz={11.5} c="#94a3b8">暂无领袖</Text>
+                      )}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {item.controlledLocations ? (
+                        <Badge size="sm" variant="outline" color="teal" leftSection={<FiMapPin size={10} />} styles={{ root: { maxWidth: 120 } }}>
+                          {item.controlledLocations}
+                        </Badge>
+                      ) : (
+                        <Text fz={11.5} c="#94a3b8">未知据点</Text>
+                      )}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {item.trend ? (
+                        <Badge size="xs" variant="light" color={item.trend === "蒸蒸日上" ? "teal" : item.trend === "危机四伏" || item.trend === "日薄西山" ? "red" : "gray"} leftSection={<FiTrendingUp size={9} />}>
+                          {item.trend}
+                        </Badge>
+                      ) : (
+                        <Text fz={11.5} c="#94a3b8">—</Text>
+                      )}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {item.doctrine && (
+                        <Text fz={12} fw={600} c="#0284c7" mb={2} lineClamp={1}>
+                          「{item.doctrine}」
+                        </Text>
+                      )}
+                      <Text fz={12} c="#475569" style={{ whiteSpace: "pre-wrap", lineHeight: 1.5, maxHeight: 80, overflowY: "auto" }}>
+                        {item.description || "暂无阵营背景描述"}
+                      </Text>
+                    </Table.Td>
+
+                    <Table.Td style={{ textAlign: "right" }}>
+                      <Group gap={4} justify="flex-end" wrap="nowrap">
+                        <ActionIcon size="sm" variant="subtle" onClick={() => handleOpenEdit(item)} title="编辑阵营">
+                          <FiEdit2 size={13} />
+                        </ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="red" onClick={(e) => handleDelete(item.id, e)} title="删除阵营">
+                          <FiTrash2 size={13} />
+                        </ActionIcon>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Paper>
       )}
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
-        {filteredList.map((item) => (
-          <Card
-            key={item.id}
-            p="12px 14px"
-            radius="sm"
-            withBorder
-            bg="#ffffff"
-            style={{
-              borderColor: "#f1f5f9",
-              display: "flex",
-              flexDirection: "column",
-              height: 156,
-              justifyContent: "space-between",
-            }}
-          >
-            <Box>
-              <Flex justify="space-between" align="flex-start" mb={4}>
-                <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
-                  <Text fz={14} fw={700} c="#0f172a" truncate="end">
-                    {item.name}
-                  </Text>
-                  <Badge size="xs" color="cyan" variant="outline">
-                    {getScaleLabel(item.scale)}
-                  </Badge>
-                  {getAlignmentBadge(item.alignment)}
-                </Group>
-                <Group gap={2}>
-                  <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => handleOpenEdit(item)}>
-                    <FiEdit2 size={12} />
-                  </ActionIcon>
-                  <ActionIcon size="xs" variant="subtle" color="red" onClick={(e) => handleDelete(item.id, e)}>
-                    <FiTrash2 size={12} />
-                  </ActionIcon>
-                </Group>
-              </Flex>
-
-              {item.doctrine && (
-                <Text fz={11.5} c="#0284c7" lineClamp={1} mb={4} style={{ fontStyle: "italic" }}>
-                  「{item.doctrine}」
-                </Text>
-              )}
-
-              <Text fz={11.5} c="#64748b" lineClamp={2} style={{ lineHeight: 1.5, marginBottom: 6 }}>
-                {item.description || "暂无阵营背景描述"}
-              </Text>
-            </Box>
-
-            <Flex justify="space-between" align="center" pt={4} style={{ borderTop: "1px solid #f8fafc" }}>
-              <Group gap={8} fz={11} c="#64748b">
-                {item.leader && (
-                  <Group gap={3}>
-                    <FiUser size={10} color="#94a3b8" />
-                    <Text fz={10.5}>{item.leader}</Text>
-                  </Group>
-                )}
-                {item.controlledLocations && (
-                  <Group gap={3}>
-                    <FiMapPin size={10} color="#94a3b8" />
-                    <Text fz={10.5}>{item.controlledLocations}</Text>
-                  </Group>
-                )}
-              </Group>
-
-              {item.trend && (
-                <Badge size="xs" variant="light" color="teal" leftSection={<FiTrendingUp size={9} />}>
-                  {item.trend}
-                </Badge>
-              )}
-            </Flex>
-          </Card>
-        ))}
-      </SimpleGrid>
-
+      {/* 新建/编辑弹窗 */}
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
@@ -317,38 +350,45 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
       >
         <Stack gap="xs">
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-            <Box>
-              <Flex justify="space-between" align="center" mb={2}>
-                <Text fz={12} fw={500} c="#475569">阵营名称 *</Text>
+            <TextInput
+              label="阵营名称"
+              placeholder="例如：万剑宗、暗夜议会"
+              size="xs"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              rightSection={
                 <Button
                   size="compact-xs"
                   variant="subtle"
-                  color="cyan"
-                  leftSection={<FiZap size={10} />}
+
                   onClick={() => setNameGenOpened(true)}
-                  styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
+                  style={{ fontSize: 10, height: 20 }}
                 >
-                  智能起名
+                  取名
                 </Button>
-              </Flex>
-              <TextInput
-                placeholder="请输入"
-                size="xs"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </Box>
+              }
+            />
             <Select
-              label="规模与等级"
+              label="领袖人物"
+              placeholder="选择领袖角色"
+              size="xs"
+              value={leaderId}
+              onChange={(val) => setLeaderId(val)}
+              data={charSelectData}
+              clearable
+              searchable
+            />
+          </SimpleGrid>
+
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
+            <Select
+              label="势力规模"
               size="xs"
               value={scale}
               onChange={(val) => setScale(val || "p3")}
               data={SCALE_OPTIONS}
             />
-          </SimpleGrid>
-
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
             <Select
               label="阵营立场"
               size="xs"
@@ -357,61 +397,40 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
               data={ALIGNMENT_OPTIONS}
             />
             <Select
-              label="发展走势"
+              label="发展态势"
               size="xs"
-              placeholder="请输入或选择"
               value={trend}
               onChange={(val) => setTrend(val || "蒸蒸日上")}
               data={TREND_PRESETS}
             />
           </SimpleGrid>
 
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-            <Select
-              label="最高领袖"
-              placeholder="请输入或选择角色"
-              size="xs"
-              value={leaderId || ""}
-              onChange={(val) => {
-                setLeaderId(val || null);
-                const found = characters.find((c) => String(c.id) === val);
-                if (found) setLeaderName(found.name);
-              }}
-              data={charSelectData}
-              clearable
-              searchable
-            />
-            <Select
-              label="控制区域"
-              placeholder="请输入或选择地点"
-              size="xs"
-              value={locationId || ""}
-              onChange={(val) => {
-                setLocationId(val || null);
-                const found = locations.find((l) => String(l.id) === val);
-                if (found) setControlledLocations(found.name);
-              }}
-              data={locSelectData}
-              clearable
-              searchable
-            />
-          </SimpleGrid>
+          <Select
+            label="所属据点 / 区域"
+            placeholder="选择主要据点"
+            size="xs"
+            value={locationId}
+            onChange={(val) => setLocationId(val)}
+            data={locSelectData}
+            clearable
+            searchable
+          />
 
           <TextInput
-            label="势力宗旨"
-            placeholder="请输入"
+            label="宗旨信条 / 门派祖训"
+            placeholder="例如：替天行道、弱肉强食、科技重塑一切"
             size="xs"
             value={doctrine}
             onChange={(e) => setDoctrine(e.target.value)}
           />
 
           <Textarea
-            label="背景设定"
-            placeholder="请输入"
+            label="阵营背景与核心设定"
+            placeholder="详细描述该势力的起源历史、组织架构、战力底蕴、核心利益诉求..."
             size="xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            minRows={3}
+            minRows={5}
             autosize
           />
 
@@ -419,7 +438,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
             <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
               取消
             </Button>
-            <Button color="cyan" size="xs" loading={formLoading} onClick={handleSave}>
+            <Button size="xs" loading={formLoading} onClick={handleSave}>
               保存阵营
             </Button>
           </Flex>
@@ -429,8 +448,8 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
       <NameGeneratorModal
         opened={nameGenOpened}
         onClose={() => setNameGenOpened(false)}
-        onSelectName={(val) => setName(val)}
         type="faction"
+        onSelectName={(genName) => setName(genName)}
       />
     </Box>
   );

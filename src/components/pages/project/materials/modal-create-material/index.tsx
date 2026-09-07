@@ -139,7 +139,7 @@ export default function ModalCreateMaterial({
 
         <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
           <Button variant="default" size="xs" onClick={onClose}>取消</Button>
-          <Button color="cyan" size="xs" loading={saving} onClick={handleSubmit}>确认创建</Button>
+          <Button size="xs" loading={saving} onClick={handleSubmit}>确认创建</Button>
         </Flex>
       </Stack>
     </Modal>

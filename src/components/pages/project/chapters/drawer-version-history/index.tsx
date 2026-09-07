@@ -187,7 +187,7 @@ export default function DrawerVersionHistory({
               </Button>
               <Button
                 size="xs"
-                color="cyan"
+
                 leftSection={<FiRotateCcw size={11} />}
                 onClick={() => {
                   if (selectedVersion) {

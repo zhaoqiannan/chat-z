@@ -8,6 +8,7 @@ import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterIte
 import TreePanel from "./tree-panel";
 import EditorArea from "./editor-area";
 import PanelAiAssistant from "./panel-ai-assistant";
+import Splitter from "./splitter";
 import ModalChapterDetail from "./modal-chapter-detail";
 import ModalCreateVolume from "./modal-create-volume";
 import ModalCreateChapter from "./modal-create-chapter";
@@ -22,6 +23,8 @@ export default function ChaptersPage() {
 
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
+  const [aiPanelWidth, setAiPanelWidth] = useState(360);
+  const [isResizingAiPanel, setIsResizingAiPanel] = useState(false);
   const [selectedTextForAi, setSelectedTextForAi] = useState("");
   const [insertTextPayload, setInsertTextPayload] = useState<{ text: string; timestamp: number } | null>(null);
 
@@ -180,12 +183,28 @@ export default function ChaptersPage() {
       />
 
       {activeChapter && (
+        <Splitter
+          width={aiPanelWidth}
+          onResize={(newWidth) => setAiPanelWidth(newWidth)}
+          minWidth={280}
+          maxWidth={720}
+          defaultWidth={360}
+          collapsed={aiPanelCollapsed}
+          onToggleCollapse={() => setAiPanelCollapsed(!aiPanelCollapsed)}
+          onDragStart={() => setIsResizingAiPanel(true)}
+          onDragEnd={() => setIsResizingAiPanel(false)}
+        />
+      )}
+
+      {activeChapter && (
         <PanelAiAssistant
           workId={workId}
           chapterId={activeChapter.id}
           currentContent={activeChapter.content || ""}
           selectedText={selectedTextForAi}
           collapsed={aiPanelCollapsed}
+          width={aiPanelWidth}
+          isResizing={isResizingAiPanel}
           onToggleCollapse={() => setAiPanelCollapsed(!aiPanelCollapsed)}
           onClearSelection={() => setSelectedTextForAi("")}
           onAcceptText={handleAcceptAiText}

@@ -183,7 +183,7 @@ export default function ModalChapterDetail({
             取消
           </Button>
           <Button
-            color="cyan"
+
             size="xs"
             leftSection={<FiSave size={12} />}
             loading={loading}

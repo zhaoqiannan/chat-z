@@ -131,7 +131,7 @@ export default function DrawerAiHistory({
       case "optimize":
         return <Badge color="teal" variant="light" size="xs">全文润色</Badge>;
       case "selection_ai":
-        return <Badge color="cyan" variant="light" size="xs">局部改写</Badge>;
+        return <Badge variant="light" size="xs">局部改写</Badge>;
       default:
         return <Badge color="gray" variant="light" size="xs">AI版本</Badge>;
     }
@@ -298,7 +298,7 @@ export default function DrawerAiHistory({
                 </Button>
 
                 <Button
-                  color="cyan"
+
                   size="sm"
                   leftSection={<FiCheck size={14} />}
                   onClick={() => handleApply(activeItem.content)}

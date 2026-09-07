@@ -171,7 +171,7 @@ export default function ModalCharacterForm({
               <Button
                 size="compact-xs"
                 variant="subtle"
-                color="cyan"
+
                 leftSection={<FiZap size={10} />}
                 onClick={() => setNameGenOpened(true)}
                 styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
@@ -363,7 +363,7 @@ export default function ModalCharacterForm({
         <Button variant="default" size="xs" onClick={onClose}>
           取消
         </Button>
-        <Button color="cyan" size="xs" loading={formLoading} onClick={handleSave}>
+        <Button size="xs" loading={formLoading} onClick={handleSave}>
           保存角色档案
         </Button>
       </Flex>

@@ -2,11 +2,14 @@
 "use client";
 
 import React from "react";
-import { Box, Text, Button, Badge, Stack } from "@mantine/core";
+import { Box, Flex, Text, Button, Badge, Stack, ActionIcon, Tooltip, Group } from "@mantine/core";
+import { FiSidebar, FiPlus } from "react-icons/fi";
 
 interface CategorySidebarProps {
   selectedCategory: string;
   counts: { all: number; idea: number; plot: number; character: number; world: number; research: number; archived: number };
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
   onSelectCategory: (cat: string) => void;
   onCreateNewNote: () => void;
 }
@@ -14,6 +17,8 @@ interface CategorySidebarProps {
 export default function CategorySidebar({
   selectedCategory,
   counts,
+  collapsed = false,
+  onToggleCollapse,
   onSelectCategory,
   onCreateNewNote,
 }: CategorySidebarProps) {
@@ -30,23 +35,43 @@ export default function CategorySidebar({
   return (
     <Box
       style={{
-        width: 200,
-        minWidth: 180,
-        borderRight: "1px solid #f1f5f9",
+        width: collapsed ? 0 : 200,
+        minWidth: collapsed ? 0 : 200,
+        maxWidth: collapsed ? 0 : 200,
+        borderRight: collapsed ? "none" : "1px solid #f1f5f9",
         display: "flex",
         flexDirection: "column",
-        padding: "16px 12px",
+        padding: collapsed ? 0 : "12px 10px",
         backgroundColor: "#fafbfc",
+        transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        overflow: "hidden",
+        opacity: collapsed ? 0 : 1,
+        pointerEvents: collapsed ? "none" : "auto",
+        flexShrink: 0,
+        zIndex: 10,
       }}
     >
+      <Flex justify="space-between" align="center" px={4} mb={10}>
+        <Text fz={13} fw={700} c="#334155">
+          分类导航
+        </Text>
+        {onToggleCollapse && (
+          <Tooltip label="收起分类栏" position="right" withArrow>
+            <ActionIcon variant="subtle" color="gray" size="sm" onClick={onToggleCollapse}>
+              <FiSidebar size={14} />
+            </ActionIcon>
+          </Tooltip>
+        )}
+      </Flex>
+
       <Button
         fullWidth
-        color="cyan"
-        size="sm"
-        leftSection={<Box style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#ffffff" }} />}
+
+        size="xs"
+        leftSection={<FiPlus size={13} />}
         onClick={onCreateNewNote}
-        mb="lg"
-        style={{ fontWeight: 600 }}
+        mb="md"
+        style={{ fontWeight: 600, height: 32 }}
       >
         新建笔记
       </Button>

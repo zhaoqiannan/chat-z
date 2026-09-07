@@ -237,7 +237,7 @@ export default function ProjectOverviewPage() {
             <Text fz={15} fw={700} c="#1e293b">
               备忘与灵感笔记
             </Text>
-            <ActionIcon variant="subtle" color="cyan" size="sm">
+            <ActionIcon variant="subtle"  size="sm">
               <FiPlusCircle size={16} color="#00c9ff" />
             </ActionIcon>
           </Flex>

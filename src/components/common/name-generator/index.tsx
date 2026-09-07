@@ -254,7 +254,7 @@ export default function NameGeneratorModal({
           </Text>
           <Button
             size="xs"
-            color="cyan"
+
             variant="light"
             leftSection={<FiRefreshCw size={12} />}
             loading={loading}

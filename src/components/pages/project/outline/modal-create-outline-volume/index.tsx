@@ -87,7 +87,7 @@ export default function ModalCreateOutlineVolume({
           <Button variant="default" size="xs" onClick={onClose}>
             取消
           </Button>
-          <Button color="cyan" size="xs" loading={loading} onClick={handleSave}>
+          <Button size="xs" loading={loading} onClick={handleSave}>
             确认创建
           </Button>
         </Flex>

@@ -88,7 +88,7 @@ export default function ModalAiAssistant({
       size="70vw"
       radius="md"
     >
-      <Tabs value={activeTab} onChange={setActiveTab} color="cyan">
+      <Tabs value={activeTab} onChange={setActiveTab} >
         <Tabs.List mb="md">
           <Tabs.Tab value="generation" leftSection={<FiCompass size={14} />}>
             大纲生成与规划

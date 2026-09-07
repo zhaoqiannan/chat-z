@@ -1,9 +1,9 @@
-// 组件：世界规则与设定管理（自由文本类型/领域、关联角色与关联阵营下拉选择、极简线条卡片流）
+// 组件：世界规则与设定管理（表格视图，核心突出规则内容机制，关联角色与阵营）
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Paper, Group, Card } from "@mantine/core";
-import { FiPlus, FiEdit2, FiTrash2, FiBookOpen, FiSearch, FiUser, FiShield } from "react-icons/fi";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Paper, Group, Table } from "@mantine/core";
+import { FiPlus, FiEdit2, FiTrash2, FiBookOpen, FiSearch, FiUser, FiShield, FiSliders } from "react-icons/fi";
 import { WorldRuleItem, getWorldRuleList, createWorldRule, updateWorldRule, deleteWorldRule, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
 
 interface RulesTabProps {
@@ -22,7 +22,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
   const [formLoading, setFormLoading] = useState(false);
 
   const [name, setName] = useState("");
-  const [category, setCategory] = useState("");
   const [characterName, setCharacterName] = useState("");
   const [factionName, setFactionName] = useState("");
   const [description, setDescription] = useState("");
@@ -47,7 +46,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
         setFactions(facRes.result);
       }
     } catch (e) {
-      console.error(e);
+      console.error("获取世界规则失败:", e);
     } finally {
       setLoading(false);
     }
@@ -60,7 +59,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
   const handleOpenCreate = () => {
     setEditingItem(null);
     setName("");
-    setCategory("");
     setCharacterName("");
     setFactionName("");
     setDescription("");
@@ -70,7 +68,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
   const handleOpenEdit = (item: WorldRuleItem) => {
     setEditingItem(item);
     setName(item.name || "");
-    setCategory(item.category || "");
     const charVal = item.characters || (item.extra?.characters as string) || "";
     const facVal = item.factions || (item.extra?.factions as string) || "";
     setCharacterName(charVal);
@@ -81,7 +78,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("请输入规则/设定名称");
+      alert("请输入规则名称");
       return;
     }
 
@@ -89,7 +86,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
       setFormLoading(true);
       const payload = {
         name: name.trim(),
-        category: category.trim() || undefined,
         characters: characterName.trim() || undefined,
         factions: factionName.trim() || undefined,
         description: description.trim() || undefined,
@@ -113,7 +109,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该规则设定吗？")) {
+    if (confirm("确定要删除该规则设定吗？此操作不可撤销。")) {
       try {
         await deleteWorldRule(id);
         setList((prev) => prev.filter((item) => item.id !== id));
@@ -130,7 +126,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
     const facVal = item.factions || (item.extra?.factions as string) || "";
     return (
       item.name.toLowerCase().includes(q) ||
-      (item.category && item.category.toLowerCase().includes(q)) ||
       (charVal && charVal.toLowerCase().includes(q)) ||
       (facVal && facVal.toLowerCase().includes(q)) ||
       (item.description && item.description.toLowerCase().includes(q)) ||
@@ -139,112 +134,134 @@ export default function RulesTab({ workId }: RulesTabProps) {
   });
 
   const charSelectData = [
-    { value: "", label: "暂无关联角色" },
+    { value: "", label: "暂无关联角色 (全局生效)" },
     ...characters.map((c) => ({ value: c.name, label: c.name })),
   ];
 
   const factionSelectData = [
-    { value: "", label: "暂无关联阵营" },
+    { value: "", label: "暂无关联阵营 (全阵营通用)" },
     ...factions.map((f) => ({ value: f.name, label: f.name })),
   ];
 
+  const formatTime = (time?: string | number) => {
+    if (!time) return "—";
+    try {
+      return new Date(time).toLocaleDateString();
+    } catch (_) {
+      return "—";
+    }
+  };
+
   return (
-    <Box p="md" pos="relative" style={{ minHeight: 400 }}>
+    <Box pos="relative" >
       <LoadingOverlay visible={loading} />
 
       <Flex justify="space-between" align="center" mb="md" gap="sm">
         <TextInput
-          placeholder="请输入关键词搜索规则设定..."
+          placeholder="搜索规则设定名称、机制内容、角色或阵营..."
           size="xs"
           leftSection={<FiSearch size={13} color="#94a3b8" />}
           value={searchKey}
           onChange={(e) => setSearchKey(e.target.value)}
-          style={{ width: 260 }}
+          style={{ width: 320 }}
         />
 
-        <Button size="xs" color="cyan" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
+        <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
           新增世界规则
         </Button>
       </Flex>
 
-      {filteredList.length === 0 && !loading && (
-        <Paper p="xl" withBorder radius="sm" ta="center" c="#94a3b8">
+      {filteredList.length === 0 && !loading ? (
+        <Paper p="xl" withBorder radius="sm" ta="center" c="#94a3b8" bg="#ffffff">
           <FiBookOpen size={36} strokeWidth={1.2} style={{ marginBottom: 8 }} />
-          <Text fz={13}>暂无世界规则设定，点击右上角「新增世界规则」开始添加</Text>
+          <Text fz={13}>暂无匹配的世界规则设定，点击右上角「新增世界规则」开始添加</Text>
+        </Paper>
+      ) : (
+        <Paper withBorder radius="sm" bg="#ffffff" style={{ overflow: "hidden", borderColor: "#e2e8f0" }}>
+          <Table verticalSpacing="sm" horizontalSpacing="md" highlightOnHover striped>
+            <Table.Thead bg="#f8fafc">
+              <Table.Tr>
+                <Table.Th style={{ width: "20%", minWidth: 160, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  规则名称
+                </Table.Th>
+                <Table.Th style={{ width: "42%", minWidth: 260, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  规则内容
+                </Table.Th>
+                <Table.Th style={{ width: "14%", minWidth: 110, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  关联角色
+                </Table.Th>
+                <Table.Th style={{ width: "14%", minWidth: 110, fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  关联阵营
+                </Table.Th>
+                <Table.Th style={{ width: "10%", minWidth: 90, textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                  操作
+                </Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {filteredList.map((item) => {
+                const charVal = item.characters || (item.extra?.characters as string);
+                const facVal = item.factions || (item.extra?.factions as string);
+                const descText = item.description || item.mechanisms || "暂无机制描述";
+
+                return (
+                  <Table.Tr key={item.id} style={{ transition: "background-color 0.15s ease" }}>
+                    <Table.Td>
+                      <Group gap={8} wrap="nowrap">
+                        <Box style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: "#e0f2fe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <FiSliders size={13} color="#0284c7" />
+                        </Box>
+                        <Text fz={13.5} fw={700} c="#0f172a" style={{ wordBreak: "break-word" }}>
+                          {item.name}
+                        </Text>
+                      </Group>
+                    </Table.Td>
+
+                    <Table.Td>
+                      <Text fz={12.5} c="#334155" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, maxHeight: 120, overflowY: "auto" }}>
+                        {descText}
+                      </Text>
+                    </Table.Td>
+
+                    <Table.Td>
+                      {charVal ? (
+                        <Badge size="sm" variant="light" leftSection={<FiUser size={10} />} styles={{ root: { maxWidth: 120 } }}>
+                          {charVal}
+                        </Badge>
+                      ) : (
+                        <Text fz={11.5} c="#94a3b8">全局适用</Text>
+                      )}
+                    </Table.Td>
+
+                    <Table.Td>
+                      {facVal ? (
+                        <Badge size="sm" variant="light" color="indigo" leftSection={<FiShield size={10} />} styles={{ root: { maxWidth: 120 } }}>
+                          {facVal}
+                        </Badge>
+                      ) : (
+                        <Text fz={11.5} c="#94a3b8">全阵营通用</Text>
+                      )}
+                    </Table.Td>
+
+                    <Table.Td style={{ textAlign: "right" }}>
+                      <Group gap={4} justify="flex-end" wrap="nowrap">
+                        <ActionIcon size="sm" variant="subtle" onClick={() => handleOpenEdit(item)} title="编辑规则">
+                          <FiEdit2 size={13} />
+                        </ActionIcon>
+                        <ActionIcon size="sm" variant="subtle" color="red" onClick={(e) => handleDelete(item.id, e)} title="删除规则">
+                          <FiTrash2 size={13} />
+                        </ActionIcon>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
         </Paper>
       )}
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
-        {filteredList.map((item) => {
-          const charVal = item.characters || (item.extra?.characters as string);
-          const facVal = item.factions || (item.extra?.factions as string);
-
-          return (
-            <Card
-              key={item.id}
-              p="12px 14px"
-              radius="sm"
-              withBorder
-              bg="#ffffff"
-              style={{
-                borderColor: "#f1f5f9",
-                display: "flex",
-                flexDirection: "column",
-                height: 140,
-                justifyContent: "space-between",
-              }}
-            >
-              <Box>
-                <Flex justify="space-between" align="flex-start" mb={4}>
-                  <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
-                    <Text fz={14} fw={700} c="#0f172a" truncate="end">
-                      {item.name}
-                    </Text>
-                    {item.category && (
-                      <Badge size="xs" color="indigo" variant="light">
-                        {item.category}
-                      </Badge>
-                    )}
-                  </Group>
-                  <Group gap={2}>
-                    <ActionIcon size="xs" variant="subtle" color="gray" onClick={() => handleOpenEdit(item)}>
-                      <FiEdit2 size={12} />
-                    </ActionIcon>
-                    <ActionIcon size="xs" variant="subtle" color="red" onClick={(e) => handleDelete(item.id, e)}>
-                      <FiTrash2 size={12} />
-                    </ActionIcon>
-                  </Group>
-                </Flex>
-
-                <Text fz={11.5} c="#334155" lineClamp={2} style={{ lineHeight: 1.5 }}>
-                  {item.description || item.mechanisms || "暂无规则描述"}
-                </Text>
-              </Box>
-
-              <Flex justify="space-between" align="center" pt={4} style={{ borderTop: "1px solid #f8fafc" }}>
-                <Group gap={8} fz={11} c="#64748b">
-                  {charVal && (
-                    <Group gap={3}>
-                      <FiUser size={10} color="#94a3b8" />
-                      <Text fz={10.5}>{charVal}</Text>
-                    </Group>
-                  )}
-                  {facVal && (
-                    <Group gap={3}>
-                      <FiShield size={10} color="#94a3b8" />
-                      <Text fz={10.5}>{facVal}</Text>
-                    </Group>
-                  )}
-                  {!charVal && !facVal && (
-                    <Text fz={10.5} c="#94a3b8">全局生效</Text>
-                  )}
-                </Group>
-              </Flex>
-            </Card>
-          );
-        })}
-      </SimpleGrid>
-
+      {/* 新建/编辑规则弹窗 */}
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
@@ -258,29 +275,20 @@ export default function RulesTab({ workId }: RulesTabProps) {
           body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
         }}
       >
-        <Stack gap="xs">
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-            <TextInput
-              label="规则名称"
-              placeholder="请输入"
-              size="xs"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-            <TextInput
-              label="领域分类"
-              placeholder="请输入"
-              size="xs"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            />
-          </SimpleGrid>
+        <Stack gap="sm">
+          <TextInput
+            label="规则名称"
+            placeholder="请输入"
+            size="xs"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
 
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
             <Select
-              label="关联角色"
-              placeholder="请输入或选择角色"
+              label="关联角色 (选填)"
+              placeholder="选择生效专属角色"
               size="xs"
               value={characterName}
               onChange={(val) => setCharacterName(val || "")}
@@ -289,8 +297,8 @@ export default function RulesTab({ workId }: RulesTabProps) {
               searchable
             />
             <Select
-              label="关联阵营"
-              placeholder="请输入或选择阵营"
+              label="关联阵营 (选填)"
+              placeholder="选择生效所属阵营"
               size="xs"
               value={factionName}
               onChange={(val) => setFactionName(val || "")}
@@ -301,20 +309,21 @@ export default function RulesTab({ workId }: RulesTabProps) {
           </SimpleGrid>
 
           <Textarea
-            label="规则描述"
-            placeholder="请输入"
+            label="核心规则内容与运转机制"
+            placeholder="详细描述该体系或法则的底层运转机理、约束条件、触发机制、代价反噬或禁忌..."
             size="xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            minRows={5}
+            minRows={7}
             autosize
+            required
           />
 
           <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
             <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
               取消
             </Button>
-            <Button color="cyan" size="xs" loading={formLoading} onClick={handleSave}>
+            <Button size="xs" loading={formLoading} onClick={handleSave}>
               保存规则
             </Button>
           </Flex>

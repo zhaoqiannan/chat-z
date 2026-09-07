@@ -220,7 +220,7 @@ export default function TimelinePage() {
       case "minor":
         return <Badge color="gray" variant="light" size="xs">🌱 背景小事</Badge>;
       default:
-        return <Badge color="cyan" variant="light" size="xs">📖 主线日常推进</Badge>;
+        return <Badge variant="light" size="xs">📖 主线日常推进</Badge>;
     }
   };
 
@@ -243,7 +243,7 @@ export default function TimelinePage() {
                 key={tl.id}
                 size="sm"
                 variant={activeTimelineId === String(tl.id) ? "filled" : "default"}
-                color="cyan"
+
                 leftSection={<FiClock size={13} />}
                 onClick={() => setActiveTimelineId(String(tl.id))}
               >
@@ -262,7 +262,7 @@ export default function TimelinePage() {
             </Button>
           </Group>
 
-          <Button leftSection={<FiPlus size={14} />} color="cyan" onClick={handleOpenCreateEvent} disabled={!activeTimelineId}>
+          <Button leftSection={<FiPlus size={14} />} onClick={handleOpenCreateEvent} disabled={!activeTimelineId}>
             添加时间节点
           </Button>
         </Group>
@@ -278,7 +278,7 @@ export default function TimelinePage() {
             </Stack>
           ) : (
             <Box py="md" px={{ base: 0, sm: "lg" }} style={{ maxWidth: 880, margin: "0 auto" }}>
-              <Timeline active={currentTimelineEvents.length} bulletSize={28} lineWidth={2} color="cyan">
+              <Timeline active={currentTimelineEvents.length} bulletSize={28} lineWidth={2} >
                 {currentTimelineEvents.map((ev) => {
                   const color = getImpactColor(ev.impactLevel);
                   return (
@@ -292,7 +292,7 @@ export default function TimelinePage() {
                       title={
                         <Group justify="space-between" align="center" mb={4} wrap="nowrap">
                           <Group gap="xs" align="center" wrap="nowrap">
-                            <Badge color="cyan" variant="outline" size="sm">
+                            <Badge variant="outline" size="sm">
                               {ev.timePoint}
                             </Badge>
                             <Text fz={16} fw={700} c="dark.7">
@@ -302,7 +302,7 @@ export default function TimelinePage() {
 
                           <Group gap={6} wrap="nowrap">
                             {getImpactBadge(ev.impactLevel)}
-                            <ActionIcon variant="subtle" color="cyan" size="xs" onClick={() => handleOpenEditEvent(ev)}>
+                            <ActionIcon variant="subtle" size="xs" onClick={() => handleOpenEditEvent(ev)}>
                               <FiEdit size={13} />
                             </ActionIcon>
                             <ActionIcon variant="subtle" color="red" size="xs" onClick={() => handleDeleteEvent(ev.id)}>
@@ -372,7 +372,7 @@ export default function TimelinePage() {
             <Button variant="outline" color="gray" onClick={() => setTimelineModalOpened(false)}>
               取消
             </Button>
-            <Button color="cyan" onClick={handleCreateTimeline}>确认创建</Button>
+            <Button onClick={handleCreateTimeline}>确认创建</Button>
           </Group>
         </Stack>
       </Modal>
@@ -450,7 +450,7 @@ export default function TimelinePage() {
             <Button variant="outline" color="gray" onClick={() => setEventModalOpened(false)}>
               取消
             </Button>
-            <Button color="cyan" loading={formLoading} onClick={handleSubmitEvent}>
+            <Button loading={formLoading} onClick={handleSubmitEvent}>
               {editingEvent ? "保存修改" : "确认添加事件"}
             </Button>
           </Group>

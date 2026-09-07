@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, ActionIcon, TextInput, Textarea, Select, ScrollArea, Group } from "@mantine/core";
-import { FiTrash2, FiBookmark, FiArchive, FiLayers, FiBookOpen, FiUser, FiFileText } from "react-icons/fi";
+import { Box, Flex, Text, Button, ActionIcon, TextInput, Textarea, Select, ScrollArea, Group, Tooltip } from "@mantine/core";
+import { FiTrash2, FiBookmark, FiArchive, FiLayers, FiBookOpen, FiUser, FiFileText, FiSidebar } from "react-icons/fi";
 import { NoteData, updateNote } from "@/rest/project-extensions";
 import { createCharacter } from "@/rest/world";
 import { createChapter } from "@/rest/chapter";
@@ -13,6 +13,8 @@ interface NoteEditorProps {
   workId: string;
   activeNote: NoteData | null;
   saving: boolean;
+  categorySidebarCollapsed?: boolean;
+  onToggleCategorySidebar?: () => void;
   onUpdateSuccess: () => Promise<void>;
   onTogglePin: () => void;
   onToggleArchive: () => void;
@@ -23,6 +25,8 @@ export default function NoteEditor({
   workId,
   activeNote,
   saving,
+  categorySidebarCollapsed = false,
+  onToggleCategorySidebar,
   onUpdateSuccess,
   onTogglePin,
   onToggleArchive,
@@ -127,16 +131,73 @@ export default function NoteEditor({
 
   if (!activeNote) {
     return (
-      <Flex style={{ flex: 1 }} justify="center" align="center" direction="column" gap="sm">
-        <FiFileText size={48} color="#cbd5e1" />
-        <Text fz={14} fw={600} c="#94a3b8">请选择或新建一条笔记查看详情</Text>
-      </Flex>
+      <Box style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", backgroundColor: "#ffffff" }}>
+        {onToggleCategorySidebar && (
+          <Flex align="center" px={16} py={10} style={{ borderBottom: "1px solid #f1f5f9" }}>
+            <Tooltip label={categorySidebarCollapsed ? "展开分类栏" : "收起分类栏"} position="bottom" withArrow>
+              <ActionIcon variant="subtle" color="gray" size="sm" onClick={onToggleCategorySidebar}>
+                <FiSidebar size={15} />
+              </ActionIcon>
+            </Tooltip>
+          </Flex>
+        )}
+        <Flex style={{ flex: 1 }} justify="center" align="center" direction="column" gap="sm">
+          <FiFileText size={48} color="#cbd5e1" />
+          <Text fz={14} fw={600} c="#94a3b8">请选择或新建一条笔记查看详情</Text>
+        </Flex>
+      </Box>
     );
   }
 
   return (
-    <Box style={{ flex: 1, display: "flex", flexDirection: "column", backgroundColor: "#ffffff" }}>
-      <Box p="20px 28px 12px 28px" style={{ borderBottom: "1px solid #f8fafc" }}>
+    <Box style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", backgroundColor: "#ffffff" }}>
+      {/* 顶部面包屑与操作栏 */}
+      <Flex justify="space-between" align="center" px={18} py={10} style={{ borderBottom: "1px solid #f1f5f9" }}>
+        <Group gap={8} align="center">
+          {onToggleCategorySidebar && (
+            <Tooltip label={categorySidebarCollapsed ? "展开分类栏" : "收起分类栏"} position="bottom" withArrow>
+              <ActionIcon variant="subtle" color="gray" size="sm" onClick={onToggleCategorySidebar}>
+                <FiSidebar size={15} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <Text fz={12.5} c="#94a3b8">随笔笔记</Text>
+          <Text fz={12.5} c="#cbd5e1">/</Text>
+          <Text fz={13} fw={600} c="#334155" lineClamp={1}>
+            {title || activeNote.title || "未命名笔记"}
+          </Text>
+        </Group>
+
+        <Group gap="xs" align="center">
+          <Button
+            size="xs"
+            variant={activeNote.isPinned ? "filled" : "default"}
+            color={activeNote.isPinned ? "cyan" : "gray"}
+            leftSection={<FiBookmark size={12} />}
+            onClick={onTogglePin}
+            styles={{ root: { height: 28 } }}
+          >
+            {activeNote.isPinned ? "已置顶" : "置顶"}
+          </Button>
+
+          <Button
+            size="xs"
+            variant={activeNote.isArchived ? "filled" : "default"}
+            color="gray"
+            leftSection={<FiArchive size={12} />}
+            onClick={onToggleArchive}
+            styles={{ root: { height: 28 } }}
+          >
+            {activeNote.isArchived ? "取消归档" : "归档"}
+          </Button>
+
+          <ActionIcon variant="subtle" color="red" size="sm" onClick={onDelete} title="删除笔记">
+            <FiTrash2 size={14} />
+          </ActionIcon>
+        </Group>
+      </Flex>
+
+      <Box p="16px 28px 12px 28px" style={{ borderBottom: "1px solid #f8fafc" }}>
         <TextInput
           variant="unstyled"
           placeholder="笔记标题..."
@@ -252,7 +313,7 @@ export default function NoteEditor({
         </Group>
 
         <Group gap="xs">
-          <Button size="xs" color="cyan" onClick={handleSave} loading={saving || localSaving}>
+          <Button size="xs" onClick={handleSave} loading={saving || localSaving}>
             保存更改
           </Button>
           <ActionIcon size="sm" variant="subtle" color="red" onClick={onDelete}>

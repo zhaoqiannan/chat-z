@@ -24,7 +24,7 @@ export default function ModalCharacterDetail({
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "protagonist":
-        return <Badge size="xs" color="cyan" variant="outline" styles={{ root: { borderColor: "#7dd3fc" } }}>主角</Badge>;
+        return <Badge size="xs" variant="outline" styles={{ root: { borderColor: "#7dd3fc" } }}>主角</Badge>;
       case "major":
         return <Badge size="xs" color="blue" variant="outline" styles={{ root: { borderColor: "#93c5fd" } }}>重要配角</Badge>;
       case "antagonist":
@@ -86,7 +86,7 @@ export default function ModalCharacterDetail({
                 {character.name}
               </Text>
               {getRoleBadge(character.roleType)}
-              {character.isPinned ? <Badge size="xs" color="cyan" variant="filled" radius="sm">已置顶</Badge> : null}
+              {character.isPinned ? <Badge size="xs" variant="filled" radius="sm">已置顶</Badge> : null}
             </Group>
 
             <Text fz={12} c="#64748b">
@@ -204,7 +204,7 @@ export default function ModalCharacterDetail({
           关闭
         </Button>
         <Button
-          color="cyan"
+
           size="xs"
           leftSection={<FiEdit2 size={11} />}
           onClick={() => {

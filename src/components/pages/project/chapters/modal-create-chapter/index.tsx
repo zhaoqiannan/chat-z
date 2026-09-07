@@ -85,7 +85,7 @@ export default function ModalCreateChapter({
           <Text fw={700} fz={15} c="#0f172a">
             新建正文章节
           </Text>
-          <Badge color="cyan" variant="outline" size="xs" styles={{ root: { borderColor: "#7dd3fc" } }}>
+          <Badge variant="outline" size="xs" styles={{ root: { borderColor: "#7dd3fc" } }}>
             序号: 第 {nextChapterNum} 章
           </Badge>
         </Flex>
@@ -157,7 +157,7 @@ export default function ModalCreateChapter({
           <Button variant="default" size="xs" onClick={onClose} disabled={loading}>
             取消
           </Button>
-          <Button color="cyan" size="xs" onClick={handleSubmit} loading={loading}>
+          <Button size="xs" onClick={handleSubmit} loading={loading}>
             确认创建
           </Button>
         </Flex>

@@ -82,7 +82,7 @@ export default function CharacterCard({
 
             <Flex align="center" gap={6} style={{ minWidth: 0, flex: 1 }}>
               {item.isPinned ? (
-                <Badge size="xs" variant="outline" color="cyan" styles={{ root: { height: 16, padding: "0 4px", fontSize: 9.5, borderColor: "#7dd3fc" } }}>
+                <Badge size="xs" variant="outline" styles={{ root: { height: 16, padding: "0 4px", fontSize: 9.5, borderColor: "#7dd3fc" } }}>
                   置顶
                 </Badge>
               ) : null}

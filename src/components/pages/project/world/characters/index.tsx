@@ -147,7 +147,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           />
         </Group>
 
-        <Button size="xs" color="cyan" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
+        <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
           新建角色档案
         </Button>
       </Flex>

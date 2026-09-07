@@ -2,8 +2,8 @@
 "use client";
 
 import React from "react";
-import { Box, Flex, Text, TextInput, Stack, ScrollArea, Paper, Badge } from "@mantine/core";
-import { FiSearch, FiBookmark, FiFileText } from "react-icons/fi";
+import { Box, Flex, Text, TextInput, Stack, ScrollArea, Paper, Badge, ActionIcon, Tooltip, Group } from "@mantine/core";
+import { FiSearch, FiBookmark, FiFileText, FiSidebar } from "react-icons/fi";
 import { NoteData } from "@/rest/project-extensions";
 
 interface NotesListProps {
@@ -12,6 +12,8 @@ interface NotesListProps {
   activeNoteId: number | null;
   searchKey: string;
   loading: boolean;
+  categorySidebarCollapsed?: boolean;
+  onToggleCategorySidebar?: () => void;
   onSearchChange: (val: string) => void;
   onSelectNote: (note: NoteData) => void;
 }
@@ -22,6 +24,8 @@ export default function NotesList({
   activeNoteId,
   searchKey,
   loading,
+  categorySidebarCollapsed = false,
+  onToggleCategorySidebar,
   onSearchChange,
   onSelectNote,
 }: NotesListProps) {
@@ -76,9 +80,21 @@ export default function NotesList({
     >
       <Box p="14px 16px" style={{ borderBottom: "1px solid #f8fafc" }}>
         <Flex justify="space-between" align="center" mb={10}>
-          <Text fz={15} fw={700} c="#1e293b">
-            {getCategoryLabel(category)}笔记
-          </Text>
+          <Group gap={6} align="center">
+            {onToggleCategorySidebar && (
+              <Tooltip label={categorySidebarCollapsed ? "展开分类栏" : "收起分类栏"} position="bottom" withArrow>
+                <ActionIcon variant="subtle" color="gray" size="sm" onClick={onToggleCategorySidebar}>
+                  <FiSidebar size={14} />
+                </ActionIcon>
+              </Tooltip>
+            )}
+            <Text fz={15} fw={700} c="#1e293b">
+              {getCategoryLabel(category)}笔记
+            </Text>
+          </Group>
+          <Badge size="xs" variant="light" styles={{ root: { fontSize: 10.5 } }}>
+            {notes.length} 条
+          </Badge>
         </Flex>
         <TextInput
           placeholder="搜索笔记标题、内容..."

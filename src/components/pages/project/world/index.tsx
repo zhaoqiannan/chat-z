@@ -26,7 +26,7 @@ export default function WorldLorePage() {
         overflow: "hidden",
       }}
     >
-      <ScrollArea style={{ flex: 1 }} p={{ base: "md", md: "xl" }}>
+      <ScrollArea style={{ flex: 1 }} p={20}>
         {subTab === "characters" && <CharactersTab workId={workId} />}
         {subTab === "locations" && <LocationsTab workId={workId} />}
         {subTab === "factions" && <FactionsTab workId={workId} />}

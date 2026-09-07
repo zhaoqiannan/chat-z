@@ -132,22 +132,30 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       structuredLoreContext += "【其他关联章节提要】：\n" + otherChaptersData.map((ch) => `- 第${ch.chapterNumber}章 ${ch.title}: 提要[${ch.summary || "无"}]`).join("\n") + "\n\n";
     }
 
-    let systemPrompt = `你是一位殿堂级网文金牌策划与白金作家协同助手，正在与作者共同打磨作品《${work.title}》（题材标签：${work.tag || "网络小说"}）。
+    let systemPrompt = `你是一位顶尖的网文白金作家与金牌主编协同助手，正在与作者共同打磨小说《${work.title}》（题材：${work.tag || "网络小说"}）。
 当前章节：第${chapter.chapterNumber}章《${chapter.title}》${chapter.summary ? `（本章大纲摘要：${chapter.summary}）` : ""}。
-你的职责是精准理解作者的创作诉求，结合提供的世界观人物设定进行逻辑严密、文笔出众、情节张力十足的协同推演与润色续写。
-【核心要求】：直接输出最优质的建议或创作成果，避免冗余寒暄与无意义的打招呼。如果生成正文内容，请注重沉浸感与画面感。`;
+
+【绝对遵守的核心输出规范（违背视为严重错误）】：
+1. 【只输出纯正文成果】：当执行【智能润色】、【场景扩写】、【精简缩写】、【情节续写】、【语气改写】等正文处理或创作指令时，必须且只能直接输出最终的正文文本！
+2. 【严禁任何元分析与前置思考】：绝对禁止输出任何思考过程、任务说明（如“任务：...”、“需要考虑：...”、“让我们构思润色稿...”）、写作解析、修改方向说明、引导语（如“以下是润色后的正文：”）、前后缀标签（如“【润色版】”）或结尾总结。
+3. 【直奔正文首字】：输出的第一行第一个字必须是正文的开头，最后一个字必须是正文的结尾。
+4. 【全文润色必须完整输出】：若为全章润色或长段润色，必须从头到尾完整输出所有润色后的正文，保持情节与段落完整，严禁中途截断、省略、打省略号或只输出局部片段。
+5. 【纯正文文笔风格】：强化画面感、动词力量感、微表情与情绪张力，严密遵循给定的世界观与人物人设。
+（仅当执行【逻辑纠错】或作者进行【创作问答】探讨剧情设定时，才输出条理清晰的专业建议，但仍禁止输出元思考过程）。`;
 
     let finalUserMessage = "";
 
     if (structuredLoreContext) {
-      finalUserMessage += `【当前关联世界观与人物知识库】：\n${structuredLoreContext}\n`;
+      finalUserMessage += `【关联世界观与人物设定知识库】：\n${structuredLoreContext}\n`;
     }
 
-    if (selectedText) {
-      finalUserMessage += `【作者在编辑器中选中的文本片段】：\n"""\n${selectedText}\n"""\n\n`;
-    } else if (currentContent) {
-      const recentText = currentContent.slice(-1200);
-      finalUserMessage += `【当前章节前文参考（节选末尾）】：\n"""\n${recentText}\n"""\n\n`;
+    const hasSelection = Boolean(selectedText && selectedText.trim());
+    const isFullChapterAction = !hasSelection && Boolean(currentContent && currentContent.trim());
+
+    if (hasSelection) {
+      finalUserMessage += `【作者在编辑器中选中的目标文本片段】：\n"""\n${selectedText.trim()}\n"""\n\n`;
+    } else if (isFullChapterAction) {
+      finalUserMessage += `【当前章节完整正文内容】：\n"""\n${currentContent.trim()}\n"""\n\n`;
     }
 
     const actionNameMap: Record<string, string> = {
@@ -163,26 +171,73 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     switch (actionType) {
       case "polish":
-        finalUserMessage += `【协同指令 - 智能润色】：请对选中文本或当前场景进行专业文学润色，提升动词表现力与环境画面感，保持原意与角色语调。${userPrompt ? `作者具体要求：${userPrompt}` : ""}`;
+        if (hasSelection) {
+          finalUserMessage += `【指令：选中文本智能润色】
+请对上述【选中文本片段】进行专业级文学润色。强化动词张力、环境氛围与感官细节，保持原剧情走向与角色性格。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出润色后的纯正文文本，不要包含任何思考过程、分析建议、前后缀或说明。`;
+        } else {
+          finalUserMessage += `【指令：全篇章节智能润色】
+请对上述【当前章节完整正文内容】进行通篇文学润色与文笔升级。优化节奏感、打斗/对话张力与画面感。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：必须完整输出润色后的全篇正文，不要截断或省略任何段落；只输出纯正文，严禁包含任何思考分析、修改说明或前缀标签！`;
+        }
         break;
+
       case "expand":
-        finalUserMessage += `【协同指令 - 场景扩写】：请对选中文本或当前场景进行细节扩充，丰富角色的微表情、心理博弈、动作细节与感官描写，使场景更具张力。${userPrompt ? `作者具体要求：${userPrompt}` : ""}`;
+        if (hasSelection) {
+          finalUserMessage += `【指令：选中文本场景扩写】
+请对上述【选中文本片段】进行深度细节扩充，丰富角色的微表情、心理博弈、动作细节与环境感官描写。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出扩写后的纯正文文本，严禁包含任何思考过程或解释。`;
+        } else {
+          finalUserMessage += `【指令：核心场景深度扩写】
+请结合当前章节的高潮或核心场景进行深度细节扩充，丰富动作与心理活动描写。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出扩写后的纯正文文本，严禁包含任何思考过程或解释。`;
+        }
         break;
+
       case "shorten":
-        finalUserMessage += `【协同指令 - 精简缩写】：请精炼浓缩选中文本，剔除废话修饰，强化叙事节奏，使其凌厉紧凑。${userPrompt ? `作者具体要求：${userPrompt}` : ""}`;
+        if (hasSelection) {
+          finalUserMessage += `【指令：选中文本精简缩写】
+请精炼浓缩上述【选中文本片段】，剔除废话赘词，加快叙事节奏，使其干练紧凑。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出精简后的纯正文文本，严禁包含任何思考分析或说明。`;
+        } else {
+          finalUserMessage += `【指令：全篇内容精简去水】
+请对上述【当前章节完整正文内容】进行通篇紧凑精简与去水，强化主线推进。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出精简后的完整正文，严禁包含任何思考分析或说明。`;
+        }
         break;
+
       case "continue":
-        finalUserMessage += `【协同指令 - 情节续写】：请结合前文剧情走向与关联设定，为当前章节顺畅续写接下来的高潮情节或对话推进（约 400~800 字）。${userPrompt ? `作者具体要求：${userPrompt}` : ""}`;
+        finalUserMessage += `【指令：章节情节顺畅续写】
+请根据已有剧情走向与世界观设定，承接前文顺畅续写接下来的故事高潮或对话推进（约 500~1000 字）。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出续写的纯正文故事文本，严禁包含任何前缀引导语或构思分析。`;
         break;
+
       case "tone":
-        finalUserMessage += `【协同指令 - 语气改写】：请根据登场角色的性格特质与人设，重构对话与神态描写，使其更具辨识度与戏剧张力。${userPrompt ? `作者具体要求：${userPrompt}` : ""}`;
+        finalUserMessage += `【指令：角色语气与对白改写】
+请根据登场角色的性格特质与人设定位，重构上述文本中的对话与神态描写，增强个性辨识度与戏剧冲突。
+${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出改写后的纯正文文本，严禁包含任何思考过程或分析。`;
         break;
+
       case "critique":
-        finalUserMessage += `【协同指令 - 逻辑纠错】：请结合上下文与世界观法则，严谨审查当前情节是否存在战力崩塌、逻辑漏洞、人设前后矛盾或伏笔冲突，并给出具体修正建议。${userPrompt ? `作者具体要求：${userPrompt}` : ""}`;
+        finalUserMessage += `【指令：剧情逻辑严谨纠错】
+请结合当前章节与世界观设定，严谨审查当前情节是否存在战力崩塌、逻辑漏洞、人设前后矛盾或伏笔冲突，并给出具体可行的修正建议。
+${userPrompt ? `作者具体问题：${userPrompt}\n` : ""}
+【输出要求】：条理清晰地直接列出纠错点与修改建议，无需多余寒暄。`;
         break;
+
       case "chat":
       default:
-        finalUserMessage += `【作者指令与问题】：\n${userPrompt || "请根据上述设定，对本章节的推进和细节给出专业构思与建议。"}`;
+        finalUserMessage += `【作者创作指令/提问】：
+${userPrompt || "请结合上述设定与当前章节正文，给出专业的推演构思与创作建议。"}
+【输出要求】：直接给出有深度的专业构思与建议，避免无意义的客套废话与元思考过程。`;
         break;
     }
 
@@ -192,8 +247,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     ];
 
     const rawAiResponse = await callCloudflareAi(env.AI, messages, {
-      temperature: actionType === "critique" ? 0.4 : 0.75,
-      maxTokens: 4096,
+      temperature: actionType === "critique" ? 0.35 : 0.75,
+      maxTokens: 8192,
     });
 
     const aiContent = cleanNovelStoryText(rawAiResponse);

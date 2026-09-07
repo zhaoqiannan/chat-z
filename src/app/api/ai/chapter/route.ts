@@ -136,7 +136,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           role: "system",
           content: `你是一位专业文学编辑与网文润色大师。
 你的任务是在严格保留作者原剧情、原人物设定的基础上，对原文进行全方位的文字润色、动词强化、画面感渲染和节奏张力提升。
-请直接输出润色后的正文全文。`,
+【绝对遵守的核心规范】：必须直接输出润色后的纯正文全文，严禁输出任何思考过程、任务分析、修改说明、引导语或前后缀标签。从正文第一个字直接输出到最后一个字！`,
         },
         {
           role: "user",
@@ -146,7 +146,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 【作者原始正文如下】：
 ${original}
 
-请开始润色：`,
+【输出要求】：请直接输出润色后的完整正文全文，不要任何前后缀或说明：`,
         },
       ];
 
@@ -208,7 +208,7 @@ ${original}
         );
       }
 
-      let systemPrompt = "你是一位殿堂级网文文学顾问与金牌剧情架构师。请针对作者在正文中划选的片段进行精准的文字处理。";
+      let systemPrompt = "你是一位殿堂级网文文学顾问与金牌剧情架构师。请针对作者在正文中划选的片段进行精准的文字处理。【铁律】：只输出处理后的纯正文片段，绝对禁止输出任何思考过程、任务说明或前后置废话。";
       let userPrompt = `作品：《${work.title}》(${work.tag || "网文"})\n`;
 
       if (fullContext) {

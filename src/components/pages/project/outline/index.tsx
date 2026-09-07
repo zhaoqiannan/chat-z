@@ -30,13 +30,24 @@ export default function StoryOutlinePage() {
     try {
       setLoading(true);
       const res = await getOutlineList(workId);
-      if (res && res.success) {
-        const rawFlat: OutlineNode[] = Array.isArray((res as any).flatList)
-          ? (res as any).flatList
-          : Array.isArray(res.result)
-          ? res.result
-          : [];
-        setFlatNodes(rawFlat);
+      if (res && res.success && res.result) {
+        const flatten = (arr: any[]): OutlineNode[] => {
+          let out: OutlineNode[] = [];
+          arr.forEach((item) => {
+            out.push(item);
+            if (item.children && Array.isArray(item.children)) {
+              out = out.concat(flatten(item.children));
+            }
+          });
+          return out;
+        };
+
+        const rawList = Array.isArray(res.result)
+          ? flatten(res.result)
+          : Array.isArray((res.result as any).list)
+            ? (res.result as any).list
+            : [];
+        setFlatNodes(rawList);
       }
     } catch (e) {
       console.error(e);
@@ -111,7 +122,7 @@ export default function StoryOutlinePage() {
         <Group gap="xs">
           <Button
             size="xs"
-            color="cyan"
+
             variant="gradient"
             gradient={{ from: "teal", to: "cyan", deg: 90 }}
             leftSection={<FiZap size={13} />}
@@ -131,7 +142,7 @@ export default function StoryOutlinePage() {
 
           <Button
             size="xs"
-            color="cyan"
+
             leftSection={<FiPlus size={13} />}
             onClick={() => handleOpenCreateNode()}
           >

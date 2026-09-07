@@ -12,6 +12,8 @@ interface PanelAiAssistantProps {
   currentContent: string;
   selectedText?: string;
   collapsed?: boolean;
+  width?: number;
+  isResizing?: boolean;
   onToggleCollapse?: () => void;
   onClearSelection?: () => void;
   onAcceptText: (text: string, targetSnippet?: string) => void;
@@ -23,6 +25,8 @@ export default function PanelAiAssistant({
   currentContent,
   selectedText = "",
   collapsed = false,
+  width = 360,
+  isResizing = false,
   onToggleCollapse,
   onClearSelection,
   onAcceptText,
@@ -243,15 +247,15 @@ export default function PanelAiAssistant({
   return (
     <Box
       style={{
-        width: collapsed ? 0 : 340,
-        minWidth: collapsed ? 0 : 320,
-        maxWidth: collapsed ? 0 : 380,
+        width: collapsed ? 0 : width,
+        minWidth: collapsed ? 0 : 280,
+        maxWidth: collapsed ? 0 : 720,
         height: "100%",
         display: "flex",
         flexDirection: "column",
         backgroundColor: "#ffffff",
         borderLeft: collapsed ? "none" : "1px solid #f1f5f9",
-        transition: "all 0.2s ease",
+        transition: isResizing ? "none" : "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
         overflow: "hidden",
         flexShrink: 0,
         opacity: collapsed ? 0 : 1,
@@ -305,7 +309,7 @@ export default function PanelAiAssistant({
               <Button
                 size="compact-xs"
                 variant="subtle"
-                color="cyan"
+
                 leftSection={<FiPlus size={10} />}
                 onClick={() => setTagPopoverOpened((o) => !o)}
                 style={{ fontSize: 11 }}
@@ -435,7 +439,7 @@ export default function PanelAiAssistant({
             <Box style={{ alignSelf: "flex-start", width: "100%" }}>
               <Paper p="10px 12px" radius="md" bg="#f8fafc" style={{ border: "1px dashed #cbd5e1" }}>
                 <Group gap={8}>
-                  <Loader size="xs" color="cyan" />
+                  <Loader size="xs" />
                   <Text fz={12} c="#64748b">AI 正在结合世界观与章节上下文严密推演中...</Text>
                 </Group>
               </Paper>
@@ -448,7 +452,7 @@ export default function PanelAiAssistant({
         <Box px="md" py={6} bg="#f8fafc" style={{ borderTop: "1px solid #f1f5f9", borderBottom: "1px dashed #e2e8f0" }}>
           <Flex justify="space-between" align="center">
             <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
-              <Badge size="xs" color="cyan" variant="light">📌 选中文本</Badge>
+              <Badge size="xs" variant="light">📌 选中文本</Badge>
               <Text fz={11.5} c="#334155" truncate="end" style={{ flex: 1 }}>
                 “{selectedText}”
               </Text>
@@ -496,7 +500,7 @@ export default function PanelAiAssistant({
           </Text>
           <ActionIcon
             size="sm"
-            color="cyan"
+
             variant="filled"
             disabled={!inputText.trim() && !selectedText}
             loading={sending}

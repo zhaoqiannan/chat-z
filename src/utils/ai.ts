@@ -14,11 +14,12 @@ export interface AiCallOptions {
 }
 
 /**
- * Cloudflare Workers AI 目前最新且长期支持的稳定文本生成模型候选序列
+ * Cloudflare Workers AI 目前最新且长期支持的稳定文本生成模型候选序列（优先选择指令遵循与长文创作表现优异的模型）
  */
 const CANDIDATE_MODELS = [
   "@cf/qwen/qwen3.8-27b",
-  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
+  "@cf/qwen/qwen2.5-72b-instruct",
+  "@cf/meta/llama-3.3-70b-instruct",
   "@cf/meta/llama-3.1-8b-instruct",
   "@cf/meta/llama-3.2-3b-instruct",
   "@cf/openai/gpt-oss-20b",
@@ -56,7 +57,7 @@ async function callCloudflareAiViaRest(
   }
 
   if (data.result) {
-    // 1. OpenAI 兼容格式 choices[0].message (支持 content 与 reasoning 字段)
+    // 1. OpenAI 兼容格式 choices[0].message (优先使用 content)
     if (Array.isArray(data.result.choices) && data.result.choices.length > 0) {
       const msg = data.result.choices[0]?.message;
       const msgContent = msg?.content;
@@ -306,48 +307,69 @@ function cleanJsonString(str: string): string {
 }
 
 /**
- * 智能提取纯净的小说正文文本（自动剥离 AI 思考链、大纲分析、草稿标记与字数元数据）
+ * 智能提取纯净的小说正文文本（自动剥离 AI 思考链、大纲分析、任务构思、草稿标记与字数元数据）
  */
 export function cleanNovelStoryText(rawText: string): string {
   if (!rawText || !rawText.trim()) return "";
   let text = rawText.trim();
 
-  // 1. 如果包含常见的思考与草稿分界标志，提取最后一段正式正文
+  // 1. 彻底剥离可能存在的 <think>...</think> 或 <thought>...</thought> 思考链标签
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  text = text.replace(/<thought>[\s\S]*?<\/thought>/gi, "").trim();
+
+  // 2. 剥离外层包裹的 Markdown 代码块标签
+  const codeBlockMatch = text.match(/^```(?:markdown|text)?\s*([\s\S]*?)\s*```$/i);
+  if (codeBlockMatch && codeBlockMatch[1]) {
+    text = codeBlockMatch[1].trim();
+  }
+
+  // 3. 如果包含明确的正文起止锚点，直接提取正文部分
   const splitKeywords = [
-    /【正文开始】/i,
-    /【正文】/i,
-    /正文如下[：:]/i,
-    /正式正文[：:]/i,
-    /最终(?:正文|定稿)[：:]/i,
-    /重写压缩[：:]/i,
-    /精简版[：:]/i,
-    /目标\d+.*?[：:]/i,
-    /草稿[：:]/i,
+    /【(?:润色版正文|润色版|润色正文|润色替换稿|润色稿|修改后正文|修改后|扩写正文|续写正文|正文开始|正文)】/i,
+    /(?:正文如下|正式正文|最终正文|最终定稿|润色稿|润色版)[：:]/i,
+    /【第\d+章[^】\n]*】\n+/i,
   ];
 
   for (const pattern of splitKeywords) {
     const matches = text.split(pattern);
     if (matches.length > 1) {
       const lastCandidate = matches[matches.length - 1].trim();
-      if (lastCandidate.length > 100) {
+      if (lastCandidate.length > 30) {
         text = lastCandidate;
       }
     }
   }
 
-  // 2. 剥离模型开头可能遗留的思考前缀行（如 "我们需要回答用户..."、"好的，我来为您..."）
+  // 4. 剥离模型开头可能遗留的任务分析与思考构思段落（如“任务：智能润色... 需要考虑：... 让我们构思润色稿：...”）
+  const metaBlockPattern = /^(?:任务[：:][\s\S]*?)(?=(?:\n\n[“"‘'第]|(?:\n\n[\u4e00-\u9fa5]{2,}[，。、“"”]))|$)/i;
+  if (metaBlockPattern.test(text)) {
+    const afterMeta = text.replace(metaBlockPattern, "").trim();
+    if (afterMeta.length > 30) {
+      text = afterMeta;
+    }
+  }
+
+  // 5. 逐行剥离常见的思考与引导前缀
   const lines = text.split("\n");
   let startIndex = 0;
-  for (let i = 0; i < Math.min(lines.length, 12); i++) {
+  for (let i = 0; i < Math.min(lines.length, 20); i++) {
     const line = lines[i].trim();
     if (
+      line.startsWith("任务：") ||
+      line.startsWith("任务:") ||
+      line.startsWith("需要考虑：") ||
+      line.startsWith("需要考虑:") ||
+      line.startsWith("思考过程") ||
+      line.startsWith("思考：") ||
+      line.startsWith("构思：") ||
+      line.startsWith("让我们构思") ||
       line.startsWith("我们需要") ||
       line.startsWith("用户要求") ||
-      line.startsWith("需要构思") ||
-      line.startsWith("思考过程") ||
       line.startsWith("字数估算") ||
       line.startsWith("好的，") ||
       line.startsWith("以下是") ||
+      line.startsWith("- ") ||
+      line.startsWith("* ") ||
       line.startsWith("```")
     ) {
       startIndex = i + 1;
@@ -360,11 +382,11 @@ export function cleanNovelStoryText(rawText: string): string {
     text = lines.slice(startIndex).join("\n").trim();
   }
 
-  // 3. 移除开头的废话前缀如 "可写："、"正文："、"剧情："
-  text = text.replace(/^(?:可写[：:]|正文[：:]|剧情[：:]|故事[：:])\s*/i, "");
+  // 6. 移除开头的引导短语如 "可写："、"正文："、"剧情："、"润色后正文："
+  text = text.replace(/^(?:可写[：:]|正文[：:]|剧情[：:]|故事[：:]|润色(?:后|版)?[：:]|修改后[：:])\s*/i, "");
 
-  // 4. 剥离文末的字数分析或元说明
-  const endPattern = /\n+(?:字数估算|字数统计|总结|以上是|注[：:])[\s\S]*$/i;
+  // 7. 剥离文末的分析总结、优化重点与字数说明
+  const endPattern = /\n+(?:【(?:主要优化点|优化重点|修改说明|创作思路|字数统计)】|(?:主要优化点|优化重点|修改说明|字数估算|字数统计|总结|以上是|注)[：:])[\s\S]*$/i;
   text = text.replace(endPattern, "").trim();
 
   return text;

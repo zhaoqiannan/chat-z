@@ -261,14 +261,14 @@ export default function TreePanel({
             <Text fz={12} fw={600} c="#334155" truncate="end" style={{ maxWidth: 160 }}>
               第{currentActiveChapter.chapterNumber}章 · {currentActiveChapter.title}
             </Text>
-            <Badge size="xs" variant="light" color="cyan">写作中</Badge>
+            <Badge size="xs" variant="light" >写作中</Badge>
           </Flex>
 
           <Flex justify="space-between" align="center" fz={10.5} c="#94a3b8" mb={4}>
             <Text fz={10.5}>完成度 {progressPercent}%</Text>
             <Text fz={10.5}>{currentWords.toLocaleString()} / {targetWords.toLocaleString()} 字</Text>
           </Flex>
-          <Progress value={progressPercent} size="xs" color="cyan" mb={8} radius="xl" />
+          <Progress value={progressPercent} size="xs" mb={8} radius="xl" />
 
           <Flex gap={6}>
             <UnstyledButton

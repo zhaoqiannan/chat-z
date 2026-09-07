@@ -241,7 +241,7 @@ export default function EditorArea({
           <Button
             size="xs"
             variant="light"
-            color="cyan"
+
             leftSection={<FiSave size={12} />}
             loading={saving}
             onClick={handleManualSave}
@@ -256,9 +256,6 @@ export default function EditorArea({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item leftSection={<FiAlignLeft size={13} color="#0891b2" />} onClick={handleFormatIndent}>
-                段首智能缩进排版
-              </Menu.Item>
               <Menu.Item leftSection={<FiZap size={13} color="#0284c7" />} onClick={onToggleAiPanel}>
                 唤起 AI 协同助手
               </Menu.Item>
@@ -339,14 +336,14 @@ export default function EditorArea({
           <Text fz={12} c="#cbd5e1">|</Text>
           <Text fz={12} c="#64748b">目标 {targetWords.toLocaleString()} 字</Text>
           <Box style={{ width: 60, marginLeft: 4 }}>
-            <Progress value={progressPercent} size="xs" color="cyan" radius="xl" />
+            <Progress value={progressPercent} size="xs" radius="xl" />
           </Box>
         </Group>
 
         <Group gap="md" align="center">
           <Text fz={11.5} c="#94a3b8">提示: 回车自动缩进 · 顶部提供「一键缩进」排版</Text>
           <Tooltip label="唤起/收起 AI 协同助手" position="top">
-            <ActionIcon variant="subtle" color="cyan" size="sm" onClick={onToggleAiPanel}>
+            <ActionIcon variant="subtle" size="sm" onClick={onToggleAiPanel}>
               <FiZap size={14} />
             </ActionIcon>
           </Tooltip>

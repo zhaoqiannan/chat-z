@@ -29,7 +29,9 @@ export default function OutlineFlow({
   const ungroupedPoints = points.filter((p) => !p.volumeId && !p.parentId);
 
   const getPointsForVolume = (volumeId: string) => {
-    return points.filter((p) => p.volumeId === volumeId || p.parentId === volumeId);
+    return points.filter(
+      (p) => String(p.volumeId) === String(volumeId) || String(p.parentId) === String(volumeId)
+    );
   };
 
   const renderPointCard = (point: OutlineNode, idx: number) => {
@@ -87,7 +89,7 @@ export default function OutlineFlow({
             <Button
               size="compact-xs"
               variant="subtle"
-              color="cyan"
+
               leftSection={<FiZap size={10} />}
               onClick={() => onLaunchDeduction(point.title, "")}
             >
@@ -122,7 +124,7 @@ export default function OutlineFlow({
                     <Button
                       size="compact-xs"
                       variant="light"
-                      color="cyan"
+
                       leftSection={<FiPlus size={10} />}
                       onClick={() => onOpenCreateNode(vol.id)}
                     >
@@ -168,7 +170,7 @@ export default function OutlineFlow({
                 <Button
                   size="compact-xs"
                   variant="light"
-                  color="cyan"
+
                   leftSection={<FiPlus size={10} />}
                   onClick={() => onOpenCreateNode()}
                 >

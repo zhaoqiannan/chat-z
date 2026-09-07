@@ -106,7 +106,7 @@ export default function MaterialsTable({
           <Button size="xs" variant="default" leftSection={<FiPlus size={12} />} onClick={onOpenCreateModal}>
             + 新建
           </Button>
-          <Button size="xs" color="cyan" leftSection={<FiUploadCloud size={13} />} onClick={onTriggerUpload}>
+          <Button size="xs" leftSection={<FiUploadCloud size={13} />} onClick={onTriggerUpload}>
             上传素材
           </Button>
         </Group>

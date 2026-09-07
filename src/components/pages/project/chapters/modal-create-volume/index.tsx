@@ -91,7 +91,7 @@ export default function ModalCreateVolume({
           <Button variant="default" size="xs" onClick={onClose} disabled={loading}>
             取消
           </Button>
-          <Button color="cyan" size="xs" onClick={handleSubmit} loading={loading}>
+          <Button size="xs" onClick={handleSubmit} loading={loading}>
             确认创建
           </Button>
         </Flex>
