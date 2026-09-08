@@ -6,7 +6,6 @@ import { Box, Menu, Tooltip } from "@mantine/core";
 import {
   FiGrid,
   FiChevronDown,
-  FiSearch,
   FiSettings,
   FiBell,
   FiMessageSquare,
@@ -254,17 +253,6 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
         </div>
 
         <div className={styles.rightSection}>
-          <div className={styles.searchWrapper}>
-            <span className={styles.searchIcon}>
-              <FiSearch size={14} />
-            </span>
-            <input
-              type="text"
-              placeholder="搜索笔记、设定、章节..."
-              className={styles.searchInput}
-            />
-          </div>
-
           <button className={styles.iconBtn} type="button" title="设置">
             <FiSettings size={17} />
           </button>

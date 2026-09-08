@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, chapters } from "@/db";
 import { desc, eq, and } from "drizzle-orm";
+import { logUserActivity } from "@/utils/activityLogger";
 
 /**
  * 获取当前用户的作品列表或单条作品详情
@@ -127,9 +128,21 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .get();
     }
 
+    const finalWork = resultWork || newWorkData;
+    await logUserActivity(db, {
+      userId: user.userId,
+      workId: finalWork?.id || null,
+      workTitle: finalWork?.title || title.trim(),
+      targetType: "work",
+      targetId: finalWork?.id || null,
+      targetTitle: finalWork?.title || title.trim(),
+      action: "create",
+      description: `创建了新作品「${finalWork?.title || title.trim()}」`,
+    });
+
     return NextResponse.json({
       success: true,
-      result: resultWork || newWorkData,
+      result: finalWork,
       message: "新建作品成功",
     });
   } catch (error: any) {
@@ -211,6 +224,22 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .set(updatedWork)
       .where(and(eq(works.id, workId), eq(works.userId, user.userId)));
 
+    await logUserActivity(db, {
+      userId: user.userId,
+      workId: workId,
+      workTitle: updatedWork.title,
+      targetType: "work",
+      targetId: workId,
+      targetTitle: updatedWork.title,
+      action: "update",
+      description:
+        isPinned !== undefined && title === undefined
+          ? nextIsPinned
+            ? `置顶了作品「${existing.title}」`
+            : `取消了「${existing.title}」的置顶`
+          : `更新了作品「${updatedWork.title}」的基本设定`,
+    });
+
     return NextResponse.json({
       success: true,
       result: { id: workId, ...updatedWork },
@@ -272,6 +301,17 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     await db
       .delete(works)
       .where(and(eq(works.id, workId), eq(works.userId, user.userId)));
+
+    await logUserActivity(db, {
+      userId: user.userId,
+      workId: workId,
+      workTitle: existing.title,
+      targetType: "work",
+      targetId: workId,
+      targetTitle: existing.title,
+      action: "delete",
+      description: `删除了作品「${existing.title}」`,
+    });
 
     return NextResponse.json({
       success: true,

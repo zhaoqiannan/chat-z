@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Box, Flex, Text } from "@mantine/core";
 import { useRouter } from "next/navigation";
-import { workspaceMockData } from "./mock.js";
+import { useSelector } from "react-redux";
+import dayjs from "dayjs";
+import { RootState } from "@/store";
 import RecentChapterCard from "./recent-chapter-card";
 import WorksSection, { WorkItem } from "./works-section";
 import CreationStats from "./creation-stats";
@@ -11,21 +13,38 @@ import AiSuggestions from "./ai-suggestions";
 import RecentActivities from "./recent-activities";
 import ModalWork, { WorkFormData } from "./modal-work";
 import ModalDeleteConfirm from "./modal-delete-confirm";
+import Loading from "@/components/common/loading";
 import { getWorkList, createWork, updateWork, deleteWork } from "@/rest/work";
+import {
+  getRecentChapter,
+  getRecentActivities,
+  getCreationStats,
+  triggerAiDiagnosis,
+  RecentChapterResult,
+  ActivityResult,
+  CreationStatItem,
+  AiSuggestionItem,
+} from "@/rest/workspace";
 
 export default function WorkspacePage() {
   const router = useRouter();
-  const {
-    welcome,
-    recentChapter,
-    worksList: initialWorks,
-    creationStats,
-    aiSuggestions,
-    recentActivities,
-  } = workspaceMockData;
+  const user = useSelector((state: RootState) => state.userInfo);
 
   const [works, setWorks] = useState<WorkItem[]>([]);
   const [loadingList, setLoadingList] = useState<boolean>(false);
+
+  const [recentChapter, setRecentChapter] = useState<RecentChapterResult | null>(null);
+  const [loadingRecent, setLoadingRecent] = useState<boolean>(true);
+
+  const [activities, setActivities] = useState<ActivityResult[]>([]);
+  const [loadingActivities, setLoadingActivities] = useState<boolean>(true);
+
+  const [creationStats, setCreationStats] = useState<CreationStatItem[]>([]);
+  const [loadingStats, setLoadingStats] = useState<boolean>(true);
+
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestionItem[]>([]);
+  const [loadingAi, setLoadingAi] = useState<boolean>(false);
+
   const [modalOpened, setModalOpened] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
   const [currentWork, setCurrentWork] = useState<WorkFormData | null>(null);
@@ -48,8 +67,71 @@ export default function WorkspacePage() {
     }
   };
 
-  React.useEffect(() => {
+  // 加载最近编辑内容
+  const fetchRecentChapterData = async () => {
+    try {
+      setLoadingRecent(true);
+      const res = await getRecentChapter();
+      if (res && res.success) {
+        setRecentChapter(res.result || null);
+      }
+    } catch (err) {
+      console.error("获取最近编辑章节失败:", err);
+    } finally {
+      setLoadingRecent(false);
+    }
+  };
+
+  // 加载近24小时动态
+  const fetchActivitiesData = async () => {
+    try {
+      setLoadingActivities(true);
+      const res = await getRecentActivities();
+      if (res && res.success && Array.isArray(res.result)) {
+        setActivities(res.result || []);
+      }
+    } catch (err) {
+      console.error("获取近期动态失败:", err);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
+  // 加载创作统计
+  const fetchStatsData = async () => {
+    try {
+      setLoadingStats(true);
+      const res = await getCreationStats();
+      if (res && res.success && Array.isArray(res.result)) {
+        setCreationStats(res.result || []);
+      }
+    } catch (err) {
+      console.error("获取创作统计失败:", err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
+  // 按需手动触发 AI 智囊诊断（避免页面加载时消耗 Token）
+  const handleDiagnoseAi = async () => {
+    try {
+      setLoadingAi(true);
+      const res = await triggerAiDiagnosis();
+      if (res && res.success && Array.isArray(res.result)) {
+        setAiSuggestions(res.result || []);
+      }
+    } catch (err) {
+      console.error("AI 智囊诊断失败:", err);
+    } finally {
+      setLoadingAi(false);
+    }
+  };
+
+  useEffect(() => {
     fetchWorks();
+    fetchRecentChapterData();
+    fetchActivitiesData();
+    fetchStatsData();
   }, []);
 
   // 新建作品
@@ -88,6 +170,9 @@ export default function WorkspacePage() {
         });
         if (res && res.success) {
           fetchWorks();
+          fetchRecentChapterData();
+          fetchActivitiesData();
+          fetchStatsData();
         }
       } catch (err) {
         console.error("新建作品失败:", err);
@@ -105,6 +190,9 @@ export default function WorkspacePage() {
         });
         if (res && res.success) {
           fetchWorks();
+          fetchRecentChapterData();
+          fetchActivitiesData();
+          fetchStatsData();
         }
       } catch (err) {
         console.error("编辑作品失败:", err);
@@ -121,6 +209,8 @@ export default function WorkspacePage() {
       });
       if (res && res.success) {
         fetchWorks();
+        fetchRecentChapterData();
+        fetchActivitiesData();
       }
     } catch (err) {
       console.error("切换置顶状态失败:", err);
@@ -139,6 +229,9 @@ export default function WorkspacePage() {
         const res = await deleteWork(String(deletingWork.id));
         if (res && res.success) {
           fetchWorks();
+          fetchRecentChapterData();
+          fetchActivitiesData();
+          fetchStatsData();
         }
       } catch (err) {
         console.error("删除作品失败:", err);
@@ -154,6 +247,23 @@ export default function WorkspacePage() {
     router.push(`/project/${work.id}`);
   };
 
+  // 点击“继续写作”跳转至对应小说对应章节的编辑页
+  const handleContinueWriting = () => {
+    if (!recentChapter) return;
+    if (recentChapter.workId) {
+      if (recentChapter.chapterId) {
+        router.push(
+          `/project/${recentChapter.workId}?tab=chapters&chapterId=${recentChapter.chapterId}`
+        );
+      } else {
+        router.push(`/project/${recentChapter.workId}?tab=chapters`);
+      }
+    }
+  };
+
+  const userName = user?.name || user?.username || "作家";
+  const currentDateStr = dayjs().format("YYYY年M月D日");
+
   return (
     <Box
       mih="calc(100vh - 60px)"
@@ -164,10 +274,10 @@ export default function WorkspacePage() {
     >
       <Box mb={24}>
         <Text fz={24} fw={700} c="#1e293b" lh={1.3}>
-          {welcome.title}
+          欢迎回来，{userName}
         </Text>
         <Text fz={13} c="#94a3b8" mt={6}>
-          {welcome.subtitle}
+          今天是 {currentDateStr} · 灵感不断，落笔成章
         </Text>
       </Box>
 
@@ -177,14 +287,13 @@ export default function WorkspacePage() {
         direction={{ base: "column", md: "row" }}
       >
         <Flex direction="column" gap={24} w="100%">
-          {/* <RecentChapterCard
-            data={recentChapter}
-            onContinue={() => {
-              if (works.length > 0) {
-                router.push(`/project/${works[0].id}`);
-              }
-            }}
-          /> */}
+          <Loading loading={loadingRecent} h={120}>
+            <RecentChapterCard
+              data={recentChapter}
+              onContinue={handleContinueWriting}
+            />
+          </Loading>
+
           <WorksSection
             loading={loadingList}
             works={works}
@@ -194,18 +303,28 @@ export default function WorkspacePage() {
             onTogglePin={handleTogglePin}
             onSelectWork={handleSelectWork}
           />
-          {/* <CreationStats stats={creationStats} /> */}
+
+          <Loading loading={loadingStats} h={100}>
+            <CreationStats stats={creationStats} />
+          </Loading>
         </Flex>
 
-        {/* <Flex
+        <Flex
           direction="column"
           gap={20}
           w={{ base: "100%", md: 340 }}
           style={{ flexShrink: 0 }}
         >
-          <AiSuggestions suggestions={aiSuggestions} />
-          <RecentActivities activities={recentActivities} />
-        </Flex> */}
+          <AiSuggestions
+            suggestions={aiSuggestions}
+            loading={loadingAi}
+            onDiagnose={handleDiagnoseAi}
+          />
+          
+          <Loading loading={loadingActivities} h={200}>
+            <RecentActivities activities={activities} />
+          </Loading>
+        </Flex>
       </Flex>
 
       <ModalWork

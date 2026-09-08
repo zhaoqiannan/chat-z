@@ -32,7 +32,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         applied INTEGER DEFAULT 0,
         created_at INTEGER
       )`);
-    } catch (_) {}
+    } catch (_) { }
 
     const chatList = await db.select().from(chapterAiChats).where(and(eq(chapterAiChats.chapterId, chapterId), eq(chapterAiChats.userId, user.userId))).orderBy(asc(chapterAiChats.createdAt)).all();
 
@@ -88,7 +88,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         applied INTEGER DEFAULT 0,
         created_at INTEGER
       )`);
-    } catch (_) {}
+    } catch (_) { }
 
     const charIds = contextTags.filter((t) => t.type === "character").map((t) => Number(t.id)).filter(Boolean);
     const locIds = contextTags.filter((t) => t.type === "location").map((t) => Number(t.id)).filter(Boolean);
@@ -141,7 +141,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 3. 【直奔正文首字】：输出的第一行第一个字必须是正文的开头，最后一个字必须是正文的结尾。
 4. 【全文润色必须完整输出】：若为全章润色或长段润色，必须从头到尾完整输出所有润色后的正文，保持情节与段落完整，严禁中途截断、省略、打省略号或只输出局部片段。
 5. 【纯正文文笔风格】：强化画面感、动词力量感、微表情与情绪张力，严密遵循给定的世界观与人物人设。
-（仅当执行【逻辑纠错】或作者进行【创作问答】探讨剧情设定时，才输出条理清晰的专业建议，但仍禁止输出元思考过程）。`;
+（仅当执行【逻辑纠错】或作者进行【创作问答】探讨剧情设定时，才输出条理清晰的专业建议，但仍禁止输出元思考过程）。
+6. 【规则】:小说中出现'（）''()',其中内容是对前文进行【智能润色】、【场景扩写】、【精简缩写】、【情节续写】、【语气改写】等的说明,必须参考这里的内容进行修改。`;
 
     let finalUserMessage = "";
 
@@ -172,15 +173,22 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     switch (actionType) {
       case "polish":
         if (hasSelection) {
-          finalUserMessage += `【指令：选中文本智能润色】
-请对上述【选中文本片段】进行专业级文学润色。强化动词张力、环境氛围与感官细节，保持原剧情走向与角色性格。
+          finalUserMessage += `【最高执行指令：选中文本无损精修润色】
+请对上述【选中文本片段】进行专业级文学润色。
+【核心准则】：
+1. 【情节零丢失】：必须100%保留原剧情、人物对话、因果逻辑与动作细节，严禁擅自删减、跳过或魔改任何情节！
+2. 【语言通顺自然】：修正病句、语序错乱与生硬表达，消除机器翻译腔，强化动词力量感与画面感，使行文通顺流畅。
 ${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出润色后的纯正文文本，不要包含任何思考过程、分析建议、前后缀或说明。`;
+【输出铁律】：只输出润色后的纯正文文本，绝对严禁输出任何思考过程、分析说明或前后缀！`;
         } else {
-          finalUserMessage += `【指令：全篇章节智能润色】
-请对上述【当前章节完整正文内容】进行通篇文学润色与文笔升级。优化节奏感、打斗/对话张力与画面感。
+          finalUserMessage += `【最高执行指令：全篇章节无损精修润色】
+请对上述【当前章节完整正文内容】进行逐段文学润色与文笔升级。
+【核心准则】：
+1. 【情节零丢失】：必须100%完整保留原文中所有的事件推进、对白互动、角色动作和细节伏笔，严禁跳跃剧情、擅自删减段落或压缩概括！
+2. 【语言通畅一气呵成】：全面修正病句、别扭语序与生硬表达，使全篇行文通畅自然、节奏紧凑。
+3. 【段落结构忠实】：保留作者原有的分段节奏，逐段精修，严禁中途截断。
 ${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：必须完整输出润色后的全篇正文，不要截断或省略任何段落；只输出纯正文，严禁包含任何思考分析、修改说明或前缀标签！`;
+【输出铁律】：必须完整输出润色后的全篇正文，从第一句到最后一句；只输出纯正文，严禁包含任何思考分析、修改说明或前缀标签！`;
         }
         break;
 
@@ -246,8 +254,9 @@ ${userPrompt || "请结合上述设定与当前章节正文，给出专业的推
       { role: "user", content: finalUserMessage },
     ];
 
+    const targetTemp = actionType === "critique" || actionType === "polish" ? 0.35 : 0.75;
     const rawAiResponse = await callCloudflareAi(env.AI, messages, {
-      temperature: actionType === "critique" ? 0.35 : 0.75,
+      temperature: targetTemp,
       maxTokens: 8192,
     });
 
@@ -346,7 +355,7 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       try {
         const body = await req.json();
         id = Number(body?.id);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     if (!id || isNaN(id)) {

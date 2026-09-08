@@ -643,7 +643,51 @@ export const plotDeductions = sqliteTable('plot_deductions', {
 });
 
 // ============================================================================
-// 20. TypeScript 类型导出 (强类型提示)
+// 21. 操作与活动动态日志表 (activity_logs)
+// ============================================================================
+export const activityLogs = sqliteTable('activity_logs', {
+  /** 日志自增 ID */
+  id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+  /** 操作者用户 ID */
+  userId: text('user_id').notNull(),
+  /** 所属作品 ID */
+  workId: integer('work_id'),
+  /** 所属作品名称 */
+  workTitle: text('work_title'),
+  /** 操作目标类型: 'work' | 'chapter' */
+  targetType: text('target_type').notNull(),
+  /** 操作目标 ID */
+  targetId: integer('target_id'),
+  /** 操作目标名称/标题 */
+  targetTitle: text('target_title'),
+  /** 操作动作: 'create' | 'update' | 'delete' */
+  action: text('action').notNull(),
+  /** 操作详细描述 */
+  description: text('description'),
+  /** 发生时间戳 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 22. 每日写作字数统计表 (daily_word_stats)
+// ============================================================================
+export const dailyWordStats = sqliteTable('daily_word_stats', {
+  /** 自增主键 ID */
+  id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
+  /** 用户 ID */
+  userId: text('user_id').notNull(),
+  /** 统计日期 (格式: YYYY-MM-DD) */
+  statDate: text('stat_date').notNull(),
+  /** 当天新增净字数 */
+  wordsAdded: integer('words_added').default(0),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+  /** 更新时间 */
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+// ============================================================================
+// 23. TypeScript 类型导出 (强类型提示)
 // ============================================================================
 
 /** 用户查询类型 (SELECT) */
@@ -725,6 +769,14 @@ export type NewMemoryFragment = typeof memoryFragments.$inferInsert;
 /** 剧情推演记录类型 */
 export type PlotDeduction = typeof plotDeductions.$inferSelect;
 export type NewPlotDeduction = typeof plotDeductions.$inferInsert;
+
+/** 活动动态日志类型 */
+export type ActivityLog = typeof activityLogs.$inferSelect;
+export type NewActivityLog = typeof activityLogs.$inferInsert;
+
+/** 每日字数统计类型 */
+export type DailyWordStat = typeof dailyWordStats.$inferSelect;
+export type NewDailyWordStat = typeof dailyWordStats.$inferInsert;
 
 
 

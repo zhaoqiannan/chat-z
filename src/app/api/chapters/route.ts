@@ -3,6 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, chapters, works } from "@/db";
 import { eq, and, asc, desc } from "drizzle-orm";
+import { logUserActivity } from "@/utils/activityLogger";
+import { trackDailyWords } from "@/utils/wordStatsLogger";
 
 /**
  * 校验作品归属权
@@ -179,11 +181,28 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     // 重新统计作品总字数与章节总数
     if (!isVol) {
       await recountWorkWords(db, workId);
+      if (wordCount > 0) {
+        await trackDailyWords(db, user.userId, wordCount);
+      }
     }
+
+    const finalChapter = inserted || newChapterData;
+    await logUserActivity(db, {
+      userId: user.userId,
+      workId,
+      workTitle: work.title,
+      targetType: "chapter",
+      targetId: finalChapter.id || null,
+      targetTitle: finalChapter.title,
+      action: "create",
+      description: isVol
+        ? `在「${work.title}」中创建了分卷「${title.trim()}」`
+        : `在「${work.title}」中新建了第 ${autoChapterNumber} 章「${title.trim()}」`,
+    });
 
     return NextResponse.json({
       success: true,
-      result: inserted || newChapterData,
+      result: finalChapter,
       message: isVol ? "新建卷成功" : `成功新建第 ${autoChapterNumber} 章`,
     });
   } catch (error: any) {
@@ -247,7 +266,30 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     // 重新统计作品字数
     if (!chapter.isVolume) {
       await recountWorkWords(db, chapter.workId);
+      const delta = wordCount - (chapter.wordCount || 0);
+      if (delta > 0) {
+        await trackDailyWords(db, user.userId, delta);
+      }
     }
+
+    const work = await db
+      .select({ title: works.title })
+      .from(works)
+      .where(eq(works.id, chapter.workId))
+      .get();
+
+    await logUserActivity(db, {
+      userId: user.userId,
+      workId: chapter.workId,
+      workTitle: work?.title || null,
+      targetType: "chapter",
+      targetId: chapterId,
+      targetTitle: updatedData.title,
+      action: "update",
+      description: chapter.isVolume
+        ? `更新了分卷「${updatedData.title}」`
+        : `编辑了「${work?.title || "作品"}」第 ${updatedData.chapterNumber} 章「${updatedData.title}」`,
+    });
 
     return NextResponse.json({
       success: true,
@@ -313,6 +355,25 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (!chapter.isVolume) {
       await recountWorkWords(db, chapter.workId);
     }
+
+    const work = await db
+      .select({ title: works.title })
+      .from(works)
+      .where(eq(works.id, chapter.workId))
+      .get();
+
+    await logUserActivity(db, {
+      userId: user.userId,
+      workId: chapter.workId,
+      workTitle: work?.title || null,
+      targetType: "chapter",
+      targetId: chapterId,
+      targetTitle: chapter.title,
+      action: "delete",
+      description: chapter.isVolume
+        ? `删除了分卷「${chapter.title}」`
+        : `删除了「${work?.title || "作品"}」章节「${chapter.title}」`,
+    });
 
     return NextResponse.json({
       success: true,

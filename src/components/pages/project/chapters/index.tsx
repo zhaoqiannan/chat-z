@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
 import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload } from "@/rest/chapter";
 import TreePanel from "./tree-panel";
@@ -15,7 +15,9 @@ import ModalCreateChapter from "./modal-create-chapter";
 
 export default function ChaptersPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const workId = String(params?.id || "");
+  const targetChapterId = searchParams.get("chapterId");
 
   const [loading, setLoading] = useState(false);
   const [rawList, setRawList] = useState<ChapterItem[]>([]);
@@ -42,6 +44,14 @@ export default function ChaptersPage() {
       if (res && res.success && Array.isArray(res.result)) {
         const list: ChapterItem[] = res.result;
         setRawList(list);
+
+        if (targetChapterId) {
+          const target = list.find((item) => String(item.id) === String(targetChapterId));
+          if (target) {
+            setActiveChapter(target);
+            return;
+          }
+        }
 
         if (activeChapter) {
           const found = list.find((item) => String(item.id) === String(activeChapter.id));
