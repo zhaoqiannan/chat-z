@@ -193,8 +193,81 @@ export default function PanelMaterialDetail({
               placeholder="https://..."
               value={sourceUrl}
               onChange={(e) => setSourceUrl(e.target.value)}
+              rightSection={
+                sourceUrl ? (
+                  <ActionIcon
+                    size="xs"
+                    variant="subtle"
+                    color="blue"
+                    onClick={() => window.open(sourceUrl, "_blank")}
+                  >
+                    <FiLink size={12} />
+                  </ActionIcon>
+                ) : null
+              }
             />
           </Box>
+
+          {/* 文件正文 / 原始文本预览 */}
+          {(material.content || material.extractedLore) && (
+            <Paper p="xs" bg="#f8fafc" withBorder radius="md" style={{ borderColor: "#e2e8f0" }}>
+              <Flex justify="space-between" align="center" mb={6}>
+                <Group gap={4}>
+                  <FiFileText size={12} color="#475569" />
+                  <Text fz={11.5} fw={700} c="#475569">文件正文内容 ({material.content?.length || material.extractedLore?.length || 0} 字符)</Text>
+                </Group>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="gray"
+                  onClick={() => {
+                    navigator.clipboard.writeText(material.content || material.extractedLore || "");
+                    alert("已复制文件内容到剪贴板");
+                  }}
+                >
+                  复制全文
+                </Button>
+              </Flex>
+              <Box
+                style={{
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  padding: "8px 10px",
+                  borderRadius: 6,
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  fontFamily: "monospace",
+                  fontSize: 11,
+                  lineHeight: 1.5,
+                  color: "#334155",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                }}
+              >
+                {material.content || material.extractedLore}
+              </Box>
+            </Paper>
+          )}
+
+          {/* 图片文件预览 */}
+          {material.fileType === "image" && material.fileUrl && (
+            <Paper p="xs" bg="#f8fafc" withBorder radius="md" style={{ borderColor: "#e2e8f0" }}>
+              <Text fz={11.5} fw={700} c="#475569" mb={6}>图片预览</Text>
+              <Box
+                component="img"
+                src={material.fileUrl}
+                alt={material.title}
+                style={{
+                  width: "100%",
+                  maxHeight: 200,
+                  objectFit: "contain",
+                  borderRadius: 4,
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                }}
+              />
+            </Paper>
+          )}
 
           <Box>
             <Text fz={11.5} fw={600} c="#64748b" mb={4}>标签管理</Text>
@@ -235,7 +308,6 @@ export default function PanelMaterialDetail({
               </Group>
               <Switch
                 size="xs"
-
                 checked={includeInAi}
                 onChange={(e) => setIncludeInAi(e.currentTarget.checked)}
               />

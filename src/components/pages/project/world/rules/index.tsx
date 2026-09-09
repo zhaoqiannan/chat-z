@@ -261,34 +261,57 @@ export default function RulesTab({ workId }: RulesTabProps) {
         </Paper>
       )}
 
-      {/* 新建/编辑规则弹窗 */}
+      {/* 新建/编辑规则弹窗 - 70vw 宽屏大文本编译器 */}
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
-        title={<Text fw={700} fz={15} c="#0f172a">{editingItem ? "编辑世界规则" : "新建世界规则"}</Text>}
-        size="md"
+        title={
+          <Group gap={8}>
+            <FiSliders size={16} color="#0284c7" />
+            <Text fw={700} fz={16} c="#0f172a">
+              {editingItem ? "编辑世界规则与运转体系" : "新建世界规则与运转体系"}
+            </Text>
+          </Group>
+        }
+        size="70vw"
         centered
-        radius="sm"
+        radius="md"
         styles={{
-          content: { maxHeight: "88vh", display: "flex", flexDirection: "column" },
-          header: { borderBottom: "1px solid #f1f5f9", padding: "12px 20px", flexShrink: 0 },
-          body: { flex: 1, overflowY: "auto", minHeight: 0, padding: "16px 20px 12px 20px" },
+          content: {
+            maxHeight: "90vh",
+            maxWidth: "1200px",
+            minWidth: "360px",
+            display: "flex",
+            flexDirection: "column",
+          },
+          header: {
+            borderBottom: "1px solid #f1f5f9",
+            padding: "16px 24px",
+            flexShrink: 0,
+          },
+          body: {
+            flex: 1,
+            overflowY: "auto",
+            minHeight: 0,
+            padding: "20px 24px",
+          },
         }}
       >
-        <Stack gap="sm">
+        <Stack gap="md">
           <TextInput
-            label="规则名称"
-            placeholder="请输入"
-            size="xs"
+            label="规则/体系名称"
+            placeholder="例如：大陆通用货币与汇率体系 / 天地灵气与九品仙道修炼法则"
+            size="sm"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            styles={{ input: { fontWeight: 600 } }}
           />
 
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
             <Select
-              label="关联角色 (选填)"
-              placeholder="选择生效专属角色"
+              label="关联专属角色 (选填)"
+              placeholder="选择适用的专属角色"
               size="xs"
               value={characterName}
               onChange={(val) => setCharacterName(val || "")}
@@ -297,8 +320,8 @@ export default function RulesTab({ workId }: RulesTabProps) {
               searchable
             />
             <Select
-              label="关联阵营 (选填)"
-              placeholder="选择生效所属阵营"
+              label="关联专属阵营 (选填)"
+              placeholder="选择适用的所属势力"
               size="xs"
               value={factionName}
               onChange={(val) => setFactionName(val || "")}
@@ -308,24 +331,92 @@ export default function RulesTab({ workId }: RulesTabProps) {
             />
           </SimpleGrid>
 
-          <Textarea
-            label="核心规则内容与运转机制"
-            placeholder="详细描述该体系或法则的底层运转机理、约束条件、触发机制、代价反噬或禁忌..."
-            size="xs"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            minRows={7}
-            autosize
-            required
-          />
+          <Box>
+            <Flex justify="space-between" align="center" mb={6}>
+              <Text fz={13} fw={600} c="#334155">
+                核心规则内容、法则机制与数据表格 (支持 Markdown)
+              </Text>
+              <Group gap={6}>
+                <Text fz={11} c="#94a3b8">快捷模版：</Text>
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  color="gray"
+                  onClick={() => {
+                    const tableTemplate = `\n| 货币名称 | 换算比例 | 购买力参考 |\n| :--- | :--- | :--- |\n| 铜钱 (文) | 1 铜钱 | 1个大烧饼 / 粗茶一壶 |\n| 白银 (两) | 1两 = 1,000 铜钱 | 寻常三口之家一月用度 |\n| 黄金 (两) | 1两 = 10 两白银 | 京城上好绸缎一匹 / 凡品战刀 |\n| 灵石 (初品) | 1枚 = 100 两黄金 | 炼气期修士修炼基础资源 |\n`;
+                    setDescription((prev) => prev ? prev + "\n" + tableTemplate : tableTemplate);
+                  }}
+                >
+                  + 货币汇率表
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  color="gray"
+                  onClick={() => {
+                    const levelTemplate = `\n| 阶位等级 | 寿元上限 | 核心能力特征 | 突破瓶颈/代价 |\n| :--- | :--- | :--- | :--- |\n| 一阶 · 炼体期 | 百年 | 肉身坚如磐石，千斤巨力 | 需经脉筑基丹破关 |\n| 二阶 · 筑基期 | 二百年 | 气海化液，可御空滑翔 | 遭遇心魔反噬风险 |\n| 三阶 · 金丹期 | 五百年 | 丹碎成婴，引天地雷劫 | 需渡九重天雷劫 |\n`;
+                    setDescription((prev) => prev ? prev + "\n" + levelTemplate : levelTemplate);
+                  }}
+                >
+                  + 境界阶梯表
+                </Button>
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  color="gray"
+                  onClick={() => {
+                    const genericTable = `\n| 条目/类别 | 规则约束 | 触发条件 | 代价与后果 |\n| :--- | :--- | :--- | :--- |\n| 禁忌条款一 | 不可逆向施法 | 强行催动禁术 | 寿元折损三成 |\n`;
+                    setDescription((prev) => prev ? prev + "\n" + genericTable : genericTable);
+                  }}
+                >
+                  + 通用规则表
+                </Button>
+              </Group>
+            </Flex>
 
-          <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9", position: "sticky", bottom: -12, backgroundColor: "#ffffff", zIndex: 10, paddingBottom: 4 }}>
-            <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
-              取消
-            </Button>
-            <Button size="xs" loading={formLoading} onClick={handleSave}>
-              保存规则
-            </Button>
+            <Textarea
+              placeholder="详细描述该体系或法则的底层运转机理、约束条件、触发机制、代价反噬或禁忌，可直接使用 Markdown 插入各类表格..."
+              size="sm"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              minRows={14}
+              autosize
+              styles={{
+                input: {
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  fontSize: "13px",
+                  lineHeight: 1.6,
+                },
+              }}
+              required
+            />
+          </Box>
+
+          <Flex
+            justify="space-between"
+            align="center"
+            mt="sm"
+            pt={12}
+            style={{
+              borderTop: "1px solid #f1f5f9",
+              position: "sticky",
+              bottom: -20,
+              backgroundColor: "#ffffff",
+              zIndex: 10,
+              paddingBottom: 4,
+            }}
+          >
+            <Text fz={12} c="#94a3b8">
+              💡 提示：在此处编写的表格与规则在 AI 协同创作中会自动进行摘要注入，完全不会过度消耗算力。
+            </Text>
+            <Group gap="xs">
+              <Button variant="default" size="xs" onClick={() => setModalOpened(false)}>
+                取消
+              </Button>
+              <Button size="xs" color="cyan" loading={formLoading} onClick={handleSave}>
+                保存规则
+              </Button>
+            </Group>
           </Flex>
         </Stack>
       </Modal>

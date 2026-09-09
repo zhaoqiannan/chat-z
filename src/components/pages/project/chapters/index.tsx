@@ -23,7 +23,7 @@ export default function ChaptersPage() {
   const [rawList, setRawList] = useState<ChapterItem[]>([]);
   const [activeChapter, setActiveChapter] = useState<ChapterItem | null>(null);
 
-  const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const [treeCollapsed, setTreeCollapsed] = useState(true);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   const [aiPanelWidth, setAiPanelWidth] = useState(360);
   const [isResizingAiPanel, setIsResizingAiPanel] = useState(false);

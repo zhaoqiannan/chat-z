@@ -61,7 +61,14 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
     if (keyword) {
       const lower = keyword.toLowerCase();
-      filtered = filtered.filter((m) => m.title.toLowerCase().includes(lower) || (m.fileName && m.fileName.toLowerCase().includes(lower)) || (m.tags && m.tags.toLowerCase().includes(lower)) || (m.aiSummary && m.aiSummary.toLowerCase().includes(lower)));
+      filtered = filtered.filter((m) => 
+        (m.title && m.title.toLowerCase().includes(lower)) ||
+        (m.fileName && m.fileName.toLowerCase().includes(lower)) ||
+        (m.tags && m.tags.toLowerCase().includes(lower)) ||
+        (m.aiSummary && m.aiSummary.toLowerCase().includes(lower)) ||
+        (m.content && m.content.toLowerCase().includes(lower)) ||
+        (m.extractedLore && m.extractedLore.toLowerCase().includes(lower))
+      );
     }
 
     return NextResponse.json({

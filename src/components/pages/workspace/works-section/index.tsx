@@ -94,7 +94,7 @@ export default function WorksSection({
       </Flex>
       <Loading loading={loading}>
         {works && works.length > 0 ? (
-          <SimpleGrid cols={{ base: 1, sm: 3, lg: 4 }} spacing={16}>
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing={16}>
             {works.map((work, i) => {
               const tags = work.tag
                 ? work.tag
