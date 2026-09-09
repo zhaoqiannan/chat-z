@@ -33,6 +33,8 @@ import {
   getChapterAiHistoryList,
   deleteChapterAiHistory,
 } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 
 interface DrawerAiHistoryProps {
   opened: boolean;
@@ -82,13 +84,24 @@ export default function DrawerAiHistory({
 
   const handleDelete = async (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (confirm("确定要删除该条 AI 生成历史记录吗？")) {
-      const res = await deleteChapterAiHistory(id);
-      if (res && res.success) {
-        if (activeItem?.id === id) {
-          setPreviewModalOpened(false);
+    const isConfirmed = await showConfirm({
+      title: "删除生成记录",
+      message: "确定要删除该条 AI 生成历史记录吗？",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
+      try {
+        const res = await deleteChapterAiHistory(id);
+        if (res && res.success) {
+          if (activeItem?.id === id) {
+            setPreviewModalOpened(false);
+          }
+          useAlert.success("历史记录已删除");
+          await fetchHistory();
         }
-        await fetchHistory();
+      } catch (e: any) {
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };
@@ -105,11 +118,19 @@ export default function DrawerAiHistory({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleApply = (content: string) => {
-    if (confirm("确定要采纳该历史版本并填入当前章节正文吗？(当前未保存的修改将被覆盖)")) {
+  const handleApply = async (content: string) => {
+    const isConfirmed = await showConfirm({
+      title: "采纳历史版本",
+      message: "确定要采纳该历史版本并填入当前章节正文吗？(当前未保存的修改将被覆盖)",
+      confirmLabel: "确认采纳",
+      confirmColor: "blue",
+      type: "warning",
+    });
+    if (isConfirmed) {
       onApplyHistory(content);
       setPreviewModalOpened(false);
       onClose();
+      useAlert.success("已采纳填入当前章节正文");
     }
   };
 

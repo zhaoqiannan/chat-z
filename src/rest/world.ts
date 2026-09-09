@@ -1,4 +1,4 @@
-import { get, post, put, patch, del } from "@/utils/rest";
+import { get, post, put, patch, del, getToken } from "@/utils/rest";
 
 // ============================================================================
 // 1. 角色 API 与类型 (Characters)
@@ -221,6 +221,8 @@ export interface WorldRuleItem {
   taboos?: string | null;
   levelTree?: LevelTreeNode[] | null;
   extra?: Record<string, any> | null;
+  isPinned?: number | null;
+  pinnedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -252,9 +254,17 @@ export const uploadImageFile = async (file: File): Promise<{ success: boolean; u
   const formData = new FormData();
   formData.append("file", file);
 
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const res = await fetch("/api/upload", {
     method: "POST",
+    headers,
     body: formData,
+    credentials: "include",
   });
 
   return res.json();

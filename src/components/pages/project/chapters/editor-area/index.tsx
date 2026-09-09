@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Progress, Menu } from "@mantine/core";
 import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft } from "react-icons/fi";
 import { ChapterItem, createChapterVersion } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
 import DrawerVersionHistory from "../drawer-version-history";
 import DrawerMemoryFragments from "../drawer-memory-fragments";
 
@@ -168,7 +169,7 @@ export default function EditorArea({
         });
       } catch (_) { }
     } catch (e: any) {
-      alert("保存失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setSaving(false);
     }

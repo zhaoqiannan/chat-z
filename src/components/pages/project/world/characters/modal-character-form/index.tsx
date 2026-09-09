@@ -6,6 +6,7 @@ import { Box, Flex, Text, Button, Modal, TextInput, Textarea, Select, Stack, Sim
 import { FiUploadCloud, FiZap } from "react-icons/fi";
 import { CharacterItem, createCharacter, updateCharacter, uploadImageFile } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
+import { useAlert } from "@/hooks/useAlert";
 
 interface ModalCharacterFormProps {
   opened: boolean;
@@ -87,7 +88,7 @@ export default function ModalCharacterForm({
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("角色姓名不能为空");
+      useAlert.warning("角色姓名不能为空");
       return;
     }
 
@@ -121,10 +122,11 @@ export default function ModalCharacterForm({
         await createCharacter({ workId: Number(workId), ...payload });
       }
 
+      useAlert.success("角色档案已成功保存");
       onClose();
       await onSuccess();
     } catch (e: any) {
-      alert("保存失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setFormLoading(false);
     }
@@ -139,11 +141,12 @@ export default function ModalCharacterForm({
       const res = await uploadImageFile(file);
       if (res && res.success && res.url) {
         setAvatarUrl(res.url);
+        useAlert.success("头像上传成功");
       } else {
-        alert("上传失败: " + (res?.message || "未知错误"));
+        useAlert.error("上传失败: " + (res?.message || "未知错误"));
       }
     } catch (err: any) {
-      alert("上传图片异常: " + (err?.message || "网络错误"));
+      useAlert.error("上传图片异常: " + (err?.message || "网络错误"));
     } finally {
       setFormLoading(false);
     }

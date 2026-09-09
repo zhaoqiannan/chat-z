@@ -31,6 +31,8 @@ import {
   FiCalendar,
   FiStar,
 } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import {
   TimelineData,
   TimelineEventData,
@@ -95,7 +97,7 @@ export default function TimelinePage() {
 
   const handleCreateTimeline = async () => {
     if (!newTimelineTitle.trim()) {
-      alert("时间线名称不能为空");
+      useAlert.warning("时间线名称不能为空");
       return;
     }
     try {
@@ -105,13 +107,14 @@ export default function TimelinePage() {
         description: newTimelineDesc.trim() || undefined,
       });
       if (res && res.success) {
+        useAlert.success("时间线创建成功！");
         setTimelineModalOpened(false);
         setNewTimelineTitle("");
         setNewTimelineDesc("");
         await fetchData();
       }
     } catch (e: any) {
-      alert("创建失败: " + (e?.message || "网络异常"));
+      useAlert.error("创建失败: " + (e?.message || "网络异常"));
     }
   };
 
@@ -142,11 +145,11 @@ export default function TimelinePage() {
 
   const handleSubmitEvent = async () => {
     if (!eventTitle.trim()) {
-      alert("事件名称不能为空");
+      useAlert.warning("事件名称不能为空");
       return;
     }
     if (!timePoint.trim()) {
-      alert("请填写时间点");
+      useAlert.warning("请填写时间点");
       return;
     }
 
@@ -176,19 +179,27 @@ export default function TimelinePage() {
           sortOrder,
         });
       }
+      useAlert.success("事件保存成功！");
       setEventModalOpened(false);
       await fetchData();
     } catch (e: any) {
-      alert("保存失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setFormLoading(false);
     }
   };
 
   const handleDeleteEvent = async (id: number) => {
-    if (confirm("确定要删除该时间节点吗？")) {
+    const isConfirmed = await showConfirm({
+      title: "删除时间节点",
+      message: "确定要删除该时间节点吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       const res = await deleteTimelineEvent(id);
       if (res && res.success) {
+        useAlert.success("时间节点已删除");
         await fetchData();
       }
     }

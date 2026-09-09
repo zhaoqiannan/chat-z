@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { Flex, Text, Button, Modal, TextInput, Textarea, Select, Stack, Group } from "@mantine/core";
 import { OutlineNode, CreateOutlinePayload, UpdateOutlinePayload } from "@/rest/outline";
+import { useAlert } from "@/hooks/useAlert";
 
 interface ModalSimpleNodeProps {
   opened: boolean;
@@ -48,7 +49,7 @@ export default function ModalSimpleNode({
 
   const handleSave = async () => {
     if (!title.trim()) {
-      alert("情节点标题不能为空");
+      useAlert.warning("情节点标题不能为空");
       return;
     }
 
@@ -74,10 +75,11 @@ export default function ModalSimpleNode({
           type: "scene",
         });
       }
+      useAlert.success("情节点保存成功！");
       onClose();
       await onSuccess();
     } catch (e: any) {
-      alert("保存情节点失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存情节点失败: " + (e?.message || "网络异常"));
     } finally {
       setLoading(false);
     }

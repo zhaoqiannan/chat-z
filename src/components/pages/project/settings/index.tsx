@@ -34,6 +34,8 @@ import {
   updateProjectSettings,
 } from "@/rest/project-extensions";
 import { deleteWork } from "@/rest/work";
+import { useAlert } from "@/hooks/useAlert";
+import { showPromptModal } from "@/hooks/useConfirm";
 
 export default function ProjectSettingsPage() {
   const params = useParams();
@@ -78,7 +80,7 @@ export default function ProjectSettingsPage() {
 
   const handleSaveSettings = async () => {
     if (!title.trim()) {
-      alert("作品书名不能为空");
+      useAlert.warning("作品书名不能为空");
       return;
     }
     try {
@@ -92,11 +94,11 @@ export default function ProjectSettingsPage() {
         status,
       });
       if (res && res.success) {
-        alert("项目设置已成功保存！");
+        useAlert.success("项目设置已成功保存！");
         await fetchDetails();
       }
     } catch (err: any) {
-      alert("保存失败: " + err?.message);
+      useAlert.error("保存失败: " + err?.message);
     } finally {
       setSaveLoading(false);
     }
@@ -107,20 +109,25 @@ export default function ProjectSettingsPage() {
   };
 
   const handleDeleteProject = async () => {
-    const confirmation = prompt(`【高危操作警告】\n确定要彻底删除小说《${title}》及其所有章节、大纲和设定吗？此操作不可逆！\n\n如确认删除，请在下方输入书名确认：`);
-    if (confirmation === title.trim()) {
-      try {
-        const res = await deleteWork(workId);
-        if (res && res.success) {
-          alert("作品已彻底删除");
-          router.replace("/workspace");
+    await showPromptModal({
+      title: "删除作品警告",
+      message: `【高危操作警告】\n确定要彻底删除小说《${title}》及其所有章节、大纲和设定吗？此操作不可逆！\n\n如确认删除，请在下方输入书名「${title}」以确认：`,
+      placeholder: `请输入「${title}」确认删除`,
+      expectedValue: title.trim(),
+      confirmLabel: "彻底删除",
+      confirmColor: "red",
+      onConfirm: async () => {
+        try {
+          const res = await deleteWork(workId);
+          if (res && res.success) {
+            useAlert.success("作品已彻底删除");
+            router.replace("/workspace");
+          }
+        } catch (e: any) {
+          useAlert.error("删除失败: " + e?.message);
         }
-      } catch (e: any) {
-        alert("删除失败: " + e?.message);
-      }
-    } else if (confirmation !== null) {
-      alert("输入的书名不一致，已取消删除操作");
-    }
+      },
+    });
   };
 
   const currentWords = workData?.wordCount || 0;

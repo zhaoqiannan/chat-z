@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
 import { MaterialData, getMaterialList, deleteMaterial } from "@/rest/project-extensions";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import MaterialsTable from "./materials-table";
 import ModalCreateMaterial from "./modal-create-material";
 import ModalMaterialSummary from "./modal-material-summary";
@@ -45,14 +47,21 @@ export default function MaterialsPage() {
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该素材资料吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除素材",
+      message: "确定要删除该素材资料吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteMaterial(id);
         if (summaryMaterial?.id === id) setSummaryMaterial(null);
         if (previewMaterial?.id === id) setPreviewMaterial(null);
+        useAlert.success("素材已成功删除");
         await fetchList();
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };
@@ -97,9 +106,9 @@ export default function MaterialsPage() {
         opened={createModalOpened}
         onClose={() => setCreateModalOpened(false)}
         workId={workId}
-        onSuccess={(created) => {
+        onSuccess={() => {
           fetchList();
-          setPreviewMaterial(created);
+          useAlert.success("素材创建/上传成功！");
         }}
       />
 

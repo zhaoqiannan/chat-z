@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Box, Flex, Text, Button, Badge, ActionIcon, TextInput, Textarea, Switch, Stack, Paper, Group, Tooltip } from "@mantine/core";
 import { FiZap, FiRefreshCw, FiSave, FiTag, FiSliders, FiLink } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
 import { MaterialData, updateMaterial, extractMaterialAiSummary } from "@/rest/project-extensions";
 
 interface ModalMaterialSummaryProps {
@@ -61,10 +62,11 @@ export default function ModalMaterialSummary({
           includeInAiContext: includeInAi ? 1 : 0,
           updatedAt: new Date().toISOString(),
         });
+        useAlert.success("素材设定与摘要已保存");
         onClose();
       }
     } catch (e: any) {
-      alert("保存失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setSaving(false);
     }
@@ -87,9 +89,10 @@ export default function ModalMaterialSummary({
           const combinedTags = Array.from(new Set([...existing, ...res.result.suggestedTags])).join(", ");
           setTags(combinedTags);
         }
+        useAlert.success("AI 智能摘要提炼成功！");
       }
     } catch (e: any) {
-      alert("AI 提取摘要异常: " + (e?.message || "网络错误"));
+      useAlert.error("AI 提取摘要异常: " + (e?.message || "网络错误"));
     } finally {
       setAiExtracting(false);
     }

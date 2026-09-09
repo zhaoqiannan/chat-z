@@ -4,6 +4,7 @@
 import React, { useState, useRef } from "react";
 import { Flex, Text, Button, Modal, TextInput, Textarea, Select, Stack, Group, SimpleGrid, Paper, Box } from "@mantine/core";
 import { FiUploadCloud, FiFileText, FiLink, FiTag, FiCheckCircle } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
 import { MaterialData, createMaterial } from "@/rest/project-extensions";
 import { uploadImageFile } from "@/rest/world";
 
@@ -71,6 +72,9 @@ export default function ModalCreateMaterial({
         const uploadRes = await uploadImageFile(file);
         if (uploadRes && uploadRes.success && uploadRes.url) {
           setFileUrl(uploadRes.url);
+          useAlert.success("图片上传成功");
+        } else {
+          useAlert.error("图片上传失败: " + (uploadRes?.message || "未知错误"));
         }
       } else {
         // 读取文本文件内容
@@ -91,7 +95,7 @@ export default function ModalCreateMaterial({
         }
       }
     } catch (err: any) {
-      alert("读取文件失败: " + (err?.message || "未知错误"));
+      useAlert.error("读取文件失败: " + (err?.message || "未知错误"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -100,7 +104,7 @@ export default function ModalCreateMaterial({
 
   const handleSubmit = async () => {
     if (!title.trim()) {
-      alert("素材名称不能为空");
+      useAlert.warning("素材名称不能为空");
       return;
     }
 
@@ -126,7 +130,7 @@ export default function ModalCreateMaterial({
         onSuccess(res.result);
       }
     } catch (e: any) {
-      alert("创建素材失败: " + (e?.message || "网络异常"));
+      useAlert.error("创建素材失败: " + (e?.message || "网络异常"));
     } finally {
       setSaving(false);
     }

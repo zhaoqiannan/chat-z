@@ -5,6 +5,7 @@ import React from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Table, TextInput, ScrollArea, Group, Tooltip } from "@mantine/core";
 import { FiPlus, FiSearch, FiFileText, FiImage, FiBarChart2, FiMusic, FiVideo, FiLink, FiZap, FiEye, FiTrash2, FiDownloadCloud } from "react-icons/fi";
 import dayjs from "dayjs";
+import { useAlert } from "@/hooks/useAlert";
 import { MaterialData } from "@/rest/project-extensions";
 
 interface MaterialsTableProps {
@@ -40,6 +41,7 @@ export default function MaterialsTable({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      useAlert.success("正在下载附件文件");
     } else if (contentText) {
       const blob = new Blob([contentText], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -50,10 +52,11 @@ export default function MaterialsTable({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      useAlert.success("正文内容文本已下载");
     } else if (targetUrl) {
       window.open(targetUrl, "_blank");
     } else {
-      alert("暂无可供下载的附件或正文内容");
+      useAlert.warning("暂无可供下载的附件或正文内容");
     }
   };
 
@@ -96,7 +99,7 @@ export default function MaterialsTable({
           </Text>
         </Box>
         <Button size="xs" leftSection={<FiPlus size={14} />} onClick={onOpenCreateModal}>
-          + 新建素材
+          新建素材
         </Button>
       </Flex>
 
@@ -195,26 +198,30 @@ export default function MaterialsTable({
                       </Text>
                     </Table.Td>
 
-                    {/* 操作（智能摘要、查看、下载、删除） */}
                     <Table.Td style={{ textAlign: "right" }}>
-                      <Group gap={6} justify="flex-end" wrap="nowrap">
-                        <Button
-                          size="compact-xs"
-                          variant="light"
-                          color="blue"
-                          leftSection={<FiZap size={11} />}
-                          onClick={() => onOpenSummaryModal(item)}
-                        >
-                          智能摘要
-                        </Button>
-                        <Button
-                          size="compact-xs"
-                          variant="default"
-                          leftSection={<FiEye size={11} />}
-                          onClick={() => onOpenPreviewModal(item)}
-                        >
-                          查看
-                        </Button>
+                      <Group gap={4} justify="flex-end" wrap="nowrap">
+                        <Tooltip label="智能摘要与设定" position="top">
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color="blue"
+                            onClick={() => onOpenSummaryModal(item)}
+                          >
+                            <FiZap size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+
+                        <Tooltip label="查看内容" position="top">
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => onOpenPreviewModal(item)}
+                          >
+                            <FiEye size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+
                         <Tooltip label="下载附件或正文" position="top">
                           <ActionIcon
                             size="sm"
@@ -225,6 +232,7 @@ export default function MaterialsTable({
                             <FiDownloadCloud size={14} />
                           </ActionIcon>
                         </Tooltip>
+
                         <Tooltip label="删除素材" position="top">
                           <ActionIcon
                             size="sm"

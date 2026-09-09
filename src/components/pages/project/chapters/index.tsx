@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
 import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import TreePanel from "./tree-panel";
 import EditorArea from "./editor-area";
 import PanelAiAssistant from "./panel-ai-assistant";
@@ -136,13 +138,24 @@ export default function ChaptersPage() {
   };
 
   const handleDelete = async (id: number | string) => {
-    if (confirm("确定要删除该章节/分卷吗？此操作不可撤销。")) {
-      const res = await deleteChapter(String(id));
-      if (res && res.success) {
-        if (activeChapter && String(activeChapter.id) === String(id)) {
-          setActiveChapter(null);
+    const isConfirmed = await showConfirm({
+      title: "删除章节/分卷",
+      message: "确定要删除该章节/分卷吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
+      try {
+        const res = await deleteChapter(String(id));
+        if (res && res.success) {
+          if (activeChapter && String(activeChapter.id) === String(id)) {
+            setActiveChapter(null);
+          }
+          useAlert.success("章节已成功删除");
+          await fetchChapters();
         }
-        await fetchChapters();
+      } catch (e: any) {
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };

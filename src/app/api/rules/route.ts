@@ -12,6 +12,12 @@ async function ensureWorldRuleColumns(db: any) {
   try {
     await db.run(sql`ALTER TABLE world_rules ADD COLUMN factions TEXT;`);
   } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE world_rules ADD COLUMN is_pinned INTEGER DEFAULT 0;`);
+  } catch (_) {}
+  try {
+    await db.run(sql`ALTER TABLE world_rules ADD COLUMN pinned_at INTEGER;`);
+  } catch (_) {}
 }
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
@@ -38,7 +44,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: true, result: rule });
     }
 
-    const list = await db.select().from(worldRules).where(eq(worldRules.workId, workId)).orderBy(desc(worldRules.createdAt)).all();
+    const list = await db.select().from(worldRules).where(eq(worldRules.workId, workId)).orderBy(desc(worldRules.isPinned), desc(worldRules.updatedAt), desc(worldRules.createdAt)).all();
     return NextResponse.json({ success: true, result: list });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: error?.message || "获取规则设定失败" }, { status: 500 });
@@ -59,6 +65,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       characters,
       factions,
       description,
+      isPinned,
       extra,
     } = body;
 
@@ -71,7 +78,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "规则设定名称不能为空" }, { status: 400 });
     }
 
-    const finalDesc = description?.trim() || "暂无描述";
+    const finalDesc = description !== undefined ? description : "暂无描述";
 
     const newRuleData = {
       workId,
@@ -79,6 +86,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       category: category?.trim() || null,
       mechanisms: finalDesc,
       description: finalDesc,
+      isPinned: isPinned ? 1 : 0,
+      pinnedAt: isPinned ? new Date() : null,
       extra: typeof extra === "object" ? { ...extra, characters, factions } : { characters, factions },
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -110,6 +119,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       characters,
       factions,
       description,
+      isPinned,
       extra,
     } = body;
 
@@ -122,8 +132,12 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (name !== undefined) updateData.name = name.trim();
     if (category !== undefined) updateData.category = category?.trim() || null;
     if (description !== undefined) {
-      updateData.description = description?.trim() || null;
-      updateData.mechanisms = description?.trim() || null;
+      updateData.description = description;
+      updateData.mechanisms = description;
+    }
+    if (isPinned !== undefined) {
+      updateData.isPinned = isPinned ? 1 : 0;
+      updateData.pinnedAt = isPinned ? new Date() : null;
     }
     if (extra !== undefined || characters !== undefined || factions !== undefined) {
       updateData.extra = { ...(extra || {}), ...(characters ? { characters } : {}), ...(factions ? { factions } : {}) };

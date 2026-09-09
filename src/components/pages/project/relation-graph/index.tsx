@@ -34,7 +34,12 @@ import {
   FiSearch,
   FiRefreshCw,
   FiArrowRight,
+  FiMaximize2,
+  FiEye,
+  FiLayers,
 } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import {
   CharacterRelationData,
   RelationGraphCharNode,
@@ -142,15 +147,15 @@ export default function RelationGraphPage() {
 
   const handleSubmit = async () => {
     if (!sourceCharId || !targetCharId) {
-      alert("请选择关联的两个角色！");
+      useAlert.warning("请选择关联的两个角色！");
       return;
     }
     if (sourceCharId === targetCharId) {
-      alert("角色不能与自己建立关联关系！");
+      useAlert.warning("角色不能与自己建立关联关系！");
       return;
     }
     if (!relationType.trim()) {
-      alert("请输入关系名称！");
+      useAlert.warning("请输入关系名称！");
       return;
     }
 
@@ -177,10 +182,11 @@ export default function RelationGraphPage() {
           description: description.trim() || undefined,
         });
       }
+      useAlert.success("人物关系保存成功！");
       setModalOpened(false);
       await fetchData();
     } catch (e: any) {
-      alert("保存关系失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存关系失败: " + (e?.message || "网络异常"));
     } finally {
       setFormLoading(false);
     }
@@ -188,9 +194,16 @@ export default function RelationGraphPage() {
 
   const handleDelete = async (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (confirm("确定要删除此条人物关系吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除人物关系",
+      message: "确定要删除此条人物关系吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       const res = await deleteCharacterRelation(id);
       if (res && res.success) {
+        useAlert.success("人物关系已删除");
         await fetchData();
       }
     }
@@ -744,11 +757,11 @@ export default function RelationGraphPage() {
               value={relationTag}
               onChange={(val) => setRelationTag(val || "friendly")}
               data={[
-                { value: "friendly", label: "🤝 同盟友好" },
-                { value: "hostile", label: "⚔️ 敌对仇恨" },
-                { value: "romantic", label: "💖 恋爱羁绊" },
-                { value: "family", label: "🏛️ 同门血亲" },
-                { value: "neutral", label: "⚖️ 利益中立" },
+                { value: "friendly", label: "同盟友好" },
+                { value: "hostile", label: "敌对仇恨" },
+                { value: "romantic", label: "恋爱羁绊" },
+                { value: "family", label: "同门血亲" },
+                { value: "neutral", label: "利益中立" },
               ]}
               size="xs"
             />

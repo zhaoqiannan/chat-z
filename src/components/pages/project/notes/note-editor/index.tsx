@@ -8,6 +8,7 @@ import { NoteData, updateNote } from "@/rest/project-extensions";
 import { createCharacter } from "@/rest/world";
 import { createChapter } from "@/rest/chapter";
 import { createOutlineNode } from "@/rest/outline";
+import { useAlert } from "@/hooks/useAlert";
 
 interface NoteEditorProps {
   workId: string;
@@ -59,9 +60,10 @@ export default function NoteEditor({
         content,
         category,
       });
+      useAlert.success("笔记已保存");
       await onUpdateSuccess();
     } catch (e: any) {
-      alert("保存失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setLocalSaving(false);
     }
@@ -76,9 +78,9 @@ export default function NoteEditor({
         description: activeNote.content,
         roleType: "major",
       });
-      alert("已成功将该笔记转为「角色设定」！可在世界观->角色库中查看。");
+      useAlert.success("已成功将该笔记转为「角色设定」！可在世界观->角色库中查看。");
     } catch (e: any) {
-      alert("转换失败: " + (e?.message || "网络异常"));
+      useAlert.error("转换失败: " + (e?.message || "网络异常"));
     }
   };
 
@@ -92,9 +94,9 @@ export default function NoteEditor({
         goal: activeNote.title,
         type: "scene",
       });
-      alert("已成功将该笔记转为「大纲剧情节点」！可在大纲树中查看。");
+      useAlert.success("已成功将该笔记转为「大纲剧情节点」！可在大纲树中查看。");
     } catch (e: any) {
-      alert("转换失败: " + (e?.message || "网络异常"));
+      useAlert.error("转换失败: " + (e?.message || "网络异常"));
     }
   };
 
@@ -108,9 +110,9 @@ export default function NoteEditor({
         content: activeNote.content,
         isVolume: 0,
       });
-      alert("已成功将该笔记转为「章节规划」！可在章节列表中查看。");
+      useAlert.success("已成功将该笔记转为「章节规划」！可在章节列表中查看。");
     } catch (e: any) {
-      alert("转换失败: " + (e?.message || "网络异常"));
+      useAlert.error("转换失败: " + (e?.message || "网络异常"));
     }
   };
 

@@ -6,6 +6,8 @@ import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select
 import { FiPlus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2 } from "react-icons/fi";
 import { LocationRecord, getLocationList, createLocation, updateLocation, deleteLocation } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 
 interface LocationsTabProps {
   workId: string;
@@ -209,7 +211,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      alert("请输入地点名称！");
+      useAlert.warning("请输入地点名称！");
       return;
     }
 
@@ -238,10 +240,11 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
         await createLocation({ workId: Number(workId), ...payload });
       }
 
+      useAlert.success("地点已保存");
       setModalOpened(false);
       await fetchList();
     } catch (e: any) {
-      alert("保存地点失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存地点失败: " + (e?.message || "网络异常"));
     } finally {
       setFormLoading(false);
     }
@@ -249,10 +252,19 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
   const handleDelete = async (id: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (confirm("确定要删除该地点吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除地点",
+      message: "确定要删除该地点吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       const res = await deleteLocation(id);
       if (res && res.success) {
+        useAlert.success("地点已删除");
         await fetchList();
+      } else {
+        useAlert.error("删除失败");
       }
     }
   };

@@ -4,6 +4,7 @@
 import React, { useState } from "react";
 import { Flex, Text, Button, Modal, TextInput, Textarea, Stack } from "@mantine/core";
 import { CreateOutlinePayload } from "@/rest/outline";
+import { useAlert } from "@/hooks/useAlert";
 
 interface ModalCreateOutlineVolumeProps {
   opened: boolean;
@@ -26,7 +27,7 @@ export default function ModalCreateOutlineVolume({
 
   const handleSave = async () => {
     if (!title.trim()) {
-      alert("篇章标题不能为空");
+      useAlert.warning("篇章标题不能为空");
       return;
     }
 
@@ -39,12 +40,13 @@ export default function ModalCreateOutlineVolume({
         type: "volume",
         goal: title.trim(),
       });
+      useAlert.success("篇章创建成功！");
       onClose();
       setTitle("");
       setContent("");
       await onSuccess();
     } catch (e: any) {
-      alert("创建篇章失败: " + (e?.message || "网络异常"));
+      useAlert.error("创建篇章失败: " + (e?.message || "网络异常"));
     } finally {
       setLoading(false);
     }

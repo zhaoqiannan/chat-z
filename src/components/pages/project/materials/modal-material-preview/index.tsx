@@ -4,6 +4,7 @@
 import React from "react";
 import { Modal, Box, Flex, Text, Button, Badge, ActionIcon, Paper, Group, Stack } from "@mantine/core";
 import { FiEye, FiCopy, FiExternalLink, FiFileText, FiImage, FiLink, FiDownloadCloud } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
 import { MaterialData } from "@/rest/project-extensions";
 
 interface ModalMaterialPreviewProps {
@@ -32,7 +33,7 @@ export default function ModalMaterialPreview({
   const handleCopy = () => {
     if (!contentText) return;
     navigator.clipboard.writeText(contentText);
-    alert("素材全文内容已复制到剪贴板");
+    useAlert.success("素材全文内容已复制到剪贴板");
   };
 
   const handleOpenSource = () => {
@@ -58,6 +59,7 @@ export default function ModalMaterialPreview({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      useAlert.success("正在下载附件文件");
     } else if (contentText) {
       const blob = new Blob([contentText], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
@@ -68,10 +70,11 @@ export default function ModalMaterialPreview({
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      useAlert.success("正文内容文本已下载");
     } else if (targetUrl) {
       window.open(targetUrl, "_blank");
     } else {
-      alert("暂无可供下载的附件或正文内容");
+      useAlert.warning("暂无可供下载的附件或正文内容");
     }
   };
 

@@ -7,6 +7,8 @@ import { FiZap, FiPlus, FiArrowRight, FiCheck, FiCornerDownRight, FiBookmark, Fi
 import { OutlineNode, PlotDeductionPath, PlotDeductionRecord, deductPlot, getPlotDeductions, savePlotDeduction, deletePlotDeduction, batchCreateOutlineNodes } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
 import { createMemoryFragment } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 
 interface DrawerPlotDeductionProps {
   opened: boolean;
@@ -64,11 +66,11 @@ export default function DrawerPlotDeduction({
 
   const handleStartDeduction = async () => {
     if (!startPoint.trim()) {
-      alert("请输入或选择【起点剧情点】");
+      useAlert.warning("请输入或选择【起点剧情点】");
       return;
     }
     if (!targetPoint.trim()) {
-      alert("请输入或选择【目标终点剧情】");
+      useAlert.warning("请输入或选择【目标终点剧情】");
       return;
     }
 
@@ -102,10 +104,10 @@ export default function DrawerPlotDeduction({
         });
         fetchHistory();
       } else {
-        alert("推演失败: " + (res?.message || "大模型未返回有效路径"));
+        useAlert.error("推演失败: " + (res?.message || "大模型未返回有效路径"));
       }
     } catch (e: any) {
-      alert("推演异常: " + (e?.message || "网络错误"));
+      useAlert.error("推演异常: " + (e?.message || "网络错误"));
     } finally {
       setLoading(false);
     }
@@ -134,11 +136,11 @@ export default function DrawerPlotDeduction({
         batch: true,
       });
 
-      alert(`已成功将「${path.title}」的 ${newNodes.length} 个转折情节点批量插入大纲树！`);
+      useAlert.success(`已成功将「${path.title}」的 ${newNodes.length} 个转折情节点批量插入大纲树！`);
       await onOutlineUpdated();
       onClose();
     } catch (e: any) {
-      alert("采纳写入大纲失败: " + (e?.message || "网络异常"));
+      useAlert.error("采纳写入大纲失败: " + (e?.message || "网络异常"));
     } finally {
       setAdopting(false);
     }
@@ -157,9 +159,9 @@ export default function DrawerPlotDeduction({
         sourceType: "ai_chat",
         tags: "剧情推演 转折方案",
       });
-      alert("已存为记忆碎片！可在章节写作区的灵感库中随时查阅。");
+      useAlert.success("已存为记忆碎片！可在章节写作区的灵感库中随时查阅。");
     } catch (e: any) {
-      alert("存为碎片失败: " + (e?.message || "网络异常"));
+      useAlert.error("存为碎片失败: " + (e?.message || "网络异常"));
     }
   };
 
@@ -174,12 +176,19 @@ export default function DrawerPlotDeduction({
 
   const handleDeleteHistory = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除这条推演历史吗？")) {
+    const isConfirmed = await showConfirm({
+      title: "删除推演历史",
+      message: "确定要删除这条推演历史吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deletePlotDeduction(id);
         setHistoryList((prev) => prev.filter((h) => h.id !== id));
+        useAlert.success("推演历史已删除");
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };

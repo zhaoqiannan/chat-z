@@ -6,6 +6,8 @@ import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea,
 import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp } from "react-icons/fi";
 import { FactionItem, getFactionList, createFaction, updateFaction, deleteFaction, getCharacterList, CharacterItem, getLocationList, LocationRecord } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 
 interface FactionsTabProps {
   workId: string;
@@ -122,7 +124,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("请输入阵营名称");
+      useAlert.warning("请输入阵营名称");
       return;
     }
 
@@ -151,10 +153,11 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
         await createFaction({ workId: Number(workId), ...payload });
       }
 
+      useAlert.success("阵营势力已成功保存！");
       setModalOpened(false);
       await fetchData();
     } catch (e: any) {
-      alert("保存阵营失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存阵营失败: " + (e?.message || "网络异常"));
     } finally {
       setFormLoading(false);
     }
@@ -162,12 +165,19 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该阵营势力吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除阵营",
+      message: "确定要删除该阵营势力吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteFaction(id);
         setList((prev) => prev.filter((item) => item.id !== id));
+        useAlert.success("阵营已成功删除");
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };

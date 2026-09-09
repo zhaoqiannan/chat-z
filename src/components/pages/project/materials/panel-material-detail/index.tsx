@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, TextInput, Textarea, Switch, Stack, ScrollArea, Paper, Group, Tooltip } from "@mantine/core";
 import { FiFileText, FiImage, FiBarChart2, FiMusic, FiVideo, FiLink, FiX, FiRefreshCw, FiSave, FiZap } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
 import { MaterialData, updateMaterial, extractMaterialAiSummary } from "@/rest/project-extensions";
 
 interface PanelMaterialDetailProps {
@@ -57,9 +58,10 @@ export default function PanelMaterialDetail({
           includeInAiContext: includeInAi ? 1 : 0,
           updatedAt: new Date().toISOString(),
         });
+        useAlert.success("素材详情已保存");
       }
     } catch (e: any) {
-      alert("保存失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setSaving(false);
     }
@@ -81,9 +83,10 @@ export default function PanelMaterialDetail({
           const combinedTags = Array.from(new Set([...tags.split(/[,，\s]+/).filter(Boolean), ...res.result.suggestedTags])).join(", ");
           setTags(combinedTags);
         }
+        useAlert.success("AI 摘要生成成功！");
       }
     } catch (e: any) {
-      alert("AI 提取摘要异常: " + (e?.message || "网络错误"));
+      useAlert.error("AI 提取摘要异常: " + (e?.message || "网络错误"));
     } finally {
       setAiExtracting(false);
     }
@@ -222,7 +225,7 @@ export default function PanelMaterialDetail({
                   color="gray"
                   onClick={() => {
                     navigator.clipboard.writeText(material.content || material.extractedLore || "");
-                    alert("已复制文件内容到剪贴板");
+                    useAlert.success("已复制文件内容到剪贴板");
                   }}
                 >
                   复制全文

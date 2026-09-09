@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
 import { NoteData, NoteListResult, getNoteList, createNote, updateNote, deleteNote } from "@/rest/project-extensions";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import NoteTreeMenu from "./note-tree-menu";
 import NoteSplitter from "./splitter";
 import NoteEditor from "./note-editor";
@@ -64,11 +66,12 @@ export default function NotesPage() {
       });
 
       if (res && res.success && res.result) {
+        useAlert.success("笔记新建成功！");
         await fetchNotes();
         setActiveNote(res.result);
       }
     } catch (e: any) {
-      alert("创建笔记失败: " + (e?.message || "网络异常"));
+      useAlert.error("创建笔记失败: " + (e?.message || "网络异常"));
     } finally {
       setSaving(false);
     }
@@ -82,7 +85,7 @@ export default function NotesPage() {
       setActiveNote((prev) => (prev ? { ...prev, isPinned: nextPin } : null));
       await fetchNotes();
     } catch (e: any) {
-      alert("操作失败: " + (e?.message || "网络异常"));
+      useAlert.error("操作失败: " + (e?.message || "网络异常"));
     }
   };
 
@@ -94,19 +97,26 @@ export default function NotesPage() {
       setActiveNote(null);
       await fetchNotes();
     } catch (e: any) {
-      alert("操作失败: " + (e?.message || "网络异常"));
+      useAlert.error("操作失败: " + (e?.message || "网络异常"));
     }
   };
 
   const handleDelete = async () => {
     if (!activeNote) return;
-    if (confirm("确定要删除这条笔记吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除笔记",
+      message: "确定要删除这条笔记吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteNote(activeNote.id);
         setActiveNote(null);
+        useAlert.success("笔记已删除");
         await fetchNotes();
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };

@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, ScrollArea, Modal, LoadingOverlay, Group } from "@mantine/core";
 import { FiClock, FiRotateCcw, FiCopy, FiCheck, FiTrash2, FiFileText } from "react-icons/fi";
 import { ChapterVersionItem, getChapterVersionList, deleteChapterVersion } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 
 interface DrawerVersionHistoryProps {
   opened: boolean;
@@ -47,15 +49,22 @@ export default function DrawerVersionHistory({
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该历史版本快照吗？")) {
+    const isConfirmed = await showConfirm({
+      title: "删除版本快照",
+      message: "确定要删除该历史版本快照吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteChapterVersion(id);
         setVersions((prev) => prev.filter((v) => v.id !== id));
         if (selectedVersion?.id === id) {
           setSelectedVersion(null);
         }
+        useAlert.success("版本快照已删除");
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络错误"));
+        useAlert.error("删除失败: " + (e?.message || "网络错误"));
       }
     }
   };
@@ -187,14 +196,21 @@ export default function DrawerVersionHistory({
               </Button>
               <Button
                 size="xs"
-
                 leftSection={<FiRotateCcw size={11} />}
-                onClick={() => {
+                onClick={async () => {
                   if (selectedVersion) {
-                    if (confirm("确定要将当前章节正文恢复为该版本的内容吗？")) {
+                    const isConfirmed = await showConfirm({
+                      title: "恢复历史版本",
+                      message: "确定要将当前章节正文恢复为该版本的内容吗？当前未保存的修改将被覆盖。",
+                      confirmLabel: "确认恢复",
+                      confirmColor: "blue",
+                      type: "warning",
+                    });
+                    if (isConfirmed) {
                       onRestoreVersion(selectedVersion.content);
                       setSelectedVersion(null);
                       onClose();
+                      useAlert.success("已成功恢复为该版本正文");
                     }
                   }
                 }}

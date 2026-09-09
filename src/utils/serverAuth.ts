@@ -17,9 +17,13 @@ export function withAuth(
   return async (req: NextRequest) => {
     try {
       const authHeader = req.headers.get("authorization");
-      const token = authHeader?.startsWith("Bearer ")
+      let token = authHeader?.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : authHeader?.trim();
+
+      if (!token) {
+        token = req.cookies.get("access_token")?.value || req.cookies.get("auth_token")?.value || "";
+      }
 
       if (!token) {
         return NextResponse.json(

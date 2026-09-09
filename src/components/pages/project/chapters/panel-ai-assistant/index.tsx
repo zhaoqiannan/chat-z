@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Badge, TextInput, Textarea, ScrollArea, Group, Stack, Paper, Loader, Popover, Tooltip } from "@mantine/core";
 import { FiSend, FiPlus, FiX, FiRefreshCw, FiCheck, FiChevronRight, FiZap, FiStar, FiBook, FiUser, FiMapPin, FiShield, FiBox, FiCpu, FiBookmark, FiTrash2, FiCornerDownLeft } from "react-icons/fi";
 import { ChapterAiChatItem, ContextTagOption, getChapterAiChatList, sendChapterAiChat, applyChapterAiChat, getWorkContextTagOptions, createMemoryFragment, deleteChapterAiChat } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
 
 interface PanelAiAssistantProps {
   workId: number | string;
@@ -163,7 +164,7 @@ export default function PanelAiAssistant({
         await fetchChats();
       }
     } catch (e: any) {
-      alert("AI 协同请求失败: " + (e?.message || "网络异常"));
+      useAlert.error("AI 协同请求失败: " + (e?.message || "网络异常"));
     } finally {
       setSending(false);
     }
@@ -200,9 +201,10 @@ export default function PanelAiAssistant({
       });
       if (res && res.success) {
         setFragmentSavedIds((prev) => ({ ...prev, [chat.id]: true }));
+        useAlert.success("已成功存为记忆碎片！");
       }
     } catch (e: any) {
-      alert("保存碎片失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存碎片失败: " + (e?.message || "网络异常"));
     }
   };
 

@@ -4,6 +4,8 @@
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Paper, Group, Table } from "@mantine/core";
 import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield, FiPackage } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import { ItemData, getItemList, createItem, updateItem, deleteItem, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
 
@@ -84,7 +86,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
 
   const handleSave = async () => {
     if (!name.trim()) {
-      alert("请输入物品名称");
+      useAlert.warning("请输入物品名称");
       return;
     }
 
@@ -111,10 +113,11 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
         await createItem({ workId: Number(workId), ...payload });
       }
 
+      useAlert.success("物品设定已成功保存！");
       setModalOpened(false);
       await fetchData();
     } catch (e: any) {
-      alert("保存物品失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存物品失败: " + (e?.message || "网络异常"));
     } finally {
       setFormLoading(false);
     }
@@ -122,12 +125,19 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该物品道具吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除物品",
+      message: "确定要删除该物品道具吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteItem(id);
         setList((prev) => prev.filter((item) => item.id !== id));
+        useAlert.success("物品已成功删除");
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };

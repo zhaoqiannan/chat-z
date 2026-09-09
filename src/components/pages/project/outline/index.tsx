@@ -6,6 +6,8 @@ import { useParams } from "next/navigation";
 import { Box, Flex, Text, Button, LoadingOverlay, Group } from "@mantine/core";
 import { FiPlus, FiZap, FiFolderPlus, FiLayers } from "react-icons/fi";
 import { OutlineNode, CreateOutlinePayload, UpdateOutlinePayload, getOutlineList, createOutlineNode, updateOutlineNode, deleteOutlineNode } from "@/rest/outline";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 import OutlineFlow from "./outline-flow";
 import ModalSimpleNode from "./modal-simple-node";
 import ModalCreateOutlineVolume from "./modal-create-outline-volume";
@@ -73,12 +75,19 @@ export default function StoryOutlinePage() {
 
   const handleDeleteNode = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除该大纲节点吗？此操作不可撤销。")) {
+    const isConfirmed = await showConfirm({
+      title: "删除大纲节点",
+      message: "确定要删除该大纲节点吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteOutlineNode(id);
         setFlatNodes((prev) => prev.filter((n) => n.id !== id));
+        useAlert.success("大纲节点已删除");
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };

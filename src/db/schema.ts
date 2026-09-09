@@ -386,6 +386,10 @@ export const worldRules = sqliteTable('world_rules', {
   description: text('description'),
   /** 其它扩展信息 (JSON) */
   extra: text('extra', { mode: 'json' }).$type<Record<string, any>>(),
+  /** 是否置顶 (1=置顶, 0=未置顶) */
+  isPinned: integer('is_pinned').default(0),
+  /** 置顶时间戳 */
+  pinnedAt: integer('pinned_at', { mode: 'timestamp' }),
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后修改时间 */

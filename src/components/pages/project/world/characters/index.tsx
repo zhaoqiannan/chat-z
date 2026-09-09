@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Select, TextInput, Stack, SimpleGrid, LoadingOverlay, Group, Modal } from "@mantine/core";
 import { FiPlus, FiSearch, FiUser, FiAlertTriangle } from "react-icons/fi";
+import { useAlert } from "@/hooks/useAlert";
 import { CharacterItem, getCharacterList, deleteCharacter, togglePinCharacter } from "@/rest/world";
 import CharacterCard from "./character-card";
 import ModalCharacterForm from "./modal-character-form";
@@ -73,8 +74,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           .map((c) => (c.id === item.id ? { ...c, isPinned: nextPin ? 1 : 0, pinnedAt: nextPin ? new Date().toISOString() : null } : c))
           .sort((a, b) => Number(b.isPinned || 0) - Number(a.isPinned || 0))
       );
+      useAlert.success(nextPin ? "角色已置顶" : "已取消置顶");
     } catch (err: any) {
-      alert("置顶操作失败: " + (err?.message || "网络异常"));
+      useAlert.error("置顶操作失败: " + (err?.message || "网络异常"));
     }
   };
 
@@ -95,8 +97,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
       }
       setDeleteModalOpened(false);
       setItemToDelete(null);
+      useAlert.success("角色已成功删除");
     } catch (e: any) {
-      alert("删除失败: " + (e?.message || "网络异常"));
+      useAlert.error("删除失败: " + (e?.message || "网络异常"));
     } finally {
       setDeleting(false);
     }

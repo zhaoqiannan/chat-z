@@ -5,6 +5,8 @@ import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, SimpleGrid, Card, ScrollArea, Modal, TextInput, Textarea, LoadingOverlay, Group } from "@mantine/core";
 import { FiBookmark, FiPlus, FiTrash2, FiCopy, FiCheck, FiCornerDownLeft, FiZap, FiEdit3 } from "react-icons/fi";
 import { MemoryFragmentItem, getMemoryFragmentList, createMemoryFragment, deleteMemoryFragment } from "@/rest/chapter";
+import { useAlert } from "@/hooks/useAlert";
+import { showConfirm } from "@/hooks/useConfirm";
 
 interface DrawerMemoryFragmentsProps {
   opened: boolean;
@@ -54,7 +56,7 @@ export default function DrawerMemoryFragments({
 
   const handleCreateSubmit = async () => {
     if (!newContent.trim()) {
-      alert("碎片内容不能为空");
+      useAlert.warning("碎片内容不能为空");
       return;
     }
 
@@ -70,6 +72,7 @@ export default function DrawerMemoryFragments({
       });
 
       if (res && res.success) {
+        useAlert.success("记忆碎片创建成功！");
         setCreateModalOpened(false);
         setNewTitle("");
         setNewContent("");
@@ -77,7 +80,7 @@ export default function DrawerMemoryFragments({
         fetchFragments();
       }
     } catch (e: any) {
-      alert("保存碎片失败: " + (e?.message || "网络异常"));
+      useAlert.error("保存碎片失败: " + (e?.message || "网络异常"));
     } finally {
       setSaving(false);
     }
@@ -85,12 +88,19 @@ export default function DrawerMemoryFragments({
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm("确定要删除这条记忆碎片吗？")) {
+    const isConfirmed = await showConfirm({
+      title: "删除记忆碎片",
+      message: "确定要删除这条记忆碎片吗？此操作不可撤销。",
+      confirmLabel: "删除",
+      confirmColor: "red",
+    });
+    if (isConfirmed) {
       try {
         await deleteMemoryFragment(id);
         setFragments((prev) => prev.filter((f) => f.id !== id));
+        useAlert.success("记忆碎片已删除");
       } catch (e: any) {
-        alert("删除失败: " + (e?.message || "网络异常"));
+        useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };
