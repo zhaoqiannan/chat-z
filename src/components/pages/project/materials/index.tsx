@@ -1,4 +1,4 @@
-// 组件：素材资料库系统（统一表格、60vw 智能摘要弹窗、60vw 预览弹窗与新建上传一体化）
+// 组件：素材资料库系统（统一表格、80vw 宽屏富文本新增/查看弹窗与智能摘要设定一体化）
 "use client";
 
 import React, { useState, useEffect } from "react";

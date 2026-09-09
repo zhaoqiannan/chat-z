@@ -17,11 +17,11 @@ export interface AiCallOptions {
  * Cloudflare Workers AI 目前最新且长期支持的稳定文本生成模型候选序列（优先选择指令遵循与长文创作表现优异的模型）
  */
 const CANDIDATE_MODELS = [
-  "@cf/qwen/qwen3.8-27b",
   "@cf/qwen/qwen2.5-72b-instruct",
+  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
   "@cf/meta/llama-3.3-70b-instruct",
+  "@cf/qwen/qwen2.5-coder-32b-instruct",
   "@cf/meta/llama-3.1-8b-instruct",
-  "@cf/meta/llama-3.2-3b-instruct",
   "@cf/openai/gpt-oss-20b",
 ];
 

@@ -1,7 +1,7 @@
-// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、段落自动缩进与一键智能排版、光标精准插入、记忆碎片与版本快照历史）
+// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、段落自动缩进与一键智能排版、光标精准插入、响应式高度自适应与视口滚动修复）
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Progress, Menu } from "@mantine/core";
 import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft } from "react-icons/fi";
 import { ChapterItem, createChapterVersion } from "@/rest/chapter";
@@ -39,8 +39,41 @@ export default function EditorArea({
   const [versionDrawerOpened, setVersionDrawerOpened] = useState(false);
   const [fragmentDrawerOpened, setFragmentDrawerOpened] = useState(false);
 
+  const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastCursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+
+  // 触发 autosize textarea 重新计算高度与重排
+  const refreshTextareaHeight = useCallback(() => {
+    window.dispatchEvent(new Event("resize"));
+    if (textareaRef.current) {
+      textareaRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }, []);
+
+  // 监听容器尺寸变化（左侧目录展开/收起、右侧 AI 面板拖拽或折叠）
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(() => {
+      refreshTextareaHeight();
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [refreshTextareaHeight]);
+
+  // 当目录折叠状态改变时，延时多次刷新以配合 CSS 动画过渡
+  useEffect(() => {
+    const timers = [
+      setTimeout(refreshTextareaHeight, 30),
+      setTimeout(refreshTextareaHeight, 100),
+      setTimeout(refreshTextareaHeight, 250),
+      setTimeout(refreshTextareaHeight, 400),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [treeCollapsed, refreshTextareaHeight]);
 
   useEffect(() => {
     if (chapter) {
@@ -49,8 +82,9 @@ export default function EditorArea({
       setContent(chapter.content || "");
       lastCursorRef.current = { start: chapter.content?.length || 0, end: chapter.content?.length || 0 };
       if (onSelectionChange) onSelectionChange("");
+      setTimeout(refreshTextareaHeight, 50);
     }
-  }, [chapter?.id]);
+  }, [chapter?.id, refreshTextareaHeight]);
 
   const insertAtCursor = (textToInsert: string) => {
     const el = textareaRef.current;
@@ -71,6 +105,7 @@ export default function EditorArea({
     setTimeout(() => {
       el.focus();
       el.setSelectionRange(nextCursorPos, nextCursorPos);
+      refreshTextareaHeight();
     }, 0);
   };
 
@@ -93,6 +128,7 @@ export default function EditorArea({
       })
       .join("\n");
     setContent(formatted);
+    setTimeout(refreshTextareaHeight, 20);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -114,6 +150,7 @@ export default function EditorArea({
       setTimeout(() => {
         el.focus();
         el.setSelectionRange(nextPos, nextPos);
+        refreshTextareaHeight();
       }, 0);
       return;
     }
@@ -143,6 +180,7 @@ export default function EditorArea({
       setTimeout(() => {
         el.focus();
         el.setSelectionRange(nextPos, nextPos);
+        refreshTextareaHeight();
       }, 0);
     }
   };
@@ -190,6 +228,7 @@ export default function EditorArea({
   const handleRestoreVersion = async (restoredContent: string) => {
     setContent(restoredContent);
     await onUpdateChapter({ content: restoredContent, wordCount: restoredContent.replace(/\s+/g, "").length });
+    setTimeout(refreshTextareaHeight, 30);
   };
 
   const handleInsertFragment = (fragmentContent: string) => {
@@ -206,8 +245,20 @@ export default function EditorArea({
   }
 
   return (
-    <Box style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", backgroundColor: "#ffffff", overflow: "hidden" }}>
-      <Flex justify="space-between" align="center" px={14} py={10} style={{ borderBottom: "1px solid #f1f5f9" }}>
+    <Box
+      ref={containerRef}
+      style={{
+        flex: 1,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: "#ffffff",
+        overflow: "hidden",
+        minWidth: 0,
+      }}
+    >
+      {/* 顶部面包屑与工具栏 */}
+      <Flex justify="space-between" align="center" px={14} py={10} style={{ borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
         <Group gap={8} align="center">
           {onToggleTree && (
             <Tooltip label={treeCollapsed ? "展开目录大纲" : "收起目录大纲"} position="bottom">
@@ -242,7 +293,6 @@ export default function EditorArea({
           <Button
             size="xs"
             variant="light"
-
             leftSection={<FiSave size={12} />}
             loading={saving}
             onClick={handleManualSave}
@@ -271,8 +321,24 @@ export default function EditorArea({
         </Group>
       </Flex>
 
-      <ScrollArea style={{ flex: 1 }} p={{ base: "md", md: 14 }}>
-        <Box style={{ margin: "0 auto", minHeight: "calc(100vh - 180px)", position: "relative" }}>
+      {/* 沉浸式正文滚动区域 */}
+      <ScrollArea
+        style={{ flex: 1, height: "100%" }}
+        p={{ base: "md", md: 16 }}
+        styles={{
+          viewport: {
+            paddingBottom: 0,
+          },
+        }}
+      >
+        <Box
+          style={{
+            margin: "0 auto",
+            minHeight: "calc(100vh - 160px)",
+            paddingBottom: "35vh", // 留足底部呼吸空间，确保最后一段内容与光标可轻松滚到屏幕中央
+            position: "relative",
+          }}
+        >
           <TextInput
             variant="unstyled"
             placeholder="输入章节标题..."
@@ -331,7 +397,8 @@ export default function EditorArea({
         </Box>
       </ScrollArea>
 
-      <Flex justify="space-between" align="center" px="xl" py={8} style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#ffffff" }}>
+      {/* 底部状态栏 */}
+      <Flex justify="space-between" align="center" px="xl" py={8} style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#ffffff", flexShrink: 0 }}>
         <Group gap="xs" align="center">
           <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字</Text>
           <Text fz={12} c="#cbd5e1">|</Text>

@@ -1,7 +1,7 @@
-// 组件：世界规则与设定管理（瀑布流双列卡片、置顶/折叠展开、富文本表格与图片编译器）
+// 组件：世界规则与设定管理（瀑布流双列卡片、置顶/折叠展开、公共富文本表格与图片编译器）
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Flex,
@@ -30,14 +30,6 @@ import {
   FiChevronDown,
   FiChevronUp,
   FiBookmark,
-  FiImage,
-  FiGrid,
-  FiBold,
-  FiItalic,
-  FiUnderline,
-  FiList,
-  FiUploadCloud,
-  FiCheck,
 } from "react-icons/fi";
 import {
   WorldRuleItem,
@@ -49,10 +41,10 @@ import {
   CharacterItem,
   getFactionList,
   FactionItem,
-  uploadImageFile,
 } from "@/rest/world";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
+import { RichTextEditor, RichTextViewer } from "@/components/common/rich-text";
 
 interface RulesTabProps {
   workId: string;
@@ -77,10 +69,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
   const [characterName, setCharacterName] = useState("");
   const [factionName, setFactionName] = useState("");
   const [descriptionHtml, setDescriptionHtml] = useState("");
-
-  const editorRef = useRef<HTMLDivElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   const fetchData = async () => {
     if (!workId) return;
@@ -112,20 +100,12 @@ export default function RulesTab({ workId }: RulesTabProps) {
     fetchData();
   }, [workId]);
 
-  // 同步富文本编辑器内容
-  useEffect(() => {
-    if (modalOpened && editorRef.current) {
-      editorRef.current.innerHTML = descriptionHtml;
-    }
-  }, [modalOpened]);
-
   const handleOpenCreate = () => {
     setEditingItem(null);
     setName("");
     setCharacterName("");
     setFactionName("");
     setDescriptionHtml("");
-    if (editorRef.current) editorRef.current.innerHTML = "";
     setModalOpened(true);
   };
 
@@ -138,7 +118,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
     setFactionName(facVal);
     const content = item.description || item.mechanisms || "";
     setDescriptionHtml(content);
-    if (editorRef.current) editorRef.current.innerHTML = content;
     setModalOpened(true);
   };
 
@@ -179,163 +158,11 @@ export default function RulesTab({ workId }: RulesTabProps) {
     }
   };
 
-  const execCmd = (command: string, value: string = "") => {
-    document.execCommand(command, false, value);
-    if (editorRef.current) {
-      setDescriptionHtml(editorRef.current.innerHTML);
-    }
-  };
-
-  const insertHtmlAtCursor = (html: string) => {
-    if (!editorRef.current) return;
-    editorRef.current.focus();
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      const el = document.createElement("div");
-      el.innerHTML = html;
-      const frag = document.createDocumentFragment();
-      let node: ChildNode | null;
-      let lastNode: ChildNode | null = null;
-      while ((node = el.firstChild)) {
-        lastNode = frag.appendChild(node);
-      }
-      range.insertNode(frag);
-      if (lastNode) {
-        range.setStartAfter(lastNode);
-        range.collapse(true);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      }
-    } else {
-      editorRef.current.innerHTML += html;
-    }
-    setDescriptionHtml(editorRef.current.innerHTML);
-  };
-
-  const handleInsertTable = (type: "currency" | "levels" | "generic") => {
-    let tableHtml = "";
-    if (type === "currency") {
-      tableHtml = `
-<table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; border:1px solid #cbd5e1;">
-  <thead>
-    <tr style="background-color:#f1f5f9; border-bottom:2px solid #cbd5e1;">
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">货币名称</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">换算比例</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">购买力参考</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">铜钱 (文)</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">1 铜钱</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">1个大烧饼 / 粗茶一壶</td>
-    </tr>
-    <tr style="background-color:#f8fafc;">
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">白银 (两)</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">1两 = 1,000 铜钱</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">寻常三口之家一月用度</td>
-    </tr>
-    <tr>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">黄金 (两)</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">1两 = 10 两白银</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">京城上好绸缎一匹 / 凡品战刀</td>
-    </tr>
-    <tr style="background-color:#f8fafc;">
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">灵石 (初品)</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">1枚 = 100 两黄金</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">炼气期修士修炼基础资源</td>
-    </tr>
-  </tbody>
-</table><p><br></p>`;
-    } else if (type === "levels") {
-      tableHtml = `
-<table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; border:1px solid #cbd5e1;">
-  <thead>
-    <tr style="background-color:#f1f5f9; border-bottom:2px solid #cbd5e1;">
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">阶位等级</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">寿元上限</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">核心能力特征</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">突破瓶颈/代价</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">一阶 · 炼体期</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">百年</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">肉身坚如磐石，千斤巨力</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">需经脉筑基丹破关</td>
-    </tr>
-    <tr style="background-color:#f8fafc;">
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">二阶 · 筑基期</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">二百年</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">气海化液，可御空滑翔</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">遭遇心魔反噬风险</td>
-    </tr>
-    <tr>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">三阶 · 金丹期</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">五百年</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">丹碎成婴，引天地雷劫</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">需渡九重天雷劫</td>
-    </tr>
-  </tbody>
-</table><p><br></p>`;
-    } else {
-      tableHtml = `
-<table style="width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; border:1px solid #cbd5e1;">
-  <thead>
-    <tr style="background-color:#f1f5f9; border-bottom:2px solid #cbd5e1;">
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">属性维度</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">数值/设定标准</th>
-      <th style="padding:8px 12px; border:1px solid #cbd5e1; text-align:left;">备注说明</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">参数 1</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">标准数值</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">适用全大陆</td>
-    </tr>
-    <tr style="background-color:#f8fafc;">
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">参数 2</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">高阶标准</td>
-      <td style="padding:8px 12px; border:1px solid #cbd5e1;">仅限专属宗门</td>
-    </tr>
-  </tbody>
-</table><p><br></p>`;
-    }
-    insertHtmlAtCursor(tableHtml);
-  };
-
-  const handleUploadImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      setUploadingImage(true);
-      const res = await uploadImageFile(file);
-      if (res && res.success && res.url) {
-        insertHtmlAtCursor(`<p><img src="${res.url}" alt="规则插图" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid #e2e8f0;" /></p><p><br></p>`);
-        useAlert.success("图片插入成功");
-      } else {
-        useAlert.error("图片上传失败: " + (res?.message || "网络异常"));
-      }
-    } catch (err: any) {
-      useAlert.error("上传图片异常: " + (err?.message || "网络错误"));
-    } finally {
-      setUploadingImage(false);
-      if (imageInputRef.current) imageInputRef.current.value = "";
-    }
-  };
-
   const handleSave = async () => {
     if (!name.trim()) {
       useAlert.warning("请输入规则名称");
       return;
     }
-
-    const currentContent = editorRef.current ? editorRef.current.innerHTML : descriptionHtml;
 
     try {
       setFormLoading(true);
@@ -343,8 +170,8 @@ export default function RulesTab({ workId }: RulesTabProps) {
         name: name.trim(),
         characters: characterName.trim() || undefined,
         factions: factionName.trim() || undefined,
-        description: currentContent || undefined,
-        mechanisms: currentContent || undefined,
+        description: descriptionHtml || undefined,
+        mechanisms: descriptionHtml || undefined,
       };
 
       if (editingItem) {
@@ -517,32 +344,17 @@ export default function RulesTab({ workId }: RulesTabProps) {
           )}
         </Group>
 
-        {/* 内容区：展开时撑开卡片高度，渲染富文本（支持表格、图片、段落） */}
+        {/* 内容区：展开时撑开卡片高度，渲染公共富文本回显 */}
         <Collapse expanded={isExpanded}>
           <Divider my="sm" color="#f1f5f9" />
-          {content ? (
-            <Box
-              className="rule-rich-content"
-              style={{
-                fontSize: 13,
-                lineHeight: 1.7,
-                color: "#334155",
-                wordBreak: "break-word",
-              }}
-              dangerouslySetInnerHTML={{ __html: content }}
-            />
-          ) : (
-            <Text fz={12} c="#94a3b8" style={{ fontStyle: "italic" }}>
-              暂无详细规则内容
-            </Text>
-          )}
+          <RichTextViewer content={content} emptyText="暂无详细规则内容" />
         </Collapse>
       </Paper>
     );
   };
 
   return (
-    <Box pos="relative" >
+    <Box pos="relative">
       <LoadingOverlay visible={loading} />
 
       {/* 顶部工具栏：搜索框、一键全部展开/收起、新建规则按钮 */}
@@ -589,16 +401,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
         </SimpleGrid>
       )}
 
-      {/* 隐藏的图片上传 input */}
-      <input
-        type="file"
-        ref={imageInputRef}
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleUploadImage}
-      />
-
-      {/* 新建/编辑规则弹窗 - 70vw 富文本大编译器 */}
+      {/* 新建/编辑规则弹窗 - 75vw 富文本公共大编译器 */}
       <Modal
         opened={modalOpened}
         onClose={() => setModalOpened(false)}
@@ -610,13 +413,13 @@ export default function RulesTab({ workId }: RulesTabProps) {
             </Text>
           </Group>
         }
-        size="70vw"
+        size="75vw"
         centered
         radius="md"
         styles={{
           content: {
             maxHeight: "90vh",
-            maxWidth: "1200px",
+            maxWidth: "1250px",
             minWidth: "360px",
             display: "flex",
             flexDirection: "column",
@@ -668,95 +471,18 @@ export default function RulesTab({ workId }: RulesTabProps) {
             />
           </SimpleGrid>
 
-          {/* 富文本编辑器工具栏 */}
+          {/* 公共富文本编辑器 */}
           <Box>
             <Text fz={13} fw={600} c="#334155" mb={6}>
               核心规则内容、法则机制与数据表格 (所见即所得富文本排版)
             </Text>
 
-            <Paper p="xs" bg="#f8fafc" withBorder radius="sm" mb={6} style={{ borderColor: "#e2e8f0" }}>
-              <Flex gap={4} wrap="wrap" align="center">
-                {/* 格式工具 */}
-                <ActionIcon size="sm" variant="subtle" onClick={() => execCmd("bold")} title="加粗 (Ctrl+B)">
-                  <FiBold size={13} />
-                </ActionIcon>
-                <ActionIcon size="sm" variant="subtle" onClick={() => execCmd("italic")} title="斜体 (Ctrl+I)">
-                  <FiItalic size={13} />
-                </ActionIcon>
-                <ActionIcon size="sm" variant="subtle" onClick={() => execCmd("underline")} title="下划线 (Ctrl+U)">
-                  <FiUnderline size={13} />
-                </ActionIcon>
-                <ActionIcon size="sm" variant="subtle" onClick={() => execCmd("insertUnorderedList")} title="无序列表">
-                  <FiList size={13} />
-                </ActionIcon>
-
-                <Divider orientation="vertical" mx={4} />
-
-                {/* 快捷表格插入 */}
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="blue"
-                  leftSection={<FiGrid size={11} />}
-                  onClick={() => handleInsertTable("currency")}
-                >
-                  + 货币汇率表
-                </Button>
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="indigo"
-                  leftSection={<FiGrid size={11} />}
-                  onClick={() => handleInsertTable("levels")}
-                >
-                  + 境界阶梯表
-                </Button>
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="gray"
-                  leftSection={<FiGrid size={11} />}
-                  onClick={() => handleInsertTable("generic")}
-                >
-                  + 通用数据表
-                </Button>
-
-                <Divider orientation="vertical" mx={4} />
-
-                {/* 上传图片 */}
-                <Button
-                  size="compact-xs"
-                  variant="light"
-                  color="teal"
-                  leftSection={<FiImage size={11} />}
-                  loading={uploadingImage}
-                  onClick={() => imageInputRef.current?.click()}
-                >
-                  插入图片
-                </Button>
-              </Flex>
-            </Paper>
-
-            {/* 可编辑富文本容器 */}
-            <Box
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              className="rule-rich-content"
-              onInput={(e) => setDescriptionHtml((e.target as HTMLElement).innerHTML)}
-              style={{
-                minHeight: 280,
-                maxHeight: 460,
-                overflowY: "auto",
-                padding: "12px 14px",
-                border: "1px solid #cbd5e1",
-                borderRadius: 6,
-                backgroundColor: "#ffffff",
-                fontSize: 13,
-                lineHeight: 1.7,
-                color: "#1e293b",
-                outline: "none",
-              }}
+            <RichTextEditor
+              value={descriptionHtml}
+              onChange={(html) => setDescriptionHtml(html)}
+              placeholder="输入核心法则、机制说明、阶梯设定或插入数据表格/图片..."
+              minHeight={280}
+              maxHeight={460}
             />
           </Box>
 
@@ -770,40 +496,6 @@ export default function RulesTab({ workId }: RulesTabProps) {
           </Flex>
         </Stack>
       </Modal>
-
-      {/* 富文本表格与图片样式注入 */}
-      <style jsx global>{`
-        .rule-rich-content table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 10px 0;
-          font-size: 13px;
-        }
-        .rule-rich-content th,
-        .rule-rich-content td {
-          border: 1px solid #e2e8f0;
-          padding: 8px 12px;
-          text-align: left;
-        }
-        .rule-rich-content th {
-          background-color: #f8fafc;
-          font-weight: 700;
-          color: #334155;
-        }
-        .rule-rich-content tr:nth-child(even) td {
-          background-color: #fafbfc;
-        }
-        .rule-rich-content img {
-          max-width: 100%;
-          height: auto;
-          border-radius: 6px;
-          margin: 8px 0;
-          border: 1px solid #e2e8f0;
-        }
-        .rule-rich-content p {
-          margin: 4px 0;
-        }
-      `}</style>
     </Box>
   );
 }

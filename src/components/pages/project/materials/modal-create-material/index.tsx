@@ -1,12 +1,13 @@
-// 组件：新建素材资料弹窗（融合文件上传与文本复制粘贴新建，支持拖拽选择与自动内容提取）
+// 组件：新建素材资料弹窗（80vw 宽屏，支持富文本排版、数据表格、插图上传、文件拖拽导入与内容自动提取）
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Flex, Text, Button, Modal, TextInput, Textarea, Select, Stack, Group, SimpleGrid, Paper, Box } from "@mantine/core";
+import { Flex, Text, Button, Modal, TextInput, Select, Stack, Group, SimpleGrid, Paper, Box } from "@mantine/core";
 import { FiUploadCloud, FiFileText, FiLink, FiTag, FiCheckCircle } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { MaterialData, createMaterial } from "@/rest/project-extensions";
 import { uploadImageFile } from "@/rest/world";
+import { RichTextEditor } from "@/components/common/rich-text";
 
 interface ModalCreateMaterialProps {
   opened: boolean;
@@ -72,7 +73,10 @@ export default function ModalCreateMaterial({
         const uploadRes = await uploadImageFile(file);
         if (uploadRes && uploadRes.success && uploadRes.url) {
           setFileUrl(uploadRes.url);
-          useAlert.success("图片上传成功");
+          // 在富文本中插入该图片
+          const imgTag = `<p><img src="${uploadRes.url}" alt="${file.name}" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid #e2e8f0;" /></p>`;
+          setContent((prev) => (prev ? `${prev}<br>${imgTag}` : imgTag));
+          useAlert.success("图片上传成功并已插入正文");
         } else {
           useAlert.error("图片上传失败: " + (uploadRes?.message || "未知错误"));
         }
@@ -90,7 +94,12 @@ export default function ModalCreateMaterial({
             reader.readAsText(file);
           });
           if (text) {
-            setContent(text);
+            // 将纯文本段落格式化为 HTML
+            const formattedHtml = text
+              .split(/\r?\n\r?\n/)
+              .map((para) => `<p>${para.replace(/\r?\n/g, "<br>")}</p>`)
+              .join("");
+            setContent(formattedHtml);
           }
         }
       }
@@ -145,22 +154,37 @@ export default function ModalCreateMaterial({
       }}
       title={
         <Group gap={8}>
-          <FiFileText size={16} color="#0284c7" />
-          <Text fw={700} fz={15} c="#0f172a">
-            新建素材资料
+          <FiFileText size={18} color="#0284c7" />
+          <Text fw={700} fz={16} c="#0f172a">
+            新建素材资料 (富文本与文件导入)
           </Text>
         </Group>
       }
       centered
-      size="lg"
+      size="80vw"
       radius="md"
       styles={{
-        content: { maxWidth: "680px" },
-        header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 12 },
-        body: { paddingTop: 16 },
+        content: {
+          maxWidth: "1350px",
+          minWidth: "360px",
+          maxHeight: "92vh",
+          display: "flex",
+          flexDirection: "column",
+        },
+        header: {
+          borderBottom: "1px solid #f1f5f9",
+          padding: "16px 24px",
+          flexShrink: 0,
+        },
+        body: {
+          padding: "20px 24px",
+          overflowY: "auto",
+          flex: 1,
+          minHeight: 0,
+        },
       }}
     >
-      <Stack gap="sm">
+      <Stack gap="md">
         {/* 上传文件或拖拽快捷区域 */}
         <input
           type="file"
@@ -169,7 +193,7 @@ export default function ModalCreateMaterial({
           onChange={handleFileSelected}
         />
         <Paper
-          p="md"
+          p="sm"
           withBorder
           radius="md"
           onClick={() => fileInputRef.current?.click()}
@@ -182,35 +206,37 @@ export default function ModalCreateMaterial({
             transition: "all 0.2s ease",
           }}
         >
-          <Flex direction="column" align="center" justify="center" gap={4}>
+          <Flex direction="column" align="center" justify="center" gap={3}>
             {fileName ? (
               <>
-                <FiCheckCircle size={22} color="#0284c7" />
-                <Text fz={12.5} fw={700} c="#0284c7">
-                  已加载文件：{fileName} {fileSize ? `(${fileSize})` : ""}
-                </Text>
+                <Group gap={6}>
+                  <FiCheckCircle size={18} color="#0284c7" />
+                  <Text fz={13} fw={700} c="#0284c7">
+                    已加载文件：{fileName} {fileSize ? `(${fileSize})` : ""}
+                  </Text>
+                </Group>
                 <Text fz={11} c="#64748b">
-                  点击可重新选择更换文件
+                  点击可重新选择更换文件，文本内容已自动填入下方富文本编辑器
                 </Text>
               </>
             ) : (
               <>
-                <FiUploadCloud size={24} color="#64748b" />
+                <FiUploadCloud size={22} color="#64748b" />
                 <Text fz={13} fw={600} c="#334155">
                   {uploading ? "正在解析文件..." : "点击选择或拖入本地文件 (TXT, MD, DOCX, CSV, 图片等)"}
                 </Text>
                 <Text fz={11} c="#94a3b8">
-                  选择后将自动提取文件名与文本正文，也可直接在下方手动输入
+                  选择后将自动提取文件名与正文并支持富文本二次排版
                 </Text>
               </>
             )}
           </Flex>
         </Paper>
 
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <TextInput
             label="素材名称"
-            placeholder="例如：空间跃迁理论 / 仙女座参考"
+            placeholder="例如：空间跃迁理论 / 仙女座星系参考"
             size="xs"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -224,7 +250,7 @@ export default function ModalCreateMaterial({
             value={fileType}
             onChange={(val) => setFileType(val || "document")}
             data={[
-              { value: "document", label: "文档 (TXT/MD/DOC)" },
+              { value: "document", label: "文档 (TXT/MD/DOC/富文本)" },
               { value: "image", label: "图片" },
               { value: "data", label: "数据表" },
               { value: "link", label: "外部链接" },
@@ -234,7 +260,7 @@ export default function ModalCreateMaterial({
           />
         </SimpleGrid>
 
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
           <TextInput
             label="物理来源 / 原始链接 (选填)"
             placeholder="https://..."
@@ -252,39 +278,37 @@ export default function ModalCreateMaterial({
           />
         </SimpleGrid>
 
+        {/* 公共富文本编辑器 */}
         <Box>
-          <Flex justify="space-between" align="center" mb={4}>
-            <Text fz={12} fw={600} c="#334155">
-              素材详细内容 / 文字提炼 (可直接复制粘贴)
+          <Flex justify="space-between" align="center" mb={6}>
+            <Text fz={13} fw={600} c="#334155">
+              素材详细内容 / 文字提炼 (所见即所得富文本编辑，支持表格与插图)
             </Text>
             {content.length > 0 && (
               <Text fz={11} c="#64748b">
-                已输入 {content.length} 字符
+                已输入约 {content.replace(/<[^>]+>/g, "").length} 字符
               </Text>
             )}
           </Flex>
-          <Textarea
-            placeholder="在此直接粘贴素材全文、核心机制、参数公式或硬核设定..."
-            size="xs"
+
+          <RichTextEditor
             value={content}
-            onChange={(e) => setContent(e.target.value)}
-            minRows={5}
-            autosize
-            styles={{
-              input: {
-                fontFamily: "monospace",
-                fontSize: 12,
-                lineHeight: 1.6,
-              },
-            }}
+            onChange={(html) => setContent(html)}
+            placeholder="在此直接输入或粘贴素材全文、硬核机制、汇率/阶梯表格或插入插图..."
+            minHeight={260}
+            maxHeight={440}
           />
         </Box>
 
-        <Flex justify="flex-end" gap="xs" mt="sm" pt={10} style={{ borderTop: "1px solid #f1f5f9" }}>
-          <Button variant="default" size="xs" onClick={() => {
-            resetForm();
-            onClose();
-          }}>
+        <Flex justify="flex-end" gap="xs" mt="sm" pt={12} style={{ borderTop: "1px solid #f1f5f9" }}>
+          <Button
+            variant="default"
+            size="xs"
+            onClick={() => {
+              resetForm();
+              onClose();
+            }}
+          >
             取消
           </Button>
           <Button size="xs" loading={saving} onClick={handleSubmit}>

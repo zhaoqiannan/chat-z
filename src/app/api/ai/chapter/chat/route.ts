@@ -99,11 +99,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const otherChapterIds = contextTags.filter((t) => t.type === "chapter").map((t) => Number(t.id)).filter(Boolean);
 
     const [charsData, locsData, facsData, itemsData, rulesData, outlinesData, otherChaptersData] = await Promise.all([
-      charIds.length > 0 ? db.select().from(characters).where(inArray(characters.id, charIds)).all() : [],
+      charIds.length > 0
+        ? db.select().from(characters).where(inArray(characters.id, charIds)).all()
+        : db.select().from(characters).where(eq(characters.workId, workId)).limit(10).all(),
       locIds.length > 0 ? db.select().from(locations).where(inArray(locations.id, locIds)).all() : [],
       facIds.length > 0 ? db.select().from(factions).where(inArray(factions.id, facIds)).all() : [],
       itemIds.length > 0 ? db.select().from(items).where(inArray(items.id, itemIds)).all() : [],
-      ruleIds.length > 0 ? db.select().from(worldRules).where(inArray(worldRules.id, ruleIds)).all() : [],
+      ruleIds.length > 0
+        ? db.select().from(worldRules).where(inArray(worldRules.id, ruleIds)).all()
+        : db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(6).all(),
       outlineIds.length > 0 ? db.select().from(outlines).where(inArray(outlines.id, outlineIds)).all() : [],
       otherChapterIds.length > 0 ? db.select({ id: chapters.id, title: chapters.title, chapterNumber: chapters.chapterNumber, summary: chapters.summary }).from(chapters).where(inArray(chapters.id, otherChapterIds)).all() : [],
     ]);
@@ -111,7 +115,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     let structuredLoreContext = "";
 
     if (charsData.length > 0) {
-      structuredLoreContext += "【关联人物设定】：\n" + charsData.map((c) => `- ${c.name} (${c.identity || c.roleType || "角色"}): 性格[${c.personality || "未知"}]，能力[${c.abilities || "无"}], 经历背景[${c.description || c.experiences || "无"}]`).join("\n") + "\n\n";
+      structuredLoreContext += "【核心角色人设与说话风格库（防OOC基准）】：\n" + charsData.map((c) => `- ${c.name} (${c.identity || c.roleType || "角色"}): 性格特质[${c.personality || "未知"}]，核心能力[${c.abilities || "无"}], 说话口吻与经历[${c.description || c.experiences || "无"}]`).join("\n") + "\n\n";
     }
     if (locsData.length > 0) {
       structuredLoreContext += "【关联地点设定】：\n" + locsData.map((l) => `- ${l.name} (${l.region || "区域"}): 类型[${l.type}], 特征[${l.features || l.climate || l.terrain || "无"}], 剧情关联[${l.plotPoints || "无"}]`).join("\n") + "\n\n";
@@ -135,26 +139,28 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     let systemPrompt = `你是一位顶尖的网文白金作家与金牌主编协同助手，正在与作者共同打磨小说《${work.title}》（题材：${work.tag || "网络小说"}）。
 当前章节：第${chapter.chapterNumber}章《${chapter.title}》${chapter.summary ? `（本章大纲摘要：${chapter.summary}）` : ""}。
 
-【绝对遵守的核心输出规范（违背视为严重错误）】：
-1. 【只输出纯正文成果】：当执行【智能润色】、【场景扩写】、【精简缩写】、【情节续写】、【语气改写】等正文处理或创作指令时，必须且只能直接输出最终的正文文本！
-2. 【严禁任何元分析与前置思考】：绝对禁止输出任何思考过程、任务说明（如“任务：...”、“需要考虑：...”、“让我们构思润色稿...”）、写作解析、修改方向说明、引导语（如“以下是润色后的正文：”）、前后缀标签（如“【润色版】”）或结尾总结。
-3. 【直奔正文首字】：输出的第一行第一个字必须是正文的开头，最后一个字必须是正文的结尾。
-4. 【全文润色必须完整输出】：若为全章润色或长段润色，必须从头到尾完整输出所有润色后的正文，保持情节与段落完整，严禁中途截断、省略、打省略号或只输出局部片段。
-5. 【纯正文文笔风格】：强化画面感、动词力量感、微表情与情绪张力，严密遵循给定的世界观与人物人设。
-（仅当执行【逻辑纠错】或作者进行【创作问答】探讨剧情设定时，才输出条理清晰的专业建议，但仍禁止输出元思考过程）。
-6. 【规则】:小说中出现'（）''()',其中内容是对前文进行【智能润色】、【场景扩写】、【精简缩写】、【情节续写】、【语气改写】等的说明,必须参考这里的内容进行修改。`;
+【网文白金级创作与润色核心铁律（必须严格执行）】：
+1. 【拒绝机械复读，实质升级文笔】：润色不是简单的校对或原样抄写！必须深入重构平铺直叙、干瘪寡淡的语句，将其转化为充满画面感、节奏快慢相宜、情绪张力饱满的优质网文正文。
+2. 【人设严格锚定（绝对防 OOC）】：必须严格依照角色人设库中的性格与说话口吻写作。冷酷者言简意赅字字如刀，桀骜者狂放不羁傲骨毕露，智谋者机锋暗藏语带双关。严禁千人一面，严禁任何角色说出出戏的现代网络流行语或崩人设的软弱/客套台词！
+3. 【四维具象化笔法】：
+   - 动作描写具象有力：用高表现力的精准动词替代“他很愤怒地打过去”等空洞表述；
+   - 感官与氛围沉浸：融合光影、音效、气流、压迫感等环境烘托；
+   - 微表情与心理暗流：强化人物对峙时的眼神交锋与心理博弈；
+   - 节奏凌厉：短句造势强化冲击力，长句铺陈增强厚重感，消除“只见”、“突然”、“紧接着”等平庸口癖。
+4. 【作者内嵌批注精准转化】：若正文中出现 '( )' 或 '（ ）' 括号内容（如“（这里补充一段对峙对话）”、“（主角眼神变冷，拔剑）”），此为作者的具体修改指令，必须将其精准化为自然生动的正文描写，并剔除括号标记。
+5. 【纯正文直出，严禁任何废话】：执行正文润色、扩写、续写或改写时，第一行第一个字必须是正文开头，最后一个字必须是正文结尾！绝对禁止输出任何思考过程、任务说明（如“任务：...”、“让我们构思...”）、前后引导语（如“以下是润色后的内容：”）或“【润色版】”等标记！`;
 
     let finalUserMessage = "";
 
     if (structuredLoreContext) {
-      finalUserMessage += `【关联世界观与人物设定知识库】：\n${structuredLoreContext}\n`;
+      finalUserMessage += `【本作品核心设定与角色档案库】：\n${structuredLoreContext}\n`;
     }
 
     const hasSelection = Boolean(selectedText && selectedText.trim());
     const isFullChapterAction = !hasSelection && Boolean(currentContent && currentContent.trim());
 
     if (hasSelection) {
-      finalUserMessage += `【作者在编辑器中选中的目标文本片段】：\n"""\n${selectedText.trim()}\n"""\n\n`;
+      finalUserMessage += `【作者划选的目标文本片段】：\n"""\n${selectedText.trim()}\n"""\n\n`;
     } else if (isFullChapterAction) {
       finalUserMessage += `【当前章节完整正文内容】：\n"""\n${currentContent.trim()}\n"""\n\n`;
     }
@@ -173,29 +179,30 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     switch (actionType) {
       case "polish":
         if (hasSelection) {
-          finalUserMessage += `【最高执行指令：选中文本无损精修润色】
-请对上述【选中文本片段】进行专业级文学润色。
-【核心准则】：
-1. 【情节零丢失】：必须100%保留原剧情、人物对话、因果逻辑与动作细节，严禁擅自删减、跳过或魔改任何情节！
-2. 【语言通顺自然】：修正病句、语序错乱与生硬表达，消除机器翻译腔，强化动词力量感与画面感，使行文通顺流畅。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出润色后的纯正文文本，绝对严禁输出任何思考过程、分析说明或前后缀！`;
+          finalUserMessage += `【最高执行指令：划选文本深度润色升级】
+请对上述【作者划选的目标文本片段】进行白金级文学精修与深度重塑。
+【核心要求】：
+1. 坚决避免机械复读！请运用高级叙事笔法，大幅提升动作力量感、环境氛围与心理描写层次。
+2. 严守角色性格基调，人物对白与行为严防 OOC。
+3. 保持原有情节脉络与因果逻辑，使阅读体验更加扣人心弦。
+${userPrompt ? `作者定制要求：${userPrompt}\n` : ""}
+【输出铁律】：只输出润色后的纯正文片段，直接从第一个字开始，严禁任何分析说明或前后缀！`;
         } else {
-          finalUserMessage += `【最高执行指令：全篇章节无损精修润色】
-请对上述【当前章节完整正文内容】进行逐段文学润色与文笔升级。
-【核心准则】：
-1. 【情节零丢失】：必须100%完整保留原文中所有的事件推进、对白互动、角色动作和细节伏笔，严禁跳跃剧情、擅自删减段落或压缩概括！
-2. 【语言通畅一气呵成】：全面修正病句、别扭语序与生硬表达，使全篇行文通畅自然、节奏紧凑。
-3. 【段落结构忠实】：保留作者原有的分段节奏，逐段精修，严禁中途截断。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：必须完整输出润色后的全篇正文，从第一句到最后一句；只输出纯正文，严禁包含任何思考分析、修改说明或前缀标签！`;
+          finalUserMessage += `【最高执行指令：全篇章节通篇文学润色重塑】
+请对上述【当前章节完整正文内容】逐段进行白金级文笔精修与戏剧张力升级。
+【核心要求】：
+1. 坚决避免原样抄写！重构平淡流水账段落，增强感官沉浸感与情绪爆发力。
+2. 严格锁定登场人物人设，台词交锋言如其人，严防人物 OOC。
+3. 保持情节完整无损，逐段升华，严禁中途截断或省略。
+${userPrompt ? `作者定制要求：${userPrompt}\n` : ""}
+【输出铁律】：完整输出润色后的全章纯正文，直接从第一句到最后一句，严禁任何前言后语！`;
         }
         break;
 
       case "expand":
         if (hasSelection) {
-          finalUserMessage += `【指令：选中文本场景扩写】
-请对上述【选中文本片段】进行深度细节扩充，丰富角色的微表情、心理博弈、动作细节与环境感官描写。
+          finalUserMessage += `【指令：划选文本深度场景扩写】
+请对上述【划选目标文本】进行深度细节扩写，补充人物微表情、感官沉浸、肢体动作与心理博弈。
 ${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
 【输出铁律】：只输出扩写后的纯正文文本，严禁包含任何思考过程或解释。`;
         } else {
@@ -228,7 +235,7 @@ ${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
         break;
 
       case "tone":
-        finalUserMessage += `【指令：角色语气与对白改写】
+        finalUserMessage += `【指令：角色语气与对白改写（防 OOC）】
 请根据登场角色的性格特质与人设定位，重构上述文本中的对话与神态描写，增强个性辨识度与戏剧冲突。
 ${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
 【输出铁律】：只输出改写后的纯正文文本，严禁包含任何思考过程或分析。`;
@@ -254,7 +261,7 @@ ${userPrompt || "请结合上述设定与当前章节正文，给出专业的推
       { role: "user", content: finalUserMessage },
     ];
 
-    const targetTemp = actionType === "critique" || actionType === "polish" ? 0.35 : 0.75;
+    const targetTemp = actionType === "critique" ? 0.3 : 0.70;
     const rawAiResponse = await callCloudflareAi(env.AI, messages, {
       temperature: targetTemp,
       maxTokens: 8192,
