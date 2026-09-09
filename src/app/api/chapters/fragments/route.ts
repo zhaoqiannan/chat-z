@@ -102,13 +102,23 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const db = getDb(env.DB);
 
     const { searchParams } = new URL(req.url);
-    const id = Number(searchParams.get("id"));
+    const queryId = searchParams.get("id");
+    let fragmentId: number | null = null;
 
-    if (!id || isNaN(id)) {
+    if (queryId && !isNaN(Number(queryId))) {
+      fragmentId = Number(queryId);
+    } else {
+      const body = await req.json().catch(() => ({}));
+      if (body && body.id && !isNaN(Number(body.id))) {
+        fragmentId = Number(body.id);
+      }
+    }
+
+    if (!fragmentId || isNaN(fragmentId)) {
       return NextResponse.json({ success: false, message: "无效的 id" }, { status: 400 });
     }
 
-    await db.delete(memoryFragments).where(and(eq(memoryFragments.id, id), eq(memoryFragments.userId, user.userId))).run();
+    await db.delete(memoryFragments).where(and(eq(memoryFragments.id, fragmentId), eq(memoryFragments.userId, user.userId))).run();
 
     return NextResponse.json({ success: true, message: "删除记忆碎片成功" });
   } catch (error: any) {

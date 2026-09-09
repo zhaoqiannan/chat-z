@@ -208,7 +208,7 @@ export const createChapterVersion = async (data: {
 };
 
 export const deleteChapterVersion = async (id: number | string) => {
-  return del(`/api/chapters/versions`, { id });
+  return del(`/api/chapters/versions?id=${id}`, { id: Number(id) });
 };
 
 export interface MemoryFragmentItem {
@@ -238,6 +238,6 @@ export const createMemoryFragment = async (data: {
 };
 
 export const deleteMemoryFragment = async (id: number | string) => {
-  return del(`/api/chapters/fragments`, { id });
+  return del(`/api/chapters/fragments?id=${id}`, { id: Number(id) });
 };
 
