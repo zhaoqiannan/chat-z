@@ -1,46 +1,40 @@
-// 组件：A ➔ B 跨度剧情推演工作台（支持字数篇幅预算、角色标签约束、笔记设定约束与一键批量写入故事轴）
+// 组件：A ➔ B 跨度剧情推演工作台（支持作者自由输入演进期望、智能生成多套具体方案、支持采纳前实时编辑、宽度 55vw）
 "use client";
 
 import React, { useState, useEffect } from "react";
 import {
-  Box,
-  Flex,
-  Text,
-  Button,
   Drawer,
   Badge,
   ActionIcon,
   Stack,
   Paper,
-  TextInput,
   Textarea,
+  TextInput,
   NumberInput,
-  Select,
   MultiSelect,
-  LoadingOverlay,
   Group,
-  ScrollArea,
-  Tabs,
+  Text,
+  Button,
+  Flex,
+  Box,
+  Tooltip,
 } from "@mantine/core";
 import {
   FiZap,
-  FiPlus,
-  FiArrowRight,
   FiCheck,
-  FiLayers,
-  FiClock,
-  FiTrash2,
   FiUser,
   FiFileText,
+  FiEdit2,
+  FiPlus,
+  FiTrash2,
+  FiCornerDownRight,
 } from "react-icons/fi";
 import {
   OutlineNode,
   PlotDeductionPath,
   PlotDeductionRecord,
   deductPlot,
-  getPlotDeductions,
   savePlotDeduction,
-  deletePlotDeduction,
   batchCreateOutlineNodes,
 } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
@@ -53,6 +47,7 @@ interface DrawerPlotDeductionProps {
   workId: string;
   outlineNodes: OutlineNode[];
   onOutlineUpdated: () => Promise<void>;
+  loadedRecord?: PlotDeductionRecord | null;
 }
 
 export default function DrawerPlotDeduction({
@@ -61,25 +56,25 @@ export default function DrawerPlotDeduction({
   workId,
   outlineNodes,
   onOutlineUpdated,
+  loadedRecord,
 }: DrawerPlotDeductionProps) {
-  const [activeTab, setActiveTab] = useState<string | null>("deduct");
   const [loading, setLoading] = useState(false);
   const [characters, setCharacters] = useState<CharacterItem[]>([]);
   const [notes, setNotes] = useState<NoteData[]>([]);
-  const [historyList, setHistoryList] = useState<PlotDeductionRecord[]>([]);
 
   // 推演输入
   const [startPoint, setStartPoint] = useState("");
   const [targetPoint, setTargetPoint] = useState("");
+  const [pathPreference, setPathPreference] = useState("");
   const [estimatedWords, setEstimatedWords] = useState<number>(10000);
   const [selectedCharIds, setSelectedCharIds] = useState<string[]>([]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
-  const [pacePreference, setPacePreference] = useState("standard");
 
   // 推演结果
   const [deductionPaths, setDeductionPaths] = useState<PlotDeductionPath[]>([]);
   const [selectedPathId, setSelectedPathId] = useState<number | null>(null);
   const [adopting, setAdopting] = useState(false);
+  const [isEditingPath, setIsEditingPath] = useState(false);
 
   useEffect(() => {
     if (opened && workId) {
@@ -94,21 +89,20 @@ export default function DrawerPlotDeduction({
           setNotes(Array.isArray(r.list) ? r.list : []);
         }
       });
-      fetchHistory();
     }
   }, [opened, workId]);
 
-  const fetchHistory = async () => {
-    if (!workId) return;
-    try {
-      const res = await getPlotDeductions(workId);
-      if (res && res.success && Array.isArray(res.result)) {
-        setHistoryList(res.result);
+  // 从历史记录中预载入
+  useEffect(() => {
+    if (loadedRecord) {
+      setStartPoint(loadedRecord.startPoint || "");
+      setTargetPoint(loadedRecord.targetPoint || "");
+      if (Array.isArray(loadedRecord.generatedPaths) && loadedRecord.generatedPaths.length > 0) {
+        setDeductionPaths(loadedRecord.generatedPaths);
+        setSelectedPathId(loadedRecord.generatedPaths[0].id);
       }
-    } catch (e) {
-      console.error(e);
     }
-  };
+  }, [loadedRecord]);
 
   const handleStartDeduction = async () => {
     if (!startPoint.trim()) {
@@ -124,6 +118,7 @@ export default function DrawerPlotDeduction({
       setLoading(true);
       setDeductionPaths([]);
       setSelectedPathId(null);
+      setIsEditingPath(false);
 
       const charIdsNum = selectedCharIds.map(Number).filter((n) => !isNaN(n));
       const noteIdsNum = selectedNoteIds.map(Number).filter((n) => !isNaN(n));
@@ -133,9 +128,10 @@ export default function DrawerPlotDeduction({
         startPoint: startPoint.trim(),
         targetPoint: targetPoint.trim(),
         estimatedWords: Number(estimatedWords) || 10000,
+        pathPreference: pathPreference.trim(),
+        pacePreference: pathPreference.trim() || "平稳递进",
         selectedCharacterIds: charIdsNum,
         selectedNoteIds: noteIdsNum,
-        pacePreference,
       });
 
       if (res && res.success && res.result && Array.isArray(res.result.paths)) {
@@ -148,10 +144,9 @@ export default function DrawerPlotDeduction({
           startPoint: startPoint.trim(),
           targetPoint: targetPoint.trim(),
           involvedCharacters: charIdsNum.join(", "),
-          pacePreference,
+          pacePreference: pathPreference.trim() || "自定义风格",
           generatedPaths: res.result.paths,
         });
-        fetchHistory();
       } else {
         useAlert.error("推演失败: " + (res?.message || "大模型未返回有效路径"));
       }
@@ -162,6 +157,12 @@ export default function DrawerPlotDeduction({
     }
   };
 
+  const handleUpdateCurrentPath = (updater: (prev: PlotDeductionPath) => PlotDeductionPath) => {
+    setDeductionPaths((prev) =>
+      prev.map((p) => (p.id === selectedPathId ? updater(p) : p))
+    );
+  };
+
   const handleAdoptPath = async (path: PlotDeductionPath) => {
     if (!workId) return;
     try {
@@ -169,45 +170,69 @@ export default function DrawerPlotDeduction({
       const charIdsNum = selectedCharIds.map(Number).filter((n) => !isNaN(n));
       const noteIdsNum = selectedNoteIds.map(Number).filter((n) => !isNaN(n));
 
-      const newNodes = path.steps.map((step, idx) => ({
+      // 组装为树状结构：父节点为推演母题总括 (Level 1)，子节点为推演出的具体阶段 (Level 2)
+      const parentTitle = `推演：从「${startPoint.trim().slice(0, 15)}」到「${targetPoint.trim().slice(0, 15)}」· ${path.title}`;
+      const parentNode = {
         workId: Number(workId),
-        title: step.title,
-        event: step.event || step.content || "",
-        twist: step.twist || step.keyConflict || "",
-        nextGoal: step.nextGoal || "",
-        suspense: step.suspense || "",
-        content: `${step.event || step.content || ""}\n转折: ${step.twist || ""}`,
-        wordCountEstimate: step.estimatedWords || Math.round((Number(estimatedWords) || 10000) / path.steps.length),
+        category: "deduction",
+        level: 1,
+        title: parentTitle,
+        summary: path.summary || "推演桥梁总括",
+        deductionOrigin: `从「${startPoint.trim()}」➔「${targetPoint.trim()}」· ${path.title}`,
+        deductionPremise: startPoint.trim(),
+        deductionTarget: targetPoint.trim(),
+        deductionPathTitle: path.title,
+        content: path.summary || "推演桥梁总括",
+        event: path.summary || "",
+        timeframe: "跨度推演时段",
+        location: "核心情境场景",
+        wordCountEstimate: Number(estimatedWords) || 10000,
         linkedCharacterIds: charIdsNum,
         linkedNoteIds: noteIdsNum,
-        type: "scene",
+        type: "bridge",
         status: "planned",
-        orderIndex: outlineNodes.length + idx,
-      }));
+        orderIndex: outlineNodes.length,
+        children: path.steps.map((step, idx) => {
+          const stepNum = idx + 1;
+          const stepContent = step.event || step.content || "";
+          return {
+            workId: Number(workId),
+            category: "deduction",
+            level: 2,
+            title: step.title || `第 ${stepNum} 阶段`,
+            deductionOrigin: `从「${startPoint.trim().slice(0, 20)}」➔「${targetPoint.trim().slice(0, 20)}」· ${path.title} · 第 ${stepNum} 阶段`,
+            deductionPremise: startPoint.trim(),
+            deductionTarget: targetPoint.trim(),
+            deductionPathTitle: path.title,
+            deductionStepIndex: stepNum,
+            event: stepContent,
+            twist: step.twist || step.keyConflict || "",
+            nextGoal: step.nextGoal || "",
+            suspense: step.suspense || "",
+            content: stepContent,
+            wordCountEstimate: step.estimatedWords || Math.round((Number(estimatedWords) || 10000) / path.steps.length),
+            linkedCharacterIds: charIdsNum,
+            linkedNoteIds: noteIdsNum,
+            type: "scene",
+            status: "planned",
+            orderIndex: idx,
+          };
+        }),
+      };
 
       await batchCreateOutlineNodes({
         workId: Number(workId),
-        nodes: newNodes,
+        nodes: [parentNode],
         batch: true,
       });
 
-      useAlert.success(`已成功将「${path.title}」的 ${newNodes.length} 个递进情节写入故事轴！`);
+      useAlert.success(`已成功采纳「${path.title}」至剧情推演大纲！`);
       await onOutlineUpdated();
       onClose();
     } catch (e: any) {
-      useAlert.error("采纳写入大纲失败: " + (e?.message || "网络异常"));
+      useAlert.error("采纳失败: " + (e?.message || "网络异常"));
     } finally {
       setAdopting(false);
-    }
-  };
-
-  const handleDeleteHistory = async (id: number) => {
-    try {
-      await deletePlotDeduction(id);
-      setHistoryList((prev) => prev.filter((h) => h.id !== id));
-      useAlert.success("已删除历史记录");
-    } catch (e: any) {
-      useAlert.error("删除失败: " + (e?.message || "网络异常"));
     }
   };
 
@@ -236,83 +261,58 @@ export default function DrawerPlotDeduction({
         </Group>
       }
       position="right"
-      size="xl"
+      size="55vw"
     >
-      <Tabs value={activeTab} onChange={setActiveTab} mb="md">
-        <Tabs.List>
-          <Tabs.Tab value="deduct" leftSection={<FiZap size={13} />}>
-            剧情桥接推演
-          </Tabs.Tab>
-          <Tabs.Tab
-            value="history"
-            leftSection={<FiClock size={13} />}
-            rightSection={
-              historyList.length > 0 ? (
-                <Badge size="xs" variant="light" color="gray">
-                  {historyList.length}
-                </Badge>
-              ) : null
-            }
-          >
-            推演历史
-          </Tabs.Tab>
-        </Tabs.List>
-      </Tabs>
+      <Stack gap="md" pb="xl">
+        {/* 输入表单 */}
+        <Paper p="sm" withBorder radius="md" bg="gray.0">
+          <Stack gap="xs">
+            <Textarea
+              label="起点剧情 A（现状 / 刚发生的事）"
+              placeholder="例如：林舟刚被逐出师门，身负重伤逃入荒野..."
+              required
+              autosize
+              minRows={2}
+              maxRows={4}
+              value={startPoint}
+              onChange={(e) => setStartPoint(e.currentTarget.value)}
+            />
 
-      {activeTab === "deduct" && (
-        <Stack gap="md">
-          {/* 输入表单 */}
-          <Paper p="sm" withBorder radius="md" bg="gray.0">
-            <Stack gap="xs">
-              <Textarea
-                label="📍 起点剧情 A（现状 / 刚发生的事）"
-                placeholder="例如：林舟刚被逐出师门，身负重伤，身无分文逃入荒野..."
-                required
-                autosize
-                minRows={2}
-                maxRows={4}
-                value={startPoint}
-                onChange={(e) => setStartPoint(e.currentTarget.value)}
+            <Textarea
+              label="目标终点 B（预期结果 / 想要达到的阶段）"
+              placeholder="例如：林舟查清线索并拜入天下第一宗门..."
+              required
+              autosize
+              minRows={2}
+              maxRows={4}
+              value={targetPoint}
+              onChange={(e) => setTargetPoint(e.currentTarget.value)}
+            />
+
+            <Textarea
+              label="发展路径期望 / 演进风格描述（选填）"
+              placeholder="例如：平稳过渡，中间经历一些温馨小故事，角色感情升温；或：快节奏多方博弈，充满机锋对话..."
+              autosize
+              minRows={2}
+              maxRows={4}
+              value={pathPreference}
+              onChange={(e) => setPathPreference(e.currentTarget.value)}
+            />
+
+            <Group grow align="flex-start">
+              <NumberInput
+                label="预期中间篇幅 (字)"
+                description="AI 将据此自动拆解合理的递进节奏"
+                min={1000}
+                max={50000}
+                step={1000}
+                value={estimatedWords}
+                onChange={(val) => setEstimatedWords(Number(val) || 10000)}
               />
-
-              <Textarea
-                label="🏁 目标终点 B（预期结果 / 想要达到的阶段）"
-                placeholder="例如：林舟查清凶手线索，并成功拜入天下第一宗门..."
-                required
-                autosize
-                minRows={2}
-                maxRows={4}
-                value={targetPoint}
-                onChange={(e) => setTargetPoint(e.currentTarget.value)}
-              />
-
-              <Group grow align="flex-start">
-                <NumberInput
-                  label="📏 预期中间字数篇幅 (字)"
-                  description="AI 将据此自动拆解过渡章节节奏"
-                  min={1000}
-                  max={50000}
-                  step={1000}
-                  value={estimatedWords}
-                  onChange={(val) => setEstimatedWords(Number(val) || 10000)}
-                />
-
-                <Select
-                  label="🎭 戏剧风格偏好"
-                  description="选择不同的戏剧冲突侧重"
-                  data={[
-                    { value: "standard", label: "稳健严密 (因果链扎实)" },
-                    { value: "twist", label: "惊天反转 (层层疑云)" },
-                    { value: "dark", label: "极限施压 (绝境突破)" },
-                  ]}
-                  value={pacePreference}
-                  onChange={(val) => setPacePreference(val || "standard")}
-                />
-              </Group>
 
               <MultiSelect
-                label="👥 关联参演角色 (AI 将严格符合其性格与标签)"
-                placeholder="选择参与本次推演的角色..."
+                label="关联参演角色"
+                placeholder="选择参与推演的角色..."
                 data={charOptions}
                 value={selectedCharIds}
                 onChange={setSelectedCharIds}
@@ -320,184 +320,220 @@ export default function DrawerPlotDeduction({
                 clearable
                 leftSection={<FiUser size={14} />}
               />
+            </Group>
 
-              <MultiSelect
-                label="📑 关联设定/灵感笔记 (AI 将遵守其规则设定)"
-                placeholder="选择需遵守的世界观或设定笔记..."
-                data={noteOptions}
-                value={selectedNoteIds}
-                onChange={setSelectedNoteIds}
-                searchable
-                clearable
-                leftSection={<FiFileText size={14} />}
-              />
+            <MultiSelect
+              label="关联参考设定/笔记"
+              placeholder="选择需遵守的世界观或设定笔记..."
+              data={noteOptions}
+              value={selectedNoteIds}
+              onChange={setSelectedNoteIds}
+              searchable
+              clearable
+              leftSection={<FiFileText size={14} />}
+            />
 
-              <Button
-                variant="filled"
-                color="blue"
-                leftSection={<FiZap size={14} />}
-                onClick={handleStartDeduction}
-                loading={loading}
-                mt="xs"
-              >
-                开始推演桥梁路径 (生成 3 套方案)
-              </Button>
-            </Stack>
-          </Paper>
+            <Button
+              variant="filled"
+              color="blue"
+              leftSection={<FiZap size={14} />}
+              onClick={handleStartDeduction}
+              loading={loading}
+              mt="xs"
+            >
+              开始推演桥接路径
+            </Button>
+          </Stack>
+        </Paper>
 
-          {/* 推演结果展示区 */}
-          {deductionPaths.length > 0 && (
-            <Stack gap="sm">
+        {/* 推演结果展示区 */}
+        {deductionPaths.length > 0 && (
+          <Stack gap="sm">
+            <Flex justify="space-between" align="center">
               <Text fw={700} fz={14} c="#0f172a">
-                🔮 推演生成的 3 条演进路径（点击切换）：
+                推演生成的演进方案（点击切换方案）：
               </Text>
+              <Button
+                size="compact-xs"
+                variant={isEditingPath ? "filled" : "light"}
+                color="indigo"
+                leftSection={<FiEdit2 size={12} />}
+                onClick={() => setIsEditingPath((v) => !v)}
+              >
+                {isEditingPath ? "完成编辑" : "编辑方案内容"}
+              </Button>
+            </Flex>
 
-              <Group gap="xs">
-                {deductionPaths.map((path) => {
-                  const isSelected = path.id === selectedPath?.id;
-                  return (
-                    <Button
-                      key={path.id}
-                      size="xs"
-                      variant={isSelected ? "filled" : "default"}
-                      color={isSelected ? "blue" : "gray"}
-                      onClick={() => setSelectedPathId(path.id)}
-                    >
-                      {path.title}
-                    </Button>
-                  );
-                })}
-              </Group>
+            <Group gap="xs">
+              {deductionPaths.map((path) => {
+                const isSelected = path.id === selectedPath?.id;
+                return (
+                  <Button
+                    key={path.id}
+                    size="xs"
+                    variant={isSelected ? "filled" : "default"}
+                    color={isSelected ? "blue" : "gray"}
+                    onClick={() => setSelectedPathId(path.id)}
+                  >
+                    {path.title}
+                  </Button>
+                );
+              })}
+            </Group>
 
-              {selectedPath && (
-                <Paper p="md" withBorder radius="md" bg="#ffffff">
-                  <Flex justify="space-between" align="center" mb="xs">
-                    <Group gap="xs">
-                      <Badge variant="light" color="blue">
-                        {selectedPath.style || "演进路线"}
-                      </Badge>
+            {selectedPath && (
+              <Paper p="md" withBorder radius="md" bg="#ffffff">
+                <Flex justify="space-between" align="center" mb="xs">
+                  <Group gap="xs" style={{ flex: 1 }}>
+                    <Badge variant="light" color="blue">
+                      {selectedPath.style || "演进方案"}
+                    </Badge>
+                    {isEditingPath ? (
+                      <TextInput
+                        size="xs"
+                        style={{ flex: 1, maxWidth: 300 }}
+                        value={selectedPath.title}
+                        onChange={(e) => {
+                          const val = e.currentTarget.value;
+                          handleUpdateCurrentPath((prev) => ({ ...prev, title: val }));
+                        }}
+                      />
+                    ) : (
                       <Text fw={700} fz={15}>
                         {selectedPath.title}
                       </Text>
-                    </Group>
+                    )}
+                  </Group>
 
-                    <Button
-                      size="xs"
-                      variant="filled"
-                      color="teal"
-                      leftSection={<FiCheck size={13} />}
-                      loading={adopting}
-                      onClick={() => handleAdoptPath(selectedPath)}
-                    >
-                      一键采纳并写入故事轴
-                    </Button>
-                  </Flex>
+                  <Button
+                    size="xs"
+                    variant="filled"
+                    color="teal"
+                    leftSection={<FiCheck size={13} />}
+                    loading={adopting}
+                    onClick={() => handleAdoptPath(selectedPath)}
+                  >
+                    一键采纳写入大纲 (一级节点+步骤)
+                  </Button>
+                </Flex>
 
-                  <Text fz={13} c="dimmed" mb="md">
-                    💡 <b>核心逻辑：</b> {selectedPath.summary}
+                {isEditingPath ? (
+                  <Textarea
+                    label="方案总述"
+                    size="xs"
+                    autosize
+                    minRows={2}
+                    value={selectedPath.summary || ""}
+                    onChange={(e) => {
+                      const val = e.currentTarget.value;
+                      handleUpdateCurrentPath((prev) => ({ ...prev, summary: val }));
+                    }}
+                    mb="md"
+                  />
+                ) : (
+                  <Text fz={13} c="dimmed" mb="md" style={{ lineHeight: 1.6 }}>
+                    <b>核心推进逻辑：</b> {selectedPath.summary}
                   </Text>
+                )}
 
-                  {/* 步骤列表 */}
-                  <Stack gap="xs">
-                    {selectedPath.steps.map((step, sIdx) => (
-                      <Paper key={sIdx} p="sm" withBorder radius="sm" bg="gray.0">
-                        <Flex justify="space-between" align="center" mb={4}>
-                          <Text fz={13} fw={700} c="#0f172a">
-                            步骤 {sIdx + 1}：{step.title}
-                          </Text>
-                          {step.estimatedWords && (
-                            <Badge variant="outline" color="gray" size="xs">
-                              约 {step.estimatedWords} 字
-                            </Badge>
+                {/* 步骤列表 */}
+                <Stack gap="xs">
+                  {selectedPath.steps.map((step, sIdx) => (
+                    <Paper key={sIdx} p="sm" withBorder radius="sm" bg="gray.0">
+                      <Flex justify="space-between" align="center" mb={6}>
+                        <Group gap="xs" style={{ flex: 1 }}>
+                          <Badge variant="filled" color="indigo" size="xs">
+                            第 {sIdx + 1} 阶段
+                          </Badge>
+                          {isEditingPath ? (
+                            <TextInput
+                              size="xs"
+                              style={{ flex: 1, maxWidth: 260 }}
+                              value={step.title}
+                              onChange={(e) => {
+                                const val = e.currentTarget.value;
+                                handleUpdateCurrentPath((prev) => {
+                                  const steps = [...prev.steps];
+                                  steps[sIdx] = { ...steps[sIdx], title: val };
+                                  return { ...prev, steps };
+                                });
+                              }}
+                            />
+                          ) : (
+                            <Text fz={13} fw={700} c="#0f172a">
+                              {step.title}
+                            </Text>
                           )}
-                        </Flex>
+                        </Group>
 
+                        {step.estimatedWords && (
+                          <Badge variant="outline" color="gray" size="xs">
+                            约 {step.estimatedWords} 字
+                          </Badge>
+                        )}
+                      </Flex>
+
+                      {isEditingPath ? (
+                        <Stack gap={4}>
+                          <Textarea
+                            label="发生经过与互动"
+                            size="xs"
+                            autosize
+                            minRows={2}
+                            value={step.event || step.content || ""}
+                            onChange={(e) => {
+                              const val = e.currentTarget.value;
+                              handleUpdateCurrentPath((prev) => {
+                                const steps = [...prev.steps];
+                                steps[sIdx] = { ...steps[sIdx], event: val, content: val };
+                                return { ...prev, steps };
+                              });
+                            }}
+                          />
+                          <TextInput
+                            label="转折冲突点"
+                            size="xs"
+                            value={step.twist || ""}
+                            onChange={(e) => {
+                              const val = e.currentTarget.value;
+                              handleUpdateCurrentPath((prev) => {
+                                const steps = [...prev.steps];
+                                steps[sIdx] = { ...steps[sIdx], twist: val };
+                                return { ...prev, steps };
+                              });
+                            }}
+                          />
+                        </Stack>
+                      ) : (
                         <Stack gap={4}>
                           <Text fz={12} c="#334155">
-                            <b>📍 发生经过：</b> {step.event || step.content}
+                            <b>发生经过与互动：</b> {step.event || step.content}
                           </Text>
                           {step.twist && (
                             <Text fz={12} c="orange.8">
-                              <b>⚡ 意外转折：</b> {step.twist}
+                              <b>转折/推进点：</b> {step.twist}
                             </Text>
                           )}
                           {step.nextGoal && (
                             <Text fz={12} c="teal.8">
-                              <b>🎯 下一步：</b> {step.nextGoal}
+                              <b>下一步计划：</b> {step.nextGoal}
                             </Text>
                           )}
                           {step.suspense && (
                             <Text fz={12} c="grape.8">
-                              <b>🕳️ 伏笔悬念：</b> {step.suspense}
+                              <b>伏笔/线索：</b> {step.suspense}
                             </Text>
                           )}
                         </Stack>
-                      </Paper>
-                    ))}
-                  </Stack>
-                </Paper>
-              )}
-            </Stack>
-          )}
-        </Stack>
-      )}
-
-      {activeTab === "history" && (
-        <Stack gap="sm">
-          {historyList.length === 0 ? (
-            <Text fz={13} c="dimmed" ta="center" py="xl">
-              暂无历史推演记录
-            </Text>
-          ) : (
-            historyList.map((rec) => (
-              <Paper key={rec.id} p="sm" withBorder radius="md">
-                <Flex justify="space-between" align="flex-start">
-                  <Box style={{ flex: 1 }}>
-                    <Text fz={13} fw={700} c="#0f172a">
-                      起点：{rec.startPoint}
-                    </Text>
-                    <Text fz={13} fw={700} c="blue.7" mt={2}>
-                      终点：{rec.targetPoint}
-                    </Text>
-                    <Text fz={11} c="dimmed" mt={4}>
-                      {new Date(rec.createdAt).toLocaleString("zh-CN")} · 共{" "}
-                      {rec.generatedPaths?.length || 0} 套生成方案
-                    </Text>
-                  </Box>
-
-                  <Group gap={4}>
-                    <Button
-                      size="xs"
-                      variant="default"
-                      onClick={() => {
-                        setStartPoint(rec.startPoint);
-                        setTargetPoint(rec.targetPoint);
-                        if (Array.isArray(rec.generatedPaths)) {
-                          setDeductionPaths(rec.generatedPaths);
-                          if (rec.generatedPaths.length > 0) {
-                            setSelectedPathId(rec.generatedPaths[0].id);
-                          }
-                        }
-                        setActiveTab("deduct");
-                      }}
-                    >
-                      载入
-                    </Button>
-                    <ActionIcon
-                      size="sm"
-                      variant="subtle"
-                      color="red"
-                      onClick={() => handleDeleteHistory(rec.id)}
-                    >
-                      <FiTrash2 size={13} />
-                    </ActionIcon>
-                  </Group>
-                </Flex>
+                      )}
+                    </Paper>
+                  ))}
+                </Stack>
               </Paper>
-            ))
-          )}
-        </Stack>
-      )}
+            )}
+          </Stack>
+        )}
+      </Stack>
     </Drawer>
   );
 }

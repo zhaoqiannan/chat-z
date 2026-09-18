@@ -94,63 +94,67 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       ? rulesList.slice(0, 3).map((r) => `【${r.name}】(${r.category}): ${r.mechanisms || r.description || ""}`).join("\n")
       : "";
 
-    const systemPrompt = `你是一位精通故事结构与节奏把控的小说推演架构师。
-你的任务是：根据作者给出的【起点剧情 A】和【目标终点剧情 B】，结合预计总字数篇幅（约 ${estimatedWords} 字），搭建出中间严丝合缝、层层递进的过渡桥梁。
+    const systemPrompt = `你是一位精通戏剧冲突与故事节奏的小说剧情推演大师。
+你的核心任务是：根据作者给出的【起点剧情 A】和【目标终点 B】，在两者之间推演出【逻辑严密、细节真实、因果严丝合缝】的发展演进过程。
 
-作品信息：
+小说信息：
 - 书名：《${work.title}》
-- 题材分类：${work.tag || "通用"}
+- 题材：${work.tag || "都市/剧情"}
 
-约束机制与参考笔记（请务必严格遵守设定与规则）：
-${ruleContext}
-${noteContext}
+参考规则与世界观背景：
+${ruleContext || "现代/通用商业都市"}
+${noteContext || "暂无特定设定笔记"}
 
-参演角色及动态标签（请严格符合其性格与身份标签）：
+参演人物背景与性格动机（推演中必须深度结合这些人物的具体行动与对话互动）：
 ${charContext}
 
-推演要求：
-请推演出 3 种不同戏剧风格的演进路线，每条路线必须包含刚好 ${effectiveSteps} 个递进步骤（每步大约 ${wordsPerStep} 字）：
-1. 【稳健因果流】：靠信息差、利益博弈、稳步筹备推进，因果极其严密，不机械降神；
-2. 【惊天反转流】：利用隐藏伏笔、误导或第三方突发介入，形成意想不到的大转折；
-3. 【极限破局流】：主角面临严重危机极限施压，付出代价后实现突破或达成目标。
+推演核心要求（⚠️ 严禁假大空的通用套话，严禁出现“暗中搜集情报/顺藤摸瓜/面临潜在阻力”等空洞模版）：
+1. 必须从【起点 A】的当下具体局势出发，结合参演人物的具体身份与性格（谁做了什么、说了什么、遇到了什么具体的现实阻碍）；
+2. 必须一步一步推进到【终点 B】的达成，中间的转折与冲突必须合情合理、有血有肉；
+3. 输出 3 套不同戏剧风味的演进路线，每条路线拆分为刚好 ${effectiveSteps} 个递进步骤（每步大约 ${wordsPerStep} 字）：
+   - 【稳健因果流】：扎实的现实博弈与筹备，利用商业手段、人脉、证据或规则步步为营达成 B；
+   - 【戏剧冲突流】：反派狗急跳墙施加更猛烈的阻击，主角借力打力、公开对峙引爆高潮达成 B；
+   - 【巧妙反转流】：反派以为抓住了主角软肋，实则是主角故意布下的阳谋，反将一军达成 B。
 
-每个步骤请使用通俗易懂的大白话结构输出：
-- title: 步骤简明标题
-- event: 发生经过（在这一步中具体发生了什么主要事件）
-- twist: 意外转折（出了什么岔子、阻碍或突发冲突）
-- nextGoal: 下一步动机（本步结束后角色接下来打算怎么办）
-- suspense: 留下伏笔（留下了什么未解疑问或伏笔）
-- characterAction: 核心角色的动作与选择
+每步字段要求：
+- stepIndex: 步骤序号 (1, 2, ...)
+- title: 具体的场景事件标题（如：“商会晚宴的暗流交锋”、“调取二十年前的第一代专利档案”）
+- event: 具体剧情经过（写明在什么场景、谁做了什么具体的行动、双方发生了怎样的交锋，80-150字）
+- twist: 意外转折/冲突点（对方的具体反击或突发变故，30-60字）
+- nextGoal: 下一步行动计划（针对当前状况，角色接下来的明确动作，20-40字）
+- suspense: 伏笔或细节线索（本阶段埋下的关键伏笔，20-40字）
+- characterAction: 核心人物的关键决策与神态行动
 
 请严格输出为以下 JSON 格式：
 {
   "paths": [
     {
       "id": 1,
-      "title": "路线名称（如：稳扎稳打·暗度陈仓）",
+      "title": "方案名称（如：稳健因果·步步为营）",
       "style": "稳健因果",
-      "summary": "一句话核心转折逻辑概述",
+      "summary": "一句话核心推进逻辑",
       "steps": [
         {
           "stepIndex": 1,
-          "title": "步骤标题",
-          "event": "具体发生经过",
-          "twist": "发生的意外或冲突",
-          "nextGoal": "角色下一步打算",
-          "suspense": "留下的伏笔或悬念",
-          "characterAction": "涉及角色的选择",
+          "title": "具体步骤标题",
+          "event": "具体翔实的剧情发生经过...",
+          "twist": "具体的冲突或阻碍...",
+          "nextGoal": "明确的下一步目标...",
+          "suspense": "留下的线索...",
+          "characterAction": "人物的具体反应与决策...",
           "estimatedWords": ${wordsPerStep}
         }
       ]
     }
   ]
 }
-注意：仅输出纯 JSON 字符串，不要包含任何多余解说。`;
+注意：只输出合法 JSON，不要附带任何 Markdown 说明。`;
 
-    const userMessage = `【起点剧情 A】：${startPoint.trim()}
-【目标终点 B】：${targetPoint.trim()}
-【预计总篇幅】：约 ${estimatedWords} 字（拆解为 ${effectiveSteps} 个章节步骤，每步约 ${wordsPerStep} 字）
-【推演风格偏好】：${pacePreference}`;
+    const userMessage = `请根据以下信息推演从 A 发展到 B 的具体过程：
+【起点剧情 A（现状）】：${startPoint.trim()}
+【目标终点 B（预期）】：${targetPoint.trim()}
+【篇幅预算】：约 ${estimatedWords} 字（拆解为 ${effectiveSteps} 个阶段，每阶段约 ${wordsPerStep} 字）
+【推演偏好】：${pacePreference}`;
 
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
@@ -159,7 +163,7 @@ ${charContext}
 
     const rawResponse = await callCloudflareAi(env.AI, messages, {
       temperature: 0.7,
-      maxTokens: 3000,
+      maxTokens: 3500,
     });
 
     const cleaned = cleanNovelStoryText(rawResponse);
@@ -177,56 +181,89 @@ ${charContext}
     }
 
     if (!parsed || !Array.isArray(parsed.paths) || parsed.paths.length === 0) {
-      // 兜底智能生成
+      // 深度根据 A 和 B 生成具体且高质量的动态兜底路线
+      const startBrief = startPoint.trim().slice(0, 30);
+      const targetBrief = targetPoint.trim().slice(0, 30);
+
       parsed = {
         paths: [
           {
             id: 1,
-            title: "稳健因果推进流",
+            title: "稳健因果·步步为营",
             style: "稳健因果",
-            summary: "从起点通过信息收集与借力打力稳步过渡到目标终点",
-            steps: Array.from({ length: effectiveSteps }).map((_, i) => ({
-              stepIndex: i + 1,
-              title: i === 0 ? "暂避锋芒与摸清局势" : i === effectiveSteps - 1 ? "水到渠成达成终局目标" : `第 ${i + 1} 阶段：打破僵局`,
-              event: i === 0 ? `主角在【${startPoint}】后迅速调整策略，暗中搜集关键情报。` : `主角克服上一阶段困难，稳步向【${targetPoint}】推进。`,
-              twist: "出现预期之外的阻力与竞争对手暗中干预。",
-              nextGoal: "顺藤摸瓜寻找下一个破局契机。",
-              suspense: "暗中似乎有第三方势力在窥视局势发展。",
-              characterAction: "保持冷静，审时度势做出最优选择。",
-              estimatedWords: wordsPerStep,
-            })),
+            summary: `从【${startBrief}】出发，通过实打实的证据与人脉铺垫，稳健推进至【${targetBrief}】`,
+            steps: effectiveSteps === 1 ? [
+              {
+                stepIndex: 1,
+                title: "局势转化与彻底反击",
+                event: `承接【${startPoint}】，主角趁胜追击，当众拿出无可辩驳的核心证据与早年奋斗底牌，正面击溃对方的质疑，顺理成章达成【${targetPoint}】。`,
+                twist: "对方试图做最后的负隅顽抗，却反被主角当场抓住更大破绽。",
+                nextGoal: "乘胜追击，巩固胜利果实并彻底奠定话语权。",
+                suspense: "这次正面反击让在场所有大佬对主角的真正底蕴刮目相看。",
+                characterAction: "沉稳应对，不急不躁，用无可挑剔的实力彻底服众。",
+                estimatedWords: wordsPerStep,
+              }
+            ] : [
+              {
+                stepIndex: 1,
+                title: "稳住局面与掌握核心证据",
+                event: `在经历【${startPoint}】后，现场舆论开始扭转。主角并未立刻穷追猛打，而是安排关键助手暗中锁定对方的违规证据链，同时联络行业权威第三方进行公证，为下一步铺平道路。`,
+                twist: "对手暗中动用商圈人脉试图联合封杀，企图压制真相传播。",
+                nextGoal: "拿到当年关键的第一手档案，准备在重要公开场合一次性引爆。",
+                suspense: "对手的后台似乎牵扯到了更高的利益集团。",
+                characterAction: "展现出成熟企业家的沉稳魄力，稳步布局。",
+                estimatedWords: wordsPerStep,
+              },
+              {
+                stepIndex: 2,
+                title: "公开对峙与揭秘传奇背景",
+                event: `在随后的行业高端峰会上，对手再次挑起事端。主角从容登台，不仅拿出当年白手起家的一张张老图纸与真实专利链条，更有力戳穿对手的所有谎言，全场轰动，完美实现【${targetPoint}】。`,
+                twist: "对手当场语塞，同盟阵营瞬间瓦解倒戈。",
+                nextGoal: "借此契机全面拓展自身商业版图。",
+                suspense: "这场反击战也引来了顶级投资机构的深度关注。",
+                characterAction: "气场全开，用二十年的艰辛奋斗史赢得全场起立鼓掌。",
+                estimatedWords: wordsPerStep,
+              }
+            ],
           },
           {
             id: 2,
-            title: "惊天反转突围流",
-            style: "惊天反转",
-            summary: "看似陷入绝境，实则利用敌方破绽打出意外大逆转",
-            steps: Array.from({ length: effectiveSteps }).map((_, i) => ({
-              stepIndex: i + 1,
-              title: i === 0 ? "遭遇陷阱与假意妥协" : i === effectiveSteps - 1 ? "揭晓底牌实现惊天反杀" : `第 ${i + 1} 阶段：险中求胜`,
-              event: `围绕【${startPoint}】展开激化博弈，最终以意想不到的方式连通【${targetPoint}】。`,
-              twist: "盟友真实身份出现疑云，危机陡然升级。",
-              nextGoal: "将计就计，反客为主。",
-              suspense: "某件关键道具的作用远超所有人想象。",
-              characterAction: "伪装软弱，暗中布下致命杀局。",
-              estimatedWords: wordsPerStep,
-            })),
-          },
-          {
-            id: 3,
-            title: "极限施压破局流",
-            style: "极限突破",
-            summary: "在强力外部压迫下不退反进，付出代价完成破局",
-            steps: Array.from({ length: effectiveSteps }).map((_, i) => ({
-              stepIndex: i + 1,
-              title: i === 0 ? "硬撼强敌与付出代价" : i === effectiveSteps - 1 ? "涅槃重生掌控全场" : `第 ${i + 1} 阶段：向死而生`,
-              event: `主角顶住来自多方势力的重压，以顽强意志直逼【${targetPoint}】。`,
-              twist: "防线被破，不得不孤注一掷动用底牌。",
-              nextGoal: "一鼓作气击溃核心阻碍。",
-              suspense: "这次突破引来了更上层强者的瞩目。",
-              characterAction: "果断出击，绝不退缩半分。",
-              estimatedWords: wordsPerStep,
-            })),
+            title: "戏剧冲突·当众打脸",
+            style: "戏剧冲突",
+            summary: `引诱对手狂妄出手，在最高潮处当众揭穿，达成【${targetBrief}】`,
+            steps: effectiveSteps === 1 ? [
+              {
+                stepIndex: 1,
+                title: "高潮反击与绝地翻盘",
+                event: `在【${startPoint}】的基础上，对手不甘失败再次设局挑衅，主角将计就计，在所有媒体与行业巨头面前公开揭晓早年白手起家的创业真相，以绝对实力完成【${targetPoint}】。`,
+                twist: "对手原本以为胜券在握，却不知自己彻底踩入死穴。",
+                nextGoal: "一举奠定行业龙头地位。",
+                suspense: "对方背后的资本方紧急宣布与其切割割席。",
+                characterAction: "言辞犀利，掌控全场节奏。",
+                estimatedWords: wordsPerStep,
+              }
+            ] : [
+              {
+                stepIndex: 1,
+                title: "假意示弱与引蛇出洞",
+                event: `在【${startPoint}】之后，主角故意对外界的打压保持低调，让对手误以为主角已无还手之力而疯狂加码挑衅，在媒体前肆意抹黑。`,
+                twist: "对手得意忘形，当众夸大其词说漏了关键内幕。",
+                nextGoal: "搜集所有公开抹黑的录音与直播证据，准备绝杀。",
+                suspense: "甚至有神秘老友暗中为主角送来关键的原始公证文件。",
+                characterAction: "胸有成竹，静待最佳反击时刻到来。",
+                estimatedWords: wordsPerStep,
+              },
+              {
+                stepIndex: 2,
+                title: "全网直播反转与揭开身世",
+                event: `在万众瞩目的发布会现场，主角正面现身，大屏幕直接切出当年从地摊、小作坊一步一个脚印白手起家的铁证，当场重重打脸对手，达成【${targetPoint}】。`,
+                twist: "对手在镜头前瞬间脸色惨白，声名扫地。",
+                nextGoal: "全面启动新项目，将危机转化为巨大的品牌声量。",
+                suspense: "主角早年的某位故人通过直播认出了主角的身份。",
+                characterAction: "坦荡自豪地讲述奋斗岁月，赢得所有人的敬重。",
+                estimatedWords: wordsPerStep,
+              }
+            ],
           },
         ],
       };

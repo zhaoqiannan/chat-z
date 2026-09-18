@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, outlines, works, characters, notes } from "@/db";
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { eq, and, or, asc, inArray } from "drizzle-orm";
 
 async function checkWorkOwnership(db: any, workId: number, userId: string) {
   const work = await db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, userId))).get();
@@ -44,19 +44,22 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无效的 workId" }, { status: 400 });
     }
 
+    const categoryParam = req.nextUrl.searchParams.get("category"); // 'chapter' | 'deduction' | 'memo' | null
+
     const isOwner = await checkWorkOwnership(db, workId, user.userId);
     if (!isOwner) {
       return NextResponse.json({ success: false, message: "无权访问该作品的大纲" }, { status: 403 });
     }
 
+    // 查询大纲列表（支持分类过滤）
+    let query = db.select().from(outlines).where(eq(outlines.workId, workId));
+    if (categoryParam && ["chapter", "deduction", "memo"].includes(categoryParam)) {
+      query = db.select().from(outlines).where(and(eq(outlines.workId, workId), eq(outlines.category, categoryParam)));
+    }
+
     // 并行获取大纲列表、角色列表与笔记列表
     const [rawList, allCharacters, allNotes] = await Promise.all([
-      db
-        .select()
-        .from(outlines)
-        .where(eq(outlines.workId, workId))
-        .orderBy(asc(outlines.orderIndex), asc(outlines.chapterNumber), asc(outlines.id))
-        .all(),
+      query.orderBy(asc(outlines.orderIndex), asc(outlines.chapterNumber), asc(outlines.id)).all(),
       db.select().from(characters).where(eq(characters.workId, workId)).all(),
       db.select().from(notes).where(eq(notes.workId, workId)).all(),
     ]);
@@ -114,26 +117,48 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         ...item,
         id: Number(item.id),
         workId: Number(item.workId),
+        category: item.category || (item.isFromChapter || item.chapterId ? "chapter" : "memo"),
+        level: Number(item.level) || (item.parentId ? 2 : 1),
         parentId: item.parentId ? Number(item.parentId) : null,
         volumeId: item.volumeId ? Number(item.volumeId) : null,
         chapterId: item.chapterId ? Number(item.chapterId) : null,
         chapterNumber: item.chapterNumber ? Number(item.chapterNumber) : null,
+        summary: item.summary || "",
+        timeframe: item.timeframe || "",
+        location: item.location || "",
+        deductionId: item.deductionId ? Number(item.deductionId) : null,
+        deductionStepIndex: item.deductionStepIndex ? Number(item.deductionStepIndex) : null,
         linkedCharacterIds: charIds,
         linkedNoteIds: noteIds,
         linkedCharacters: enrichedChars,
         linkedNotes: enrichedNotes,
-        // 4 要素回退兼容
-        event: item.event || item.eventDescription || item.content || "",
+        // 内容回退兼容
+        event: item.event || item.content || "",
         twist: item.twist || item.conflict || "",
         nextGoal: item.nextGoal || item.goal || "",
         suspense: item.suspense || item.foreshadowing || "",
       };
     });
 
+    // 组装树级结构 treeList
+    const nodeMap = new Map<number, any>();
+    enrichedList.forEach((n) => nodeMap.set(n.id, { ...n, children: [] }));
+
+    const treeList: any[] = [];
+    enrichedList.forEach((n) => {
+      const current = nodeMap.get(n.id);
+      if (n.parentId && nodeMap.has(n.parentId)) {
+        nodeMap.get(n.parentId).children.push(current);
+      } else {
+        treeList.push(current);
+      }
+    });
+
     return NextResponse.json({
       success: true,
       result: enrichedList,
       flatList: enrichedList,
+      treeList,
       totalCount: enrichedList.length,
       message: "获取大纲成功",
     });
@@ -145,7 +170,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
 /**
  * POST /api/outlines
- * 创建单个大纲节点或批量插入（支持 A➔B 推演结果写入）
+ * 创建单个大纲节点或批量插入（支持嵌套树级节点插入）
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -154,7 +179,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const body = await req.json();
 
-    // 1. 批量插入分支（如来自 A➔B 跨度推演）
+    // 1. 批量插入分支（支持包含 children 的嵌套树状结构）
     if (body.batch && Array.isArray(body.nodes)) {
       const workId = Number(body.workId);
       if (!workId || isNaN(workId)) {
@@ -166,14 +191,19 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         return NextResponse.json({ success: false, message: "无权操作该作品" }, { status: 403 });
       }
 
-      const createdList = [];
-      for (const nodeData of body.nodes) {
+      const createdList: any[] = [];
+
+      async function insertNodeRecursively(nodeData: any, parentId: number | null, order: number, currentLevel: number = 1) {
         const charIds = parseNumberArray(nodeData.linkedCharacterIds);
         const noteIds = parseNumberArray(nodeData.linkedNoteIds);
+        const effectiveParentId = parentId ?? (nodeData.parentId ? Number(nodeData.parentId) : null);
+        const itemLevel = typeof nodeData.level === "number" ? nodeData.level : (effectiveParentId ? 2 : currentLevel);
 
         const item: any = {
           workId,
-          parentId: nodeData.parentId ? Number(nodeData.parentId) : null,
+          category: nodeData.category || "memo",
+          level: itemLevel,
+          parentId: effectiveParentId,
           volumeId: nodeData.volumeId ? Number(nodeData.volumeId) : null,
           chapterId: nodeData.chapterId ? Number(nodeData.chapterId) : null,
           chapterNumber: nodeData.chapterNumber ? Number(nodeData.chapterNumber) : null,
@@ -181,34 +211,56 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           pointType: nodeData.pointType || null,
           status: nodeData.status || "planned",
           isFromChapter: nodeData.isFromChapter ? 1 : 0,
-          title: (nodeData.title || "未命名节点").trim(),
+          title: (nodeData.title || "未命名情节").trim(),
+          summary: nodeData.summary?.trim() || null,
+          timeframe: nodeData.timeframe?.trim() || null,
+          location: nodeData.location?.trim() || null,
+          deductionId: nodeData.deductionId ? Number(nodeData.deductionId) : null,
+          deductionOrigin: nodeData.deductionOrigin?.trim() || null,
+          deductionPremise: nodeData.deductionPremise?.trim() || null,
+          deductionTarget: nodeData.deductionTarget?.trim() || null,
+          deductionPathTitle: nodeData.deductionPathTitle?.trim() || null,
+          deductionStepIndex: typeof nodeData.deductionStepIndex === "number" ? nodeData.deductionStepIndex : null,
           event: nodeData.event?.trim() || nodeData.content?.trim() || "",
-          twist: nodeData.twist?.trim() || nodeData.conflict?.trim() || "",
-          nextGoal: nodeData.nextGoal?.trim() || nodeData.goal?.trim() || "",
-          suspense: nodeData.suspense?.trim() || nodeData.foreshadowing?.trim() || "",
+          twist: nodeData.twist?.trim() || "",
+          nextGoal: nodeData.nextGoal?.trim() || "",
+          suspense: nodeData.suspense?.trim() || "",
           content: nodeData.content?.trim() || nodeData.event?.trim() || "",
           wordCountEstimate: typeof nodeData.wordCountEstimate === "number" ? nodeData.wordCountEstimate : 3000,
           linkedCharacterIds: charIds,
           linkedNoteIds: noteIds,
-          orderIndex: typeof nodeData.orderIndex === "number" ? nodeData.orderIndex : 0,
+          orderIndex: typeof nodeData.orderIndex === "number" ? nodeData.orderIndex : order,
           createdAt: new Date(),
           updatedAt: new Date(),
         };
 
         const insertRes = await db.insert(outlines).values(item).returning();
-        createdList.push(insertRes[0] || item);
+        const insertedItem = insertRes[0] || item;
+        createdList.push(insertedItem);
+
+        if (Array.isArray(nodeData.children) && nodeData.children.length > 0) {
+          for (let cIdx = 0; cIdx < nodeData.children.length; cIdx++) {
+            await insertNodeRecursively(nodeData.children[cIdx], insertedItem.id, cIdx, itemLevel + 1);
+          }
+        }
+      }
+
+      for (let i = 0; i < body.nodes.length; i++) {
+        await insertNodeRecursively(body.nodes[i], body.nodes[i].parentId ? Number(body.nodes[i].parentId) : null, i, 1);
       }
 
       return NextResponse.json({
         success: true,
         result: createdList,
-        message: `成功批量创建 ${createdList.length} 个大纲节点`,
+        message: `成功创建 ${createdList.length} 个大纲节点（含子节点）`,
       });
     }
 
     // 2. 单个节点创建
     const {
       workId: rawWorkId,
+      category = "memo",
+      level,
       parentId,
       volumeId,
       chapterId,
@@ -218,6 +270,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       status = "planned",
       isFromChapter = 0,
       title,
+      summary,
+      timeframe,
+      location,
+      deductionId,
+      deductionOrigin,
+      deductionPremise,
+      deductionTarget,
+      deductionPathTitle,
+      deductionStepIndex,
       event,
       twist,
       nextGoal,
@@ -254,6 +315,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const insertPayload: any = {
       workId,
+      category: category || (isFromChapter || chapterId ? "chapter" : "memo"),
+      level: typeof level === "number" ? level : (parentId ? 2 : 1),
       parentId: parentId ? Number(parentId) : null,
       volumeId: volumeId ? Number(volumeId) : null,
       chapterId: chapterId ? Number(chapterId) : null,
@@ -263,6 +326,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       status: status || "planned",
       isFromChapter: isFromChapter ? 1 : 0,
       title: title.trim(),
+      summary: summary?.trim() || null,
+      timeframe: timeframe?.trim() || null,
+      location: location?.trim() || null,
+      deductionId: deductionId ? Number(deductionId) : null,
+      deductionOrigin: deductionOrigin?.trim() || null,
+      deductionPremise: deductionPremise?.trim() || null,
+      deductionTarget: deductionTarget?.trim() || null,
+      deductionPathTitle: deductionPathTitle?.trim() || null,
+      deductionStepIndex: typeof deductionStepIndex === "number" ? deductionStepIndex : null,
       event: event?.trim() || content?.trim() || "",
       twist: twist?.trim() || "",
       nextGoal: nextGoal?.trim() || "",
@@ -319,7 +391,12 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       updatedAt: new Date(),
     };
 
+    if (body.category !== undefined) updateData.category = body.category;
+    if (body.level !== undefined) updateData.level = Number(body.level);
     if (body.title !== undefined) updateData.title = body.title.trim();
+    if (body.summary !== undefined) updateData.summary = body.summary?.trim() || null;
+    if (body.timeframe !== undefined) updateData.timeframe = body.timeframe?.trim() || null;
+    if (body.location !== undefined) updateData.location = body.location?.trim() || null;
     if (body.event !== undefined) updateData.event = body.event.trim();
     if (body.twist !== undefined) updateData.twist = body.twist.trim();
     if (body.nextGoal !== undefined) updateData.nextGoal = body.nextGoal.trim();
@@ -335,6 +412,13 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (body.orderIndex !== undefined) updateData.orderIndex = Number(body.orderIndex);
     if (body.wordCountEstimate !== undefined) updateData.wordCountEstimate = Number(body.wordCountEstimate);
 
+    if (body.deductionId !== undefined) updateData.deductionId = body.deductionId ? Number(body.deductionId) : null;
+    if (body.deductionOrigin !== undefined) updateData.deductionOrigin = body.deductionOrigin?.trim() || null;
+    if (body.deductionPremise !== undefined) updateData.deductionPremise = body.deductionPremise?.trim() || null;
+    if (body.deductionTarget !== undefined) updateData.deductionTarget = body.deductionTarget?.trim() || null;
+    if (body.deductionPathTitle !== undefined) updateData.deductionPathTitle = body.deductionPathTitle?.trim() || null;
+    if (body.deductionStepIndex !== undefined) updateData.deductionStepIndex = typeof body.deductionStepIndex === "number" ? body.deductionStepIndex : null;
+
     if (body.linkedCharacterIds !== undefined) {
       updateData.linkedCharacterIds = parseNumberArray(body.linkedCharacterIds);
     }
@@ -343,6 +427,65 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     await db.update(outlines).set(updateData).where(eq(outlines.id, id));
+
+    // 支持编辑后全量替换原数据的子情节 (replaceChildren 模式)
+    if (body.replaceChildren === true && Array.isArray(body.children)) {
+      const targetWorkId = existingNode.workId;
+      const targetCategory = existingNode.category;
+
+      // 1. 删除旧的直接子节点及其后代
+      const oldChildren = await db.select().from(outlines).where(eq(outlines.parentId, id)).all();
+      const oldChildIds = oldChildren.map((c: any) => c.id);
+      if (oldChildIds.length > 0) {
+        await db.delete(outlines).where(or(inArray(outlines.id, oldChildIds), inArray(outlines.parentId, oldChildIds)));
+      }
+
+      // 2. 递归插入新的子节点
+      async function insertChildRecursively(cData: any, pId: number, cIdx: number, cLevel: number) {
+        const cCharIds = parseNumberArray(cData.linkedCharacterIds);
+        const cNoteIds = parseNumberArray(cData.linkedNoteIds);
+        const cItem: any = {
+          workId: targetWorkId,
+          category: cData.category || targetCategory,
+          level: typeof cData.level === "number" ? cData.level : cLevel,
+          parentId: pId,
+          volumeId: cData.volumeId ? Number(cData.volumeId) : null,
+          chapterId: cData.chapterId ? Number(cData.chapterId) : null,
+          chapterNumber: cData.chapterNumber ? Number(cData.chapterNumber) : null,
+          type: cData.type || "scene",
+          pointType: cData.pointType || null,
+          status: cData.status || "planned",
+          isFromChapter: cData.isFromChapter ? 1 : 0,
+          title: (cData.title || "细分情节").trim(),
+          summary: cData.summary?.trim() || null,
+          timeframe: cData.timeframe?.trim() || null,
+          location: cData.location?.trim() || null,
+          event: cData.event?.trim() || cData.content?.trim() || "",
+          twist: cData.twist?.trim() || "",
+          nextGoal: cData.nextGoal?.trim() || "",
+          suspense: cData.suspense?.trim() || "",
+          content: cData.content?.trim() || cData.event?.trim() || "",
+          wordCountEstimate: typeof cData.wordCountEstimate === "number" ? cData.wordCountEstimate : 2000,
+          linkedCharacterIds: cCharIds,
+          linkedNoteIds: cNoteIds,
+          orderIndex: typeof cData.orderIndex === "number" ? cData.orderIndex : cIdx,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        const ins = await db.insert(outlines).values(cItem).returning();
+        const insObj = ins[0] || cItem;
+        if (Array.isArray(cData.children) && cData.children.length > 0) {
+          for (let subIdx = 0; subIdx < cData.children.length; subIdx++) {
+            await insertChildRecursively(cData.children[subIdx], insObj.id, subIdx, cLevel + 1);
+          }
+        }
+      }
+
+      for (let i = 0; i < body.children.length; i++) {
+        await insertChildRecursively(body.children[i], id, i, 2);
+      }
+    }
 
     const updated = await db.select().from(outlines).where(eq(outlines.id, id)).get();
 
@@ -416,7 +559,11 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       }
     }
 
-    await db.delete(outlines).where(inArray(outlines.id, idsToDelete));
+    // 找出所有下属子节点并一并删除 (防止孤儿节点)
+    const childNodes = await db.select().from(outlines).where(inArray(outlines.parentId, idsToDelete)).all();
+    const allIdsToDelete = Array.from(new Set([...idsToDelete, ...childNodes.map((c: any) => c.id)]));
+
+    await db.delete(outlines).where(inArray(outlines.id, allIdsToDelete));
 
     return NextResponse.json({
       success: true,

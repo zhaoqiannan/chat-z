@@ -11,6 +11,7 @@ export const OutlineApi = {
   deductAi: "/api/ai/plot-deduction",
   deductions: "/api/plot-deductions",
   extractOutline: "/api/ai/chapter/extract-outline",
+  organizeThoughts: "/api/ai/outline/organize-thoughts",
 };
 
 export type OutlineNodeType = "scene" | "volume" | "act" | "branch" | "bridge" | "story";
@@ -40,6 +41,8 @@ export interface EnrichedNote {
 export interface OutlineNode {
   id: number | string;
   workId: number | string;
+  category: "chapter" | "deduction" | "memo";
+  level?: number;
   parentId?: number | string | null;
   volumeId?: number | string | null;
   chapterId?: number | null;
@@ -49,9 +52,20 @@ export interface OutlineNode {
   status: OutlineStatus | string;
   isFromChapter: number;
   title: string;
+  summary?: string | null;
+  timeframe?: string | null;
+  location?: string | null;
   orderIndex: number;
 
-  // 大白话 4 要素
+  // 剧情推演溯源
+  deductionId?: number | null;
+  deductionOrigin?: string | null;
+  deductionPremise?: string | null;
+  deductionTarget?: string | null;
+  deductionPathTitle?: string | null;
+  deductionStepIndex?: number | null;
+
+  // 大纲核心要素
   event?: string | null;
   twist?: string | null;
   nextGoal?: string | null;
@@ -65,7 +79,7 @@ export interface OutlineNode {
   linkedCharacters?: EnrichedCharacter[];
   linkedNotes?: EnrichedNote[];
 
-  // 兼容与扩展字段
+  // 树级子节点
   children?: OutlineNode[];
   goal?: string | null;
   conflict?: string | null;
@@ -83,6 +97,8 @@ export interface OutlineNode {
 
 export interface CreateOutlinePayload {
   workId: number | string;
+  category?: "chapter" | "deduction" | "memo";
+  level?: number;
   parentId?: number | string | null;
   volumeId?: number | string | null;
   chapterId?: number | null;
@@ -92,6 +108,18 @@ export interface CreateOutlinePayload {
   status?: OutlineStatus | string;
   isFromChapter?: number;
   title: string;
+  summary?: string | null;
+  timeframe?: string | null;
+  location?: string | null;
+
+  // 剧情推演溯源
+  deductionId?: number | null;
+  deductionOrigin?: string | null;
+  deductionPremise?: string | null;
+  deductionTarget?: string | null;
+  deductionPathTitle?: string | null;
+  deductionStepIndex?: number | null;
+
   event?: string;
   twist?: string;
   nextGoal?: string;
@@ -101,6 +129,7 @@ export interface CreateOutlinePayload {
   linkedCharacterIds?: number[];
   linkedNoteIds?: number[];
   orderIndex?: number;
+  children?: any[];
 
   // 兼容旧字段
   goal?: string;
@@ -116,6 +145,8 @@ export interface CreateOutlinePayload {
 
 export interface UpdateOutlinePayload extends Partial<CreateOutlinePayload> {
   id: number | string;
+  replaceChildren?: boolean;
+  children?: any[];
 }
 
 export interface PlotDeductionStep {
@@ -152,8 +183,33 @@ export interface PlotDeductionPayload {
   stepCount?: number;
   selectedCharacterIds?: number[];
   selectedNoteIds?: number[];
-  pacePreference?: "standard" | "twist" | "dark" | string;
+  pacePreference?: string;
+  pathPreference?: string; // 自由输入的演进期望
   involvedCharacters?: string;
+}
+
+export interface OrganizedTreeNode {
+  title: string;
+  content: string;
+  timeframe?: string;
+  location?: string;
+  characters?: string;
+  children?: OrganizedTreeNode[];
+}
+
+export interface ThoughtOrganizePayload {
+  workId: number | string;
+  thoughts: string[];
+  selectedCharacterIds?: number[];
+  selectedNoteIds?: number[];
+}
+
+export interface ThoughtOrganizeResult {
+  title?: string;
+  summary: string;
+  timeframe?: string;
+  location?: string;
+  tree: OrganizedTreeNode[];
 }
 
 export interface PlotDeductionRecord {
@@ -219,6 +275,10 @@ export const extractChapterOutline = async (payload: {
   title?: string;
 }): Promise<{ success: boolean; result?: OutlineNode; message?: string }> => {
   return post(OutlineApi.extractOutline, payload);
+};
+
+export const organizeOutlineThoughts = async (payload: ThoughtOrganizePayload): Promise<{ success: boolean; result?: ThoughtOrganizeResult; message?: string }> => {
+  return post(OutlineApi.organizeThoughts, payload);
 };
 
 // 兼容历史 AI 辅助功能接口定义

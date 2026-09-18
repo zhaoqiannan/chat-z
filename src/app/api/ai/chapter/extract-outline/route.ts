@@ -126,6 +126,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const outlineData: any = {
       workId: effectiveWorkId,
+      category: "chapter",
       chapterId: chapterId,
       chapterNumber: chapter.chapterNumber || 1,
       title: finalTitle,
@@ -133,7 +134,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       twist: finalTwist,
       nextGoal: finalNextGoal,
       suspense: finalSuspense,
-      content: `${finalEvent}\n转折: ${finalTwist}\n下一步: ${finalNextGoal}\n伏笔: ${finalSuspense}`,
+      content: finalEvent,
       status: "completed",
       isFromChapter: 1,
       type: "scene",

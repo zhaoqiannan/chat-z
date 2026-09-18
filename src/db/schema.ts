@@ -113,30 +113,54 @@ export const outlines = sqliteTable('outlines', {
   chapterId: integer('chapter_id'),
   /** 对应章节序号（如第 1 章、第 2 章） */
   chapterNumber: integer('chapter_number'),
+  /** 节点分类: 'chapter'(章节大纲) | 'deduction'(剧情推演) | 'memo'(随手卡片) */
+  category: text('category').notNull().default('chapter'),
   /** 节点类型: 'scene'(情节点) | 'volume'(卷) | 'act'(幕) | 'branch'(支线) | 'bridge'(推演桥) | 'story'(故事主线) */
   type: text('type').notNull().default('scene'),
   /** 情节点细分类型: 'conflict'(冲突) | 'twist'(转折) | 'foreshadow'(铺垫) | 'climax'(高潮) | 'transition'(过渡) | 'reveal'(揭示) */
   pointType: text('point_type'),
   /** 创作/同步状态: 'completed'(已完成/已写) | 'in_progress'(正在写) | 'planned'(待写规划) */
   status: text('status').default('planned'),
+  /** 节点层级深度: 1=一级主纲/推演/整理实体, 2=二级具体细化情节/步骤, 3=三级情节点 */
+  level: integer('level').default(1),
   /** 来源标记: 1=正文实际提取沉淀生成, 0=预先规划/推演生成 */
   isFromChapter: integer('is_from_chapter').default(0),
   /** 节点标题/名称 */
   title: text('title').notNull(),
+  /** 一级节点宏观总括/阶段综述/推演总括 */
+  summary: text('summary'),
+  /** 时空逻辑：时间跨度/时间点 (如: 前三天 / 晚宴当晚) */
+  timeframe: text('timeframe'),
+  /** 时空逻辑：主要发生地点/空间场景 (如: 建材展厅 / 拍卖行) */
+  location: text('location'),
   /** 同级排序索引 */
   orderIndex: integer('order_index').default(0),
 
-  // --- 大白话 4 核心要素 ---
-  /** 📍 发生了什么事（核心事件经过） */
+  // --- 剧情推演溯源信息 (针对 category='deduction') ---
+  /** 关联推演记录 ID */
+  deductionId: integer('deduction_id'),
+  /** 推演母题/依据说明 (如: 从「第1章 开端」➔「第5章 决战」· 方案二 (戏剧冲突流) 第2阶段) */
+  deductionOrigin: text('deduction_origin'),
+  /** 推演起点 A 描述 */
+  deductionPremise: text('deduction_premise'),
+  /** 推演终点 B 描述 */
+  deductionTarget: text('deduction_target'),
+  /** 采纳的推演方案名称 (如: 稳健因果流 / 惊天反转流) */
+  deductionPathTitle: text('deduction_path_title'),
+  /** 推演阶段序号 (如: 第 1 步 / 第 2 步) */
+  deductionStepIndex: integer('deduction_step_index'),
+
+  // --- 大纲内容与结构要素 (灵活支持自由文本与结构化要点) ---
+  /** 核心事件经过 / 主要内容 */
   event: text('event'),
-  /** ⚡ 出了什么岔子/意外（关键转折与冲突） */
+  /** 意外转折与冲突 */
   twist: text('twist'),
-  /** 🎯 接下来打算怎么办（下一步行动动机与目标） */
+  /** 下一步行动目标与动机 */
   nextGoal: text('next_goal'),
-  /** 🕳️ 留下了什么悬念/伏笔（未解决的问题或待填的坑） */
+  /** 留下悬念与伏笔 */
   suspense: text('suspense'),
 
-  /** 剧情内容 / 发生经过 / 综合摘要与备注 */
+  /** 剧情内容 / 发生经过 / 综合摘要与作者备注 */
   content: text('content'),
   /** 预计/实际字数篇幅 (如 3000 字) */
   wordCountEstimate: integer('word_count_estimate').default(3000),
