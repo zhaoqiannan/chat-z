@@ -1,16 +1,44 @@
-// 组件：故事大纲与剧情推演工作台（极简线条卡片流、起终点转折推演与篇章管理）
+// 组件：故事大纲与章节故事轴主工作台（双向章节镜像、批量删除、A➔B 跨度推演、角色标签与笔记全文联动）
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { Box, Flex, Text, Button, LoadingOverlay, Group } from "@mantine/core";
-import { FiPlus, FiZap, FiFolderPlus, FiLayers } from "react-icons/fi";
-import { OutlineNode, CreateOutlinePayload, UpdateOutlinePayload, getOutlineList, createOutlineNode, updateOutlineNode, deleteOutlineNode } from "@/rest/outline";
+import {
+  Box,
+  Flex,
+  Text,
+  Button,
+  LoadingOverlay,
+  Group,
+  Tabs,
+  Paper,
+  ScrollArea,
+  Badge,
+  Checkbox,
+} from "@mantine/core";
+import {
+  FiPlus,
+  FiZap,
+  FiLayers,
+  FiCheckCircle,
+  FiClock,
+  FiTrash2,
+  FiX,
+} from "react-icons/fi";
+import {
+  OutlineNode,
+  CreateOutlinePayload,
+  UpdateOutlinePayload,
+  getOutlineList,
+  createOutlineNode,
+  updateOutlineNode,
+  deleteOutlineNode,
+  batchDeleteOutlineNodes,
+} from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
-import OutlineFlow from "./outline-flow";
-import ModalSimpleNode from "./modal-simple-node";
-import ModalCreateOutlineVolume from "./modal-create-outline-volume";
+import OutlineAxis from "./outline-axis";
+import ModalNodeEditor from "./modal-node-editor";
 import DrawerPlotDeduction from "./drawer-plot-deduction";
 
 export default function StoryOutlinePage() {
@@ -18,86 +46,165 @@ export default function StoryOutlinePage() {
   const workId = String(params?.id || "");
 
   const [loading, setLoading] = useState(false);
-  const [flatNodes, setFlatNodes] = useState<OutlineNode[]>([]);
+  const [nodes, setNodes] = useState<OutlineNode[]>([]);
+  const [activeTab, setActiveTab] = useState<string | null>("all");
+  const [selectedNodeIds, setSelectedNodeIds] = useState<(number | string)[]>([]);
 
-  const [nodeModalOpened, setNodeModalOpened] = useState(false);
+  // 弹窗与抽屉状态
+  const [editorModalOpened, setEditorModalOpened] = useState(false);
   const [editingNode, setEditingNode] = useState<OutlineNode | null>(null);
-  const [targetVolumeId, setTargetVolumeId] = useState<string | undefined>(undefined);
-
-  const [volumeModalOpened, setVolumeModalOpened] = useState(false);
   const [deductionDrawerOpened, setDeductionDrawerOpened] = useState(false);
 
-  const fetchNodes = async () => {
+  const fetchOutline = async () => {
     if (!workId) return;
     try {
       setLoading(true);
       const res = await getOutlineList(workId);
       if (res && res.success && res.result) {
-        const flatten = (arr: any[]): OutlineNode[] => {
-          let out: OutlineNode[] = [];
-          arr.forEach((item) => {
-            out.push(item);
-            if (item.children && Array.isArray(item.children)) {
-              out = out.concat(flatten(item.children));
-            }
-          });
-          return out;
-        };
-
         const rawList = Array.isArray(res.result)
-          ? flatten(res.result)
+          ? res.result
           : Array.isArray((res.result as any).list)
-            ? (res.result as any).list
-            : [];
-        setFlatNodes(rawList);
+          ? (res.result as any).list
+          : [];
+        setNodes(rawList);
       }
     } catch (e) {
-      console.error(e);
+      console.error("获取故事大纲失败:", e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchNodes();
+    fetchOutline();
   }, [workId]);
 
-  const handleOpenCreateNode = (volumeId?: string) => {
+  const handleOpenCreateNode = () => {
     setEditingNode(null);
-    setTargetVolumeId(volumeId);
-    setNodeModalOpened(true);
+    setEditorModalOpened(true);
   };
 
   const handleOpenEditNode = (node: OutlineNode) => {
     setEditingNode(node);
-    setNodeModalOpened(true);
+    setEditorModalOpened(true);
   };
 
-  const handleDeleteNode = async (id: string, e: React.MouseEvent) => {
+  const handleToggleSelectNode = (id: number | string) => {
+    setSelectedNodeIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteNode = async (id: number | string, e: React.MouseEvent) => {
     e.stopPropagation();
     const isConfirmed = await showConfirm({
-      title: "删除大纲节点",
-      message: "确定要删除该大纲节点吗？此操作不可撤销。",
+      title: "删除大纲卡片",
+      message: "确定要删除该情节卡片吗？此操作不可撤销。",
       confirmLabel: "删除",
       confirmColor: "red",
     });
     if (isConfirmed) {
       try {
         await deleteOutlineNode(id);
-        setFlatNodes((prev) => prev.filter((n) => n.id !== id));
-        useAlert.success("大纲节点已删除");
+        setNodes((prev) => prev.filter((n) => n.id !== id));
+        setSelectedNodeIds((prev) => prev.filter((i) => i !== id));
+        useAlert.success("已删除该大纲卡片");
       } catch (e: any) {
         useAlert.error("删除失败: " + (e?.message || "网络异常"));
       }
     }
   };
 
-  const handleLaunchDeduction = (start?: string, target?: string) => {
-    setDeductionDrawerOpened(true);
+  // 批量删除选中的卡片
+  const handleBatchDelete = async () => {
+    if (selectedNodeIds.length === 0) return;
+
+    const isConfirmed = await showConfirm({
+      title: "批量删除大纲卡片",
+      message: `确定要批量删除选中的 ${selectedNodeIds.length} 个大纲卡片吗？此操作不可撤销。`,
+      confirmLabel: `确认删除 (${selectedNodeIds.length} 项)`,
+      confirmColor: "red",
+    });
+
+    if (isConfirmed) {
+      try {
+        setLoading(true);
+        await batchDeleteOutlineNodes(selectedNodeIds);
+        setNodes((prev) => prev.filter((n) => !selectedNodeIds.includes(n.id)));
+        setSelectedNodeIds([]);
+        useAlert.success(`已成功批量删除 ${selectedNodeIds.length} 个大纲卡片`);
+      } catch (e: any) {
+        useAlert.error("批量删除失败: " + (e?.message || "网络异常"));
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
-  const volumes = flatNodes.filter((n) => n.type === "volume" || n.type === "story");
-  const points = flatNodes.filter((n) => n.type !== "volume" && n.type !== "story");
+  const handleMoveNode = async (node: OutlineNode, direction: "up" | "down") => {
+    const currentIndex = nodes.findIndex((n) => n.id === node.id);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= nodes.length) return;
+
+    const targetNode = nodes[targetIndex];
+    const newNodes = [...nodes];
+    newNodes[currentIndex] = targetNode;
+    newNodes[targetIndex] = node;
+
+    // 乐观更新
+    setNodes(newNodes);
+
+    try {
+      await Promise.all([
+        updateOutlineNode({ id: node.id, orderIndex: targetIndex }),
+        updateOutlineNode({ id: targetNode.id, orderIndex: currentIndex }),
+      ]);
+    } catch (e) {
+      console.error("更新排序失败:", e);
+      fetchOutline();
+    }
+  };
+
+  // 统计数据
+  const completedCount = nodes.filter(
+    (n) => n.status === "completed" || n.isFromChapter === 1 || !!n.chapterId
+  ).length;
+  const plannedCount = nodes.length - completedCount;
+
+  // 根据当前标签筛选
+  const filteredNodes = useMemo(() => {
+    if (activeTab === "completed") {
+      return nodes.filter(
+        (n) => n.status === "completed" || n.isFromChapter === 1 || !!n.chapterId
+      );
+    }
+    if (activeTab === "planned") {
+      return nodes.filter(
+        (n) => !(n.status === "completed" || n.isFromChapter === 1 || !!n.chapterId)
+      );
+    }
+    return nodes;
+  }, [nodes, activeTab]);
+
+  const isAllFilteredSelected =
+    filteredNodes.length > 0 &&
+    filteredNodes.every((n) => selectedNodeIds.includes(n.id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllFilteredSelected) {
+      // 取消当前筛选项的选择
+      const filteredIds = new Set(filteredNodes.map((n) => n.id));
+      setSelectedNodeIds((prev) => prev.filter((id) => !filteredIds.has(id)));
+    } else {
+      // 全选当前筛选项
+      const combined = Array.from(
+        new Set([...selectedNodeIds, ...filteredNodes.map((n) => n.id)])
+      );
+      setSelectedNodeIds(combined);
+    }
+  };
 
   return (
     <Box
@@ -109,8 +216,9 @@ export default function StoryOutlinePage() {
         overflow: "hidden",
       }}
     >
-      <LoadingOverlay visible={loading && flatNodes.length === 0} />
+      <LoadingOverlay visible={loading && nodes.length === 0} />
 
+      {/* 顶部工具栏 */}
       <Flex
         justify="space-between"
         align="center"
@@ -118,82 +226,139 @@ export default function StoryOutlinePage() {
         py={12}
         style={{ borderBottom: "1px solid #f1f5f9", backgroundColor: "#ffffff" }}
       >
-        <Group gap={8} align="center">
-          <FiLayers size={16} color="#0284c7" />
-          <Text fz={16} fw={800} c="#0f172a">
-            故事大纲与情节点
+        <Group gap="xs" align="center">
+          <FiLayers size={18} color="#0284c7" />
+          <Text fz={16} fw={700} c="#0f172a">
+            故事大纲与章节故事轴
           </Text>
-          <Text fz={12} c="#94a3b8">
-            ({volumes.length} 个篇章分卷 · {points.length} 个情节点)
-          </Text>
+          <Badge variant="light" color="gray" size="sm">
+            共 {nodes.length} 个情节 · {completedCount} 篇正文同步 · {plannedCount} 条待写规划
+          </Badge>
         </Group>
 
         <Group gap="xs">
-          <Button
-            size="xs"
+          {selectedNodeIds.length > 0 ? (
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="filled"
+                color="red"
+                leftSection={<FiTrash2 size={13} />}
+                onClick={handleBatchDelete}
+                loading={loading}
+              >
+                批量删除 ({selectedNodeIds.length} 项)
+              </Button>
+              <Button
+                size="xs"
+                variant="default"
+                leftSection={<FiX size={13} />}
+                onClick={() => setSelectedNodeIds([])}
+              >
+                取消多选
+              </Button>
+            </Group>
+          ) : (
+            <Group gap="xs">
+              <Button
+                size="xs"
+                variant="filled"
+                color="blue"
+                leftSection={<FiZap size={13} />}
+                onClick={() => setDeductionDrawerOpened(true)}
+              >
+                ✨ A➔B 剧情推演 (起终点桥接)
+              </Button>
 
-            variant="gradient"
-            gradient={{ from: "teal", to: "cyan", deg: 90 }}
-            leftSection={<FiZap size={13} />}
-            onClick={() => handleLaunchDeduction()}
-          >
-            ✨ 剧情推演 (起终点转折)
-          </Button>
-
-          <Button
-            size="xs"
-            variant="default"
-            leftSection={<FiFolderPlus size={13} />}
-            onClick={() => setVolumeModalOpened(true)}
-          >
-            新建分卷篇章
-          </Button>
-
-          <Button
-            size="xs"
-
-            leftSection={<FiPlus size={13} />}
-            onClick={() => handleOpenCreateNode()}
-          >
-            新增情节点
-          </Button>
+              <Button
+                size="xs"
+                variant="default"
+                leftSection={<FiPlus size={13} />}
+                onClick={handleOpenCreateNode}
+              >
+                随手添加情节卡片
+              </Button>
+            </Group>
+          )}
         </Group>
       </Flex>
 
-      <OutlineFlow
-        nodes={flatNodes}
-        onOpenCreateNode={handleOpenCreateNode}
-        onOpenCreateVolume={() => setVolumeModalOpened(true)}
-        onEditNode={handleOpenEditNode}
-        onDeleteNode={handleDeleteNode}
-        onLaunchDeduction={handleLaunchDeduction}
-      />
+      {/* 视图过滤标签栏与多选操作栏 */}
+      <Flex
+        justify="space-between"
+        align="center"
+        px="md"
+        pt="xs"
+        style={{ borderBottom: "1px solid #f8fafc" }}
+      >
+        <Tabs value={activeTab} onChange={setActiveTab}>
+          <Tabs.List>
+            <Tabs.Tab value="all" leftSection={<FiLayers size={13} />}>
+              全部故事轴 ({nodes.length})
+            </Tabs.Tab>
+            <Tabs.Tab
+              value="completed"
+              leftSection={<FiCheckCircle size={13} color="#16a34a" />}
+            >
+              已写正文轴 ({completedCount})
+            </Tabs.Tab>
+            <Tabs.Tab
+              value="planned"
+              leftSection={<FiClock size={13} color="#0284c7" />}
+            >
+              待写规划轴 ({plannedCount})
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs>
 
-      <ModalSimpleNode
-        opened={nodeModalOpened}
-        onClose={() => setNodeModalOpened(false)}
+        {filteredNodes.length > 0 && (
+          <Group gap="xs" align="center" pb={6}>
+            <Checkbox
+              size="xs"
+              label={isAllFilteredSelected ? "取消全选" : "全选当前项"}
+              checked={isAllFilteredSelected}
+              indeterminate={
+                selectedNodeIds.length > 0 && !isAllFilteredSelected
+              }
+              onChange={handleToggleSelectAll}
+            />
+          </Group>
+        )}
+      </Flex>
+
+      {/* 故事轴主体列表 */}
+      <ScrollArea style={{ flex: 1 }} px="md" py="xs">
+        <Box maw={980} mx="auto" pb={60}>
+          <OutlineAxis
+            workId={workId}
+            nodes={filteredNodes}
+            selectedNodeIds={selectedNodeIds}
+            onToggleSelectNode={handleToggleSelectNode}
+            onEditNode={handleOpenEditNode}
+            onDeleteNode={handleDeleteNode}
+            onMoveNode={handleMoveNode}
+          />
+        </Box>
+      </ScrollArea>
+
+      {/* 大纲卡片编辑/创建弹窗 */}
+      <ModalNodeEditor
+        opened={editorModalOpened}
+        onClose={() => setEditorModalOpened(false)}
         workId={workId}
         editingNode={editingNode}
-        volumes={volumes}
-        onSuccess={fetchNodes}
-        onCreateNode={createOutlineNode}
-        onUpdateNode={updateOutlineNode}
+        onSaved={fetchOutline}
+        onSubmitCreate={createOutlineNode}
+        onSubmitUpdate={updateOutlineNode}
       />
 
-      <ModalCreateOutlineVolume
-        opened={volumeModalOpened}
-        onClose={() => setVolumeModalOpened(false)}
-        workId={workId}
-        onSuccess={fetchNodes}
-        onCreateNode={createOutlineNode}
-      />
-
+      {/* A➔B 跨度推演抽屉 */}
       <DrawerPlotDeduction
         opened={deductionDrawerOpened}
         onClose={() => setDeductionDrawerOpened(false)}
         workId={workId}
-        outlineNodes={flatNodes}
-        onOutlineUpdated={fetchNodes}
+        outlineNodes={nodes}
+        onOutlineUpdated={fetchOutline}
       />
     </Box>
   );

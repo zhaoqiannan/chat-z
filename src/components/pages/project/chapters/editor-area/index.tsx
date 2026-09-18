@@ -3,8 +3,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Progress, Menu } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft } from "react-icons/fi";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers } from "react-icons/fi";
 import { ChapterItem, createChapterVersion } from "@/rest/chapter";
+import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import DrawerVersionHistory from "../drawer-version-history";
 import DrawerMemoryFragments from "../drawer-memory-fragments";
@@ -36,6 +37,7 @@ export default function EditorArea({
   const [subtitle, setSubtitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [extractingOutline, setExtractingOutline] = useState(false);
   const [versionDrawerOpened, setVersionDrawerOpened] = useState(false);
   const [fragmentDrawerOpened, setFragmentDrawerOpened] = useState(false);
 
@@ -235,6 +237,35 @@ export default function EditorArea({
     insertAtCursor(fragmentContent);
   };
 
+  const handleExtractToOutline = async () => {
+    if (!chapter) return;
+    const cleanContent = content.trim();
+    if (!cleanContent || cleanContent.length < 30) {
+      useAlert.warning("本章正文内容过短，写满一段后再提取大纲吧！");
+      return;
+    }
+
+    try {
+      setExtractingOutline(true);
+      const res = await extractChapterOutline({
+        chapterId: chapter.id,
+        workId,
+        content: cleanContent,
+        title: title.trim() || chapter.title,
+      });
+
+      if (res && res.success) {
+        useAlert.success("已提炼本章核心剧情并同步至大纲故事轴！");
+      } else {
+        useAlert.error("提取大纲失败: " + (res?.message || "网络异常"));
+      }
+    } catch (e: any) {
+      useAlert.error("提取异常: " + (e?.message || "网络错误"));
+    } finally {
+      setExtractingOutline(false);
+    }
+  };
+
   if (!chapter) {
     return (
       <Flex style={{ flex: 1, height: "100%" }} justify="center" align="center" direction="column" gap="sm">
@@ -278,6 +309,19 @@ export default function EditorArea({
             <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字</Text>
           </Group>
 
+          <Tooltip label="智能提炼本章剧情4要素并同步至大纲故事轴" position="bottom">
+            <Button
+              size="xs"
+              variant="light"
+              color="teal"
+              leftSection={<FiLayers size={13} />}
+              loading={extractingOutline}
+              onClick={handleExtractToOutline}
+            >
+              提取剧情到大纲
+            </Button>
+          </Tooltip>
+
           <Tooltip label="一键智能排版（所有段首缩进2空格）" position="bottom">
             <Button
               size="xs"
@@ -307,6 +351,9 @@ export default function EditorArea({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Item leftSection={<FiLayers size={13} color="#16a34a" />} onClick={handleExtractToOutline}>
+                提取剧情到大纲
+              </Menu.Item>
               <Menu.Item leftSection={<FiZap size={13} color="#0284c7" />} onClick={onToggleAiPanel}>
                 唤起 AI 协同助手
               </Menu.Item>

@@ -95,7 +95,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const facIds = contextTags.filter((t) => t.type === "faction").map((t) => Number(t.id)).filter(Boolean);
     const itemIds = contextTags.filter((t) => t.type === "item").map((t) => Number(t.id)).filter(Boolean);
     const ruleIds = contextTags.filter((t) => t.type === "rule").map((t) => Number(t.id)).filter(Boolean);
-    const outlineIds = contextTags.filter((t) => t.type === "outline").map((t) => String(t.id)).filter(Boolean);
+    const outlineIds = contextTags.filter((t) => t.type === "outline").map((t) => Number(t.id)).filter((n) => !isNaN(n) && n > 0);
     const otherChapterIds = contextTags.filter((t) => t.type === "chapter").map((t) => Number(t.id)).filter(Boolean);
 
     const [charsData, locsData, facsData, itemsData, rulesData, outlinesData, otherChaptersData] = await Promise.all([

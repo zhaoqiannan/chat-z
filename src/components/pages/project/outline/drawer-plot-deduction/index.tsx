@@ -1,14 +1,51 @@
-// 组件：剧情推演抽屉（起终点转折推演、多分支推演卡片流、一键批量采纳写入大纲）
+// 组件：A ➔ B 跨度剧情推演工作台（支持字数篇幅预算、角色标签约束、笔记设定约束与一键批量写入故事轴）
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, SimpleGrid, Paper, TextInput, Textarea, Select, LoadingOverlay, Group, ScrollArea, Tabs, Card } from "@mantine/core";
-import { FiZap, FiPlus, FiArrowRight, FiCheck, FiCornerDownRight, FiBookmark, FiCopy, FiTrash2, FiClock, FiLayers } from "react-icons/fi";
-import { OutlineNode, PlotDeductionPath, PlotDeductionRecord, deductPlot, getPlotDeductions, savePlotDeduction, deletePlotDeduction, batchCreateOutlineNodes } from "@/rest/outline";
+import {
+  Box,
+  Flex,
+  Text,
+  Button,
+  Drawer,
+  Badge,
+  ActionIcon,
+  Stack,
+  Paper,
+  TextInput,
+  Textarea,
+  NumberInput,
+  Select,
+  MultiSelect,
+  LoadingOverlay,
+  Group,
+  ScrollArea,
+  Tabs,
+} from "@mantine/core";
+import {
+  FiZap,
+  FiPlus,
+  FiArrowRight,
+  FiCheck,
+  FiLayers,
+  FiClock,
+  FiTrash2,
+  FiUser,
+  FiFileText,
+} from "react-icons/fi";
+import {
+  OutlineNode,
+  PlotDeductionPath,
+  PlotDeductionRecord,
+  deductPlot,
+  getPlotDeductions,
+  savePlotDeduction,
+  deletePlotDeduction,
+  batchCreateOutlineNodes,
+} from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
-import { createMemoryFragment } from "@/rest/chapter";
+import { NoteData, NoteListResult, getNoteList } from "@/rest/project-extensions";
 import { useAlert } from "@/hooks/useAlert";
-import { showConfirm } from "@/hooks/useConfirm";
 
 interface DrawerPlotDeductionProps {
   opened: boolean;
@@ -25,27 +62,36 @@ export default function DrawerPlotDeduction({
   outlineNodes,
   onOutlineUpdated,
 }: DrawerPlotDeductionProps) {
-  const [activeTab, setActiveTab] = useState<string>("deduct");
+  const [activeTab, setActiveTab] = useState<string | null>("deduct");
   const [loading, setLoading] = useState(false);
   const [characters, setCharacters] = useState<CharacterItem[]>([]);
+  const [notes, setNotes] = useState<NoteData[]>([]);
   const [historyList, setHistoryList] = useState<PlotDeductionRecord[]>([]);
 
+  // 推演输入
   const [startPoint, setStartPoint] = useState("");
   const [targetPoint, setTargetPoint] = useState("");
-  const [selectedChars, setSelectedChars] = useState<string[]>([]);
+  const [estimatedWords, setEstimatedWords] = useState<number>(10000);
+  const [selectedCharIds, setSelectedCharIds] = useState<string[]>([]);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
   const [pacePreference, setPacePreference] = useState("standard");
-  const [stepCount, setStepCount] = useState<number>(3);
 
+  // 推演结果
   const [deductionPaths, setDeductionPaths] = useState<PlotDeductionPath[]>([]);
   const [selectedPathId, setSelectedPathId] = useState<number | null>(null);
   const [adopting, setAdopting] = useState(false);
-  const [copiedPathId, setCopiedPathId] = useState<number | null>(null);
 
   useEffect(() => {
     if (opened && workId) {
       getCharacterList(workId).then((res) => {
         if (res && res.success && Array.isArray(res.result)) {
           setCharacters(res.result);
+        }
+      });
+      getNoteList(workId, "all", "").then((res) => {
+        if (res && res.success && res.result) {
+          const r = res.result as NoteListResult;
+          setNotes(Array.isArray(r.list) ? r.list : []);
         }
       });
       fetchHistory();
@@ -66,11 +112,11 @@ export default function DrawerPlotDeduction({
 
   const handleStartDeduction = async () => {
     if (!startPoint.trim()) {
-      useAlert.warning("请输入或选择【起点剧情点】");
+      useAlert.warning("请输入【起点剧情 A（现状）】");
       return;
     }
     if (!targetPoint.trim()) {
-      useAlert.warning("请输入或选择【目标终点剧情】");
+      useAlert.warning("请输入【目标终点 B（预期目标）】");
       return;
     }
 
@@ -79,13 +125,17 @@ export default function DrawerPlotDeduction({
       setDeductionPaths([]);
       setSelectedPathId(null);
 
+      const charIdsNum = selectedCharIds.map(Number).filter((n) => !isNaN(n));
+      const noteIdsNum = selectedNoteIds.map(Number).filter((n) => !isNaN(n));
+
       const res = await deductPlot({
         workId,
         startPoint: startPoint.trim(),
         targetPoint: targetPoint.trim(),
-        involvedCharacters: selectedChars.join(", "),
+        estimatedWords: Number(estimatedWords) || 10000,
+        selectedCharacterIds: charIdsNum,
+        selectedNoteIds: noteIdsNum,
         pacePreference,
-        stepCount,
       });
 
       if (res && res.success && res.result && Array.isArray(res.result.paths)) {
@@ -97,9 +147,8 @@ export default function DrawerPlotDeduction({
           workId: Number(workId),
           startPoint: startPoint.trim(),
           targetPoint: targetPoint.trim(),
-          involvedCharacters: selectedChars.join(", "),
+          involvedCharacters: charIdsNum.join(", "),
           pacePreference,
-          stepCount,
           generatedPaths: res.result.paths,
         });
         fetchHistory();
@@ -117,16 +166,22 @@ export default function DrawerPlotDeduction({
     if (!workId) return;
     try {
       setAdopting(true);
+      const charIdsNum = selectedCharIds.map(Number).filter((n) => !isNaN(n));
+      const noteIdsNum = selectedNoteIds.map(Number).filter((n) => !isNaN(n));
+
       const newNodes = path.steps.map((step, idx) => ({
-        id: crypto.randomUUID(),
         workId: Number(workId),
         title: step.title,
-        content: step.content,
-        goal: step.title,
-        conflict: step.keyConflict || "",
-        eventDescription: step.content,
-        characters: step.characterAction || selectedChars.join(", ") || "",
+        event: step.event || step.content || "",
+        twist: step.twist || step.keyConflict || "",
+        nextGoal: step.nextGoal || "",
+        suspense: step.suspense || "",
+        content: `${step.event || step.content || ""}\n转折: ${step.twist || ""}`,
+        wordCountEstimate: step.estimatedWords || Math.round((Number(estimatedWords) || 10000) / path.steps.length),
+        linkedCharacterIds: charIdsNum,
+        linkedNoteIds: noteIdsNum,
         type: "scene",
+        status: "planned",
         orderIndex: outlineNodes.length + idx,
       }));
 
@@ -136,7 +191,7 @@ export default function DrawerPlotDeduction({
         batch: true,
       });
 
-      useAlert.success(`已成功将「${path.title}」的 ${newNodes.length} 个转折情节点批量插入大纲树！`);
+      useAlert.success(`已成功将「${path.title}」的 ${newNodes.length} 个递进情节写入故事轴！`);
       await onOutlineUpdated();
       onClose();
     } catch (e: any) {
@@ -146,352 +201,303 @@ export default function DrawerPlotDeduction({
     }
   };
 
-  const handleSaveToFragment = async (path: PlotDeductionPath) => {
-    if (!workId) return;
+  const handleDeleteHistory = async (id: number) => {
     try {
-      const fullText = `【推演方案：${path.title}】\n核心逻辑：${path.summary}\n\n` +
-        path.steps.map((s, i) => `${i + 1}. ${s.title}\n${s.content}\n[冲突]: ${s.keyConflict || "无"}\n[动作]: ${s.characterAction || "无"}`).join("\n\n");
-
-      await createMemoryFragment({
-        workId,
-        title: `剧情推演：${path.title}`,
-        content: fullText,
-        sourceType: "ai_chat",
-        tags: "剧情推演 转折方案",
-      });
-      useAlert.success("已存为记忆碎片！可在章节写作区的灵感库中随时查阅。");
+      await deletePlotDeduction(id);
+      setHistoryList((prev) => prev.filter((h) => h.id !== id));
+      useAlert.success("已删除历史记录");
     } catch (e: any) {
-      useAlert.error("存为碎片失败: " + (e?.message || "网络异常"));
+      useAlert.error("删除失败: " + (e?.message || "网络异常"));
     }
   };
 
-  const handleCopyPath = (path: PlotDeductionPath) => {
-    const fullText = `【推演方案：${path.title}】\n核心逻辑：${path.summary}\n\n` +
-      path.steps.map((s, i) => `${i + 1}. ${s.title}\n${s.content}\n关键冲突: ${s.keyConflict || "无"}\n关键选择: ${s.characterAction || "无"}`).join("\n\n");
-
-    navigator.clipboard.writeText(fullText);
-    setCopiedPathId(path.id);
-    setTimeout(() => setCopiedPathId(null), 2000);
-  };
-
-  const handleDeleteHistory = async (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const isConfirmed = await showConfirm({
-      title: "删除推演历史",
-      message: "确定要删除这条推演历史吗？此操作不可撤销。",
-      confirmLabel: "删除",
-      confirmColor: "red",
-    });
-    if (isConfirmed) {
-      try {
-        await deletePlotDeduction(id);
-        setHistoryList((prev) => prev.filter((h) => h.id !== id));
-        useAlert.success("推演历史已删除");
-      } catch (e: any) {
-        useAlert.error("删除失败: " + (e?.message || "网络异常"));
-      }
-    }
-  };
-
-  const nodeOptions = outlineNodes.map((n) => ({
-    value: n.title,
-    label: n.title,
+  const charOptions = characters.map((c) => ({
+    value: String(c.id),
+    label: `${c.name}${c.identity ? ` (${c.identity})` : ""}`,
   }));
+
+  const noteOptions = notes.map((n) => ({
+    value: String(n.id),
+    label: `[${n.category}] ${n.title}`,
+  }));
+
+  const selectedPath = deductionPaths.find((p) => p.id === selectedPathId) || deductionPaths[0];
 
   return (
     <Drawer
       opened={opened}
       onClose={onClose}
-      position="right"
-      size="80vw"
       title={
-        <Group gap={8} align="center">
+        <Group gap="xs">
           <FiZap size={16} color="#0284c7" />
-          <Text fw={700} fz={15} c="#0f172a">剧情推演工作台 (起终点转折桥梁模拟)</Text>
+          <Text fw={700} fz={16}>
+            A ➔ B 跨度剧情推演工作台
+          </Text>
         </Group>
       }
-      styles={{
-        header: { borderBottom: "1px solid #f1f5f9", paddingBottom: 10 },
-        body: { height: "calc(100vh - 60px)", padding: "16px 20px", display: "flex", flexDirection: "column" },
-      }}
+      position="right"
+      size="xl"
     >
-      <Tabs value={activeTab} onChange={(val) => setActiveTab(val || "deduct")} style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        <Tabs.List mb="md">
+      <Tabs value={activeTab} onChange={setActiveTab} mb="md">
+        <Tabs.List>
           <Tabs.Tab value="deduct" leftSection={<FiZap size={13} />}>
-            智能推演
+            剧情桥接推演
           </Tabs.Tab>
-          <Tabs.Tab value="history" leftSection={<FiClock size={13} />}>
-            推演历史 ({historyList.length})
+          <Tabs.Tab
+            value="history"
+            leftSection={<FiClock size={13} />}
+            rightSection={
+              historyList.length > 0 ? (
+                <Badge size="xs" variant="light" color="gray">
+                  {historyList.length}
+                </Badge>
+              ) : null
+            }
+          >
+            推演历史
           </Tabs.Tab>
         </Tabs.List>
+      </Tabs>
 
-        <Tabs.Panel value="deduct" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <Box p="12px 16px" bg="#fafbfc" style={{ border: "1px solid #f1f5f9", borderRadius: 6 }} mb="md">
-            <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" mb="sm">
-              <Box>
-                <Flex justify="space-between" align="center" mb={4}>
-                  <Text fz={12} fw={600} c="#0284c7">【起点剧情】当前情节点</Text>
-                  {nodeOptions.length > 0 && (
-                    <Select
-                      placeholder="从大纲中快速点选"
-                      size="xs"
-                      data={nodeOptions}
-                      onChange={(val) => val && setStartPoint(val)}
-                      styles={{ input: { fontSize: 11, height: 24, padding: "0 6px" } }}
-                    />
-                  )}
-                </Flex>
-                <TextInput
-                  placeholder="例如：主角在宗门大比遭陷害被废，流放边荒矿脉..."
-                  size="xs"
-                  value={startPoint}
-                  onChange={(e) => setStartPoint(e.target.value)}
+      {activeTab === "deduct" && (
+        <Stack gap="md">
+          {/* 输入表单 */}
+          <Paper p="sm" withBorder radius="md" bg="gray.0">
+            <Stack gap="xs">
+              <Textarea
+                label="📍 起点剧情 A（现状 / 刚发生的事）"
+                placeholder="例如：林舟刚被逐出师门，身负重伤，身无分文逃入荒野..."
+                required
+                autosize
+                minRows={2}
+                maxRows={4}
+                value={startPoint}
+                onChange={(e) => setStartPoint(e.currentTarget.value)}
+              />
+
+              <Textarea
+                label="🏁 目标终点 B（预期结果 / 想要达到的阶段）"
+                placeholder="例如：林舟查清凶手线索，并成功拜入天下第一宗门..."
+                required
+                autosize
+                minRows={2}
+                maxRows={4}
+                value={targetPoint}
+                onChange={(e) => setTargetPoint(e.currentTarget.value)}
+              />
+
+              <Group grow align="flex-start">
+                <NumberInput
+                  label="📏 预期中间字数篇幅 (字)"
+                  description="AI 将据此自动拆解过渡章节节奏"
+                  min={1000}
+                  max={50000}
+                  step={1000}
+                  value={estimatedWords}
+                  onChange={(val) => setEstimatedWords(Number(val) || 10000)}
                 />
-              </Box>
 
-              <Box>
-                <Flex justify="space-between" align="center" mb={4}>
-                  <Text fz={12} fw={600} c="#0891b2">【目标终点】期望达成的剧情</Text>
-                  {nodeOptions.length > 0 && (
-                    <Select
-                      placeholder="从大纲中快速点选"
-                      size="xs"
-                      data={nodeOptions}
-                      onChange={(val) => val && setTargetPoint(val)}
-                      styles={{ input: { fontSize: 11, height: 24, padding: "0 6px" } }}
-                    />
-                  )}
-                </Flex>
-                <TextInput
-                  placeholder="例如：三年后主角以魔道巨擘身份携无上圣物重临帝都大比..."
-                  size="xs"
-                  value={targetPoint}
-                  onChange={(e) => setTargetPoint(e.target.value)}
-                />
-              </Box>
-            </SimpleGrid>
-
-            <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
-              <Box>
-                <Text fz={11.5} fw={600} c="#64748b" mb={3}>参演关键角色</Text>
-                <Group gap={4} wrap="wrap">
-                  {characters.slice(0, 6).map((c) => {
-                    const isChecked = selectedChars.includes(c.name);
-                    return (
-                      <Badge
-                        key={c.id}
-                        size="xs"
-                        variant={isChecked ? "filled" : "outline"}
-                        color={isChecked ? "cyan" : "gray"}
-                        style={{ cursor: "pointer" }}
-                        onClick={() => {
-                          setSelectedChars((prev) =>
-                            prev.includes(c.name) ? prev.filter((n) => n !== c.name) : [...prev, c.name]
-                          );
-                        }}
-                      >
-                        {c.name}
-                      </Badge>
-                    );
-                  })}
-                  {characters.length === 0 && <Text fz={11} c="#94a3b8">暂无预设角色</Text>}
-                </Group>
-              </Box>
-
-              <Box>
                 <Select
-                  label="转折演进偏好"
-                  size="xs"
-                  value={pacePreference}
-                  onChange={(v) => v && setPacePreference(v)}
+                  label="🎭 戏剧风格偏好"
+                  description="选择不同的戏剧冲突侧重"
                   data={[
-                    { label: "稳健因果 (层层递进)", value: "standard" },
-                    { label: "惊天逆转 (伏笔爆发)", value: "twist" },
-                    { label: "极限突破 (绝境逢生)", value: "dark" },
+                    { value: "standard", label: "稳健严密 (因果链扎实)" },
+                    { value: "twist", label: "惊天反转 (层层疑云)" },
+                    { value: "dark", label: "极限施压 (绝境突破)" },
                   ]}
+                  value={pacePreference}
+                  onChange={(val) => setPacePreference(val || "standard")}
                 />
-              </Box>
+              </Group>
 
-              <Box>
-                <Flex justify="space-between" align="flex-end" gap="xs">
-                  <Box style={{ flex: 1 }}>
-                    <Select
-                      label="过渡步数"
-                      size="xs"
-                      value={String(stepCount)}
-                      onChange={(v) => v && setStepCount(Number(v))}
-                      data={[
-                        { label: "2 步过渡转折", value: "2" },
-                        { label: "3 步过渡转折", value: "3" },
-                        { label: "4 步过渡转折", value: "4" },
-                        { label: "5 步过渡转折", value: "5" },
-                      ]}
-                    />
-                  </Box>
-                  <Button
-                    size="xs"
+              <MultiSelect
+                label="👥 关联参演角色 (AI 将严格符合其性格与标签)"
+                placeholder="选择参与本次推演的角色..."
+                data={charOptions}
+                value={selectedCharIds}
+                onChange={setSelectedCharIds}
+                searchable
+                clearable
+                leftSection={<FiUser size={14} />}
+              />
 
-                    leftSection={<FiZap size={13} />}
-                    loading={loading}
-                    onClick={handleStartDeduction}
-                    style={{ height: 30 }}
-                  >
-                    开始智能推演
-                  </Button>
-                </Flex>
-              </Box>
-            </SimpleGrid>
-          </Box>
+              <MultiSelect
+                label="📑 关联设定/灵感笔记 (AI 将遵守其规则设定)"
+                placeholder="选择需遵守的世界观或设定笔记..."
+                data={noteOptions}
+                value={selectedNoteIds}
+                onChange={setSelectedNoteIds}
+                searchable
+                clearable
+                leftSection={<FiFileText size={14} />}
+              />
 
-          <Box pos="relative" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <LoadingOverlay visible={loading} />
+              <Button
+                variant="filled"
+                color="blue"
+                leftSection={<FiZap size={14} />}
+                onClick={handleStartDeduction}
+                loading={loading}
+                mt="xs"
+              >
+                开始推演桥梁路径 (生成 3 套方案)
+              </Button>
+            </Stack>
+          </Paper>
 
-            {deductionPaths.length === 0 && !loading ? (
-              <Stack align="center" justify="center" p={60} c="#94a3b8" gap={6} style={{ flex: 1 }}>
-                <FiZap size={36} strokeWidth={1.2} />
-                <Text fz={14} fw={600}>设定起点与终点，让 AI 智能推演中间转折</Text>
-                <Text fz={12}>AI 将结合世界观规则、人物动机与素材库，自动推演出 3 套逻辑自洽的演进路径</Text>
-              </Stack>
-            ) : (
-              <ScrollArea style={{ flex: 1 }}>
-                <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm" pb="md">
-                  {deductionPaths.map((path) => (
-                    <Card
+          {/* 推演结果展示区 */}
+          {deductionPaths.length > 0 && (
+            <Stack gap="sm">
+              <Text fw={700} fz={14} c="#0f172a">
+                🔮 推演生成的 3 条演进路径（点击切换）：
+              </Text>
+
+              <Group gap="xs">
+                {deductionPaths.map((path) => {
+                  const isSelected = path.id === selectedPath?.id;
+                  return (
+                    <Button
                       key={path.id}
-                      p="12px 14px"
-                      radius="sm"
-                      withBorder
-                      bg="#ffffff"
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        borderColor: selectedPathId === path.id ? "#7dd3fc" : "#f1f5f9",
-                        backgroundColor: selectedPathId === path.id ? "#f0f9ff" : "#ffffff",
-                      }}
+                      size="xs"
+                      variant={isSelected ? "filled" : "default"}
+                      color={isSelected ? "blue" : "gray"}
                       onClick={() => setSelectedPathId(path.id)}
                     >
-                      <Flex justify="space-between" align="center" mb={6}>
-                        <Group gap={6}>
-                          <Badge size="xs" variant="filled">
-                            {path.style}
-                          </Badge>
-                          <Text fz={13.5} fw={700} c="#1e293b">
-                            {path.title}
-                          </Text>
-                        </Group>
-                      </Flex>
+                      {path.title}
+                    </Button>
+                  );
+                })}
+              </Group>
 
-                      <Text fz={11.5} c="#0369a1" mb="xs" style={{ lineHeight: 1.5 }}>
-                        {path.summary}
-                      </Text>
-
-                      <Stack gap={6} style={{ flex: 1 }} mb="sm">
-                        {path.steps.map((step, sIdx) => (
-                          <Box key={sIdx} p="6px 8px" bg="#ffffff" style={{ border: "1px solid #e2e8f0", borderRadius: 4 }}>
-                            <Group gap={4} mb={2}>
-                              <FiCornerDownRight size={10} color="#0284c7" />
-                              <Text fz={11.5} fw={700} c="#1e293b">
-                                第 {sIdx + 1} 步：{step.title}
-                              </Text>
-                            </Group>
-                            <Text fz={11} c="#475569" style={{ lineHeight: 1.5, whiteSpace: "pre-wrap" }} mb={3}>
-                              {step.content}
-                            </Text>
-                            {step.keyConflict && (
-                              <Text fz={10.5} c="#dc2626">
-                                ● 矛盾冲突：{step.keyConflict}
-                              </Text>
-                            )}
-                            {step.characterAction && (
-                              <Text fz={10.5} c="#0891b2">
-                                ● 破局动作：{step.characterAction}
-                              </Text>
-                            )}
-                          </Box>
-                        ))}
-                      </Stack>
-
-                      <Flex justify="space-between" align="center" pt={8} style={{ borderTop: "1px solid #e2e8f0" }}>
-                        <Group gap={4}>
-                          <ActionIcon
-                            size="xs"
-                            variant="subtle"
-                            color={copiedPathId === path.id ? "teal" : "gray"}
-                            onClick={(e) => { e.stopPropagation(); handleCopyPath(path); }}
-                          >
-                            {copiedPathId === path.id ? <FiCheck size={11} /> : <FiCopy size={11} />}
-                          </ActionIcon>
-                          <Button
-                            size="compact-xs"
-                            variant="subtle"
-                            color="gray"
-                            leftSection={<FiBookmark size={10} />}
-                            onClick={(e) => { e.stopPropagation(); handleSaveToFragment(path); }}
-                          >
-                            存碎片
-                          </Button>
-                        </Group>
-
-                        <Button
-                          size="compact-xs"
-
-                          leftSection={<FiPlus size={10} />}
-                          loading={adopting}
-                          onClick={(e) => { e.stopPropagation(); handleAdoptPath(path); }}
-                        >
-                          采纳写入大纲
-                        </Button>
-                      </Flex>
-                    </Card>
-                  ))}
-                </SimpleGrid>
-              </ScrollArea>
-            )}
-          </Box>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="history" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <ScrollArea style={{ flex: 1 }}>
-            <Stack gap="sm">
-              {historyList.map((hist) => (
-                <Paper key={hist.id} p="md" withBorder radius="sm" bg="#ffffff" style={{ borderColor: "#f1f5f9" }}>
-                  <Flex justify="space-between" align="center" mb={6}>
-                    <Group gap={8}>
-                      <Badge size="xs" >{hist.pacePreference || "标准"}</Badge>
-                      <Text fz={13} fw={700} c="#1e293b">
-                        {hist.startPoint} <FiArrowRight size={11} style={{ verticalAlign: "middle" }} /> {hist.targetPoint}
+              {selectedPath && (
+                <Paper p="md" withBorder radius="md" bg="#ffffff">
+                  <Flex justify="space-between" align="center" mb="xs">
+                    <Group gap="xs">
+                      <Badge variant="light" color="blue">
+                        {selectedPath.style || "演进路线"}
+                      </Badge>
+                      <Text fw={700} fz={15}>
+                        {selectedPath.title}
                       </Text>
                     </Group>
-                    <ActionIcon size="xs" variant="subtle" color="red" onClick={(e) => handleDeleteHistory(hist.id, e)}>
-                      <FiTrash2 size={12} />
-                    </ActionIcon>
+
+                    <Button
+                      size="xs"
+                      variant="filled"
+                      color="teal"
+                      leftSection={<FiCheck size={13} />}
+                      loading={adopting}
+                      onClick={() => handleAdoptPath(selectedPath)}
+                    >
+                      一键采纳并写入故事轴
+                    </Button>
                   </Flex>
 
-                  {Array.isArray(hist.generatedPaths) && hist.generatedPaths.length > 0 && (
-                    <SimpleGrid cols={{ base: 1, md: 3 }} spacing="xs" mt="xs">
-                      {hist.generatedPaths.map((p) => (
-                        <Box key={p.id} p="8px" bg="#fafbfc" style={{ border: "1px solid #f1f5f9", borderRadius: 4 }}>
-                          <Text fz={12} fw={700} c="#0284c7" mb={2}>{p.title}</Text>
-                          <Text fz={11} c="#64748b" lineClamp={2} mb={4}>{p.summary}</Text>
-                          <Button size="compact-xs" variant="light" onClick={() => handleAdoptPath(p)}>
-                            重新采纳此方案
-                          </Button>
-                        </Box>
-                      ))}
-                    </SimpleGrid>
-                  )}
-                </Paper>
-              ))}
+                  <Text fz={13} c="dimmed" mb="md">
+                    💡 <b>核心逻辑：</b> {selectedPath.summary}
+                  </Text>
 
-              {historyList.length === 0 && (
-                <Text fz={13} c="#94a3b8" ta="center" py={40}>
-                  暂无推演历史记录
-                </Text>
+                  {/* 步骤列表 */}
+                  <Stack gap="xs">
+                    {selectedPath.steps.map((step, sIdx) => (
+                      <Paper key={sIdx} p="sm" withBorder radius="sm" bg="gray.0">
+                        <Flex justify="space-between" align="center" mb={4}>
+                          <Text fz={13} fw={700} c="#0f172a">
+                            步骤 {sIdx + 1}：{step.title}
+                          </Text>
+                          {step.estimatedWords && (
+                            <Badge variant="outline" color="gray" size="xs">
+                              约 {step.estimatedWords} 字
+                            </Badge>
+                          )}
+                        </Flex>
+
+                        <Stack gap={4}>
+                          <Text fz={12} c="#334155">
+                            <b>📍 发生经过：</b> {step.event || step.content}
+                          </Text>
+                          {step.twist && (
+                            <Text fz={12} c="orange.8">
+                              <b>⚡ 意外转折：</b> {step.twist}
+                            </Text>
+                          )}
+                          {step.nextGoal && (
+                            <Text fz={12} c="teal.8">
+                              <b>🎯 下一步：</b> {step.nextGoal}
+                            </Text>
+                          )}
+                          {step.suspense && (
+                            <Text fz={12} c="grape.8">
+                              <b>🕳️ 伏笔悬念：</b> {step.suspense}
+                            </Text>
+                          )}
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Paper>
               )}
             </Stack>
-          </ScrollArea>
-        </Tabs.Panel>
-      </Tabs>
+          )}
+        </Stack>
+      )}
+
+      {activeTab === "history" && (
+        <Stack gap="sm">
+          {historyList.length === 0 ? (
+            <Text fz={13} c="dimmed" ta="center" py="xl">
+              暂无历史推演记录
+            </Text>
+          ) : (
+            historyList.map((rec) => (
+              <Paper key={rec.id} p="sm" withBorder radius="md">
+                <Flex justify="space-between" align="flex-start">
+                  <Box style={{ flex: 1 }}>
+                    <Text fz={13} fw={700} c="#0f172a">
+                      起点：{rec.startPoint}
+                    </Text>
+                    <Text fz={13} fw={700} c="blue.7" mt={2}>
+                      终点：{rec.targetPoint}
+                    </Text>
+                    <Text fz={11} c="dimmed" mt={4}>
+                      {new Date(rec.createdAt).toLocaleString("zh-CN")} · 共{" "}
+                      {rec.generatedPaths?.length || 0} 套生成方案
+                    </Text>
+                  </Box>
+
+                  <Group gap={4}>
+                    <Button
+                      size="xs"
+                      variant="default"
+                      onClick={() => {
+                        setStartPoint(rec.startPoint);
+                        setTargetPoint(rec.targetPoint);
+                        if (Array.isArray(rec.generatedPaths)) {
+                          setDeductionPaths(rec.generatedPaths);
+                          if (rec.generatedPaths.length > 0) {
+                            setSelectedPathId(rec.generatedPaths[0].id);
+                          }
+                        }
+                        setActiveTab("deduct");
+                      }}
+                    >
+                      载入
+                    </Button>
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color="red"
+                      onClick={() => handleDeleteHistory(rec.id)}
+                    >
+                      <FiTrash2 size={13} />
+                    </ActionIcon>
+                  </Group>
+                </Flex>
+              </Paper>
+            ))
+          )}
+        </Stack>
+      )}
     </Drawer>
   );
 }

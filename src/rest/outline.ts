@@ -1,4 +1,4 @@
-// REST: 故事大纲管理、情节点维护与 AI 剧情推演接口封装
+// REST: 故事大纲管理、双向章节故事轴与 AI A➔B 剧情推演接口封装
 import { get, post, put, del } from "@/utils/rest";
 
 export const OutlineApi = {
@@ -10,22 +10,63 @@ export const OutlineApi = {
   history: "/api/ai/outline/history",
   deductAi: "/api/ai/plot-deduction",
   deductions: "/api/plot-deductions",
+  extractOutline: "/api/ai/chapter/extract-outline",
 };
 
-export type OutlineNodeType = "story" | "volume" | "act" | "scene" | "branch" | "event" | "point";
-
+export type OutlineNodeType = "scene" | "volume" | "act" | "branch" | "bridge" | "story";
 export type PlotPointType = "conflict" | "twist" | "foreshadow" | "climax" | "transition" | "reveal";
+export type OutlineStatus = "completed" | "in_progress" | "planned";
+
+export interface EnrichedCharacter {
+  id: number;
+  name: string;
+  roleType: string;
+  identity?: string;
+  avatarUrl?: string | null;
+  tags: string[];
+  characterArc?: string;
+}
+
+export interface EnrichedNote {
+  id: number;
+  title: string;
+  category: string;
+  content: string;
+  isPinned?: number;
+  priority?: string;
+  updatedAt?: string | number;
+}
 
 export interface OutlineNode {
-  id: string;
+  id: number | string;
   workId: number | string;
-  parentId?: string | null;
-  volumeId?: string | null;
+  parentId?: number | string | null;
+  volumeId?: number | string | null;
+  chapterId?: number | null;
+  chapterNumber?: number | null;
   type: OutlineNodeType;
   pointType?: PlotPointType | null;
+  status: OutlineStatus | string;
+  isFromChapter: number;
   title: string;
-  content?: string | null;
   orderIndex: number;
+
+  // 大白话 4 要素
+  event?: string | null;
+  twist?: string | null;
+  nextGoal?: string | null;
+  suspense?: string | null;
+
+  content?: string | null;
+  wordCountEstimate?: number;
+
+  linkedCharacterIds?: number[];
+  linkedNoteIds?: number[];
+  linkedCharacters?: EnrichedCharacter[];
+  linkedNotes?: EnrichedNote[];
+
+  // 兼容与扩展字段
+  children?: OutlineNode[];
   goal?: string | null;
   conflict?: string | null;
   eventDescription?: string | null;
@@ -35,20 +76,33 @@ export interface OutlineNode {
   foreshadowing?: string | null;
   linkedChapters?: number[] | null;
   remarks?: string | null;
+
   createdAt?: string | number;
   updatedAt?: string | number;
-  children?: OutlineNode[];
 }
 
 export interface CreateOutlinePayload {
   workId: number | string;
-  parentId?: string | null;
-  volumeId?: string | null;
+  parentId?: number | string | null;
+  volumeId?: number | string | null;
+  chapterId?: number | null;
+  chapterNumber?: number | null;
   type?: OutlineNodeType;
   pointType?: PlotPointType | null;
+  status?: OutlineStatus | string;
+  isFromChapter?: number;
   title: string;
+  event?: string;
+  twist?: string;
+  nextGoal?: string;
+  suspense?: string;
   content?: string;
+  wordCountEstimate?: number;
+  linkedCharacterIds?: number[];
+  linkedNoteIds?: number[];
   orderIndex?: number;
+
+  // 兼容旧字段
   goal?: string;
   conflict?: string;
   eventDescription?: string;
@@ -61,15 +115,21 @@ export interface CreateOutlinePayload {
 }
 
 export interface UpdateOutlinePayload extends Partial<CreateOutlinePayload> {
-  id: string;
+  id: number | string;
 }
 
 export interface PlotDeductionStep {
   stepIndex?: number;
   title: string;
-  content: string;
-  keyConflict?: string;
+  event: string;
+  twist?: string;
+  nextGoal?: string;
+  suspense?: string;
   characterAction?: string;
+  estimatedWords?: number;
+  // 兼容旧字段
+  content?: string;
+  keyConflict?: string;
 }
 
 export interface PlotDeductionPath {
@@ -88,9 +148,12 @@ export interface PlotDeductionPayload {
   workId: number | string;
   startPoint: string;
   targetPoint: string;
-  involvedCharacters?: string;
-  pacePreference?: "standard" | "twist" | "dark" | string;
+  estimatedWords?: number;
   stepCount?: number;
+  selectedCharacterIds?: number[];
+  selectedNoteIds?: number[];
+  pacePreference?: "standard" | "twist" | "dark" | string;
+  involvedCharacters?: string;
 }
 
 export interface PlotDeductionRecord {
@@ -109,7 +172,7 @@ export interface PlotDeductionRecord {
   updatedAt: string | number;
 }
 
-export const getOutlineList = async (workId: number | string) => {
+export const getOutlineList = async (workId: number | string): Promise<{ success: boolean; result?: OutlineNode[]; flatList?: OutlineNode[]; message?: string }> => {
   return get(OutlineApi.list, { workId });
 };
 
@@ -125,8 +188,12 @@ export const updateOutlineNode = async (data: UpdateOutlinePayload) => {
   return put(OutlineApi.update, data);
 };
 
-export const deleteOutlineNode = async (id: string) => {
-  return del(OutlineApi.delete, { id });
+export const deleteOutlineNode = async (id: number | string) => {
+  return del(`${OutlineApi.delete}?id=${encodeURIComponent(String(id))}`, { id: Number(id) });
+};
+
+export const batchDeleteOutlineNodes = async (ids: (number | string)[]) => {
+  return del(`${OutlineApi.delete}?ids=${encodeURIComponent(ids.join(","))}`, { ids: ids.map(Number) });
 };
 
 export const deductPlot = async (payload: PlotDeductionPayload): Promise<{ success: boolean; result?: PlotDeductionResult; message?: string }> => {
@@ -145,15 +212,41 @@ export const deletePlotDeduction = async (id: number) => {
   return del(OutlineApi.deductions, { id });
 };
 
-export type OutlineAiAction = "generate_from_premise" | "plan_chapters" | "expand_node" | "split_node" | "find_plot_holes" | "polish_rhythm" | "generate_alternatives" | "alternative_plots" | "check_mainline" | "check_conflict" | "check_pacing" | "diagnose";
+export const extractChapterOutline = async (payload: {
+  chapterId: number | string;
+  workId: number | string;
+  content?: string;
+  title?: string;
+}): Promise<{ success: boolean; result?: OutlineNode; message?: string }> => {
+  return post(OutlineApi.extractOutline, payload);
+};
+
+// 兼容历史 AI 辅助功能接口定义
+export type OutlineAiAction =
+  | "generate_from_premise"
+  | "plan_chapters"
+  | "expand_node"
+  | "split_node"
+  | "find_plot_holes"
+  | "polish_rhythm"
+  | "generate_alternatives"
+  | "alternative_plots"
+  | "check_mainline"
+  | "check_conflict"
+  | "check_pacing"
+  | "diagnose";
 
 export interface OutlineAiPayload {
   workId: number | string;
+  nodeId?: string;
+  targetNodeId?: string;
+  targetNode?: any;
   action: OutlineAiAction;
   premise?: string;
-  targetNodeId?: string;
-  targetNode?: Partial<OutlineNode>;
-  additionalPrompt?: string;
+  currentContent?: string;
+  targetChapterCount?: number;
+  genre?: string;
+  customPrompt?: string;
 }
 
 export interface OutlineAiHistoryRecord {
@@ -167,17 +260,24 @@ export interface OutlineAiHistoryRecord {
   createdAt: string | number;
 }
 
-export const requestOutlineAi = async (data: OutlineAiPayload) => {
+export interface OutlineAiResponse {
+  success: boolean;
+  action?: string;
+  title?: string;
+  data?: any;
+  result?: any;
+  rawText?: string;
+  message?: string;
+}
+
+export const requestOutlineAi = async (data: OutlineAiPayload): Promise<OutlineAiResponse> => {
   return post(OutlineApi.aiAssistant, data);
 };
 
-export const getOutlineAiHistory = async (workId: number | string, nodeId?: string) => {
+export const getOutlineAiHistoryList = async (workId: number | string, nodeId?: string): Promise<{ success: boolean; result?: OutlineAiHistoryRecord[]; message?: string }> => {
   return get(OutlineApi.history, { workId, nodeId });
 };
-
-export const getOutlineAiHistoryList = getOutlineAiHistory;
 
 export const deleteOutlineAiHistoryRecord = async (id: number) => {
   return del(OutlineApi.history, { id });
 };
-

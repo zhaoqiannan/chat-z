@@ -97,45 +97,76 @@ export const chapters = sqliteTable('chapters', {
 });
 
 // ============================================================================
-// 4. 故事大纲树结构表 (outlines)
+// ============================================================================
+// 4. 故事大纲树与章节故事轴表 (outlines)
 // ============================================================================
 export const outlines = sqliteTable('outlines', {
-  /** 节点唯一标识 (UUID) */
-  id: text('id').primaryKey(),
+  /** 节点唯一数字 ID (自增数字主键) */
+  id: integer('id', { mode: 'number' }).primaryKey({ autoIncrement: true }),
   /** 所属小说作品 ID (对应 works.id 自增数字) */
   workId: integer('work_id').notNull(),
-  /** 父级节点 ID（为空表示根节点） */
-  parentId: text('parent_id'),
-  /** 节点类型: 'story'(故事主线) | 'volume'(卷) | 'act'(幕) | 'scene'(情节点) | 'branch'(支线) */
-  type: text('type').notNull(),
+  /** 父级节点 ID (对应 outlines.id 数字，为空表示根节点) */
+  parentId: integer('parent_id'),
+  /** 归属分卷 / 篇章 ID */
+  volumeId: integer('volume_id'),
+  /** 对应正文章节 ID (对应 chapters.id 自增数字，为空表示独立大纲卡片) */
+  chapterId: integer('chapter_id'),
+  /** 对应章节序号（如第 1 章、第 2 章） */
+  chapterNumber: integer('chapter_number'),
+  /** 节点类型: 'scene'(情节点) | 'volume'(卷) | 'act'(幕) | 'branch'(支线) | 'bridge'(推演桥) | 'story'(故事主线) */
+  type: text('type').notNull().default('scene'),
   /** 情节点细分类型: 'conflict'(冲突) | 'twist'(转折) | 'foreshadow'(铺垫) | 'climax'(高潮) | 'transition'(过渡) | 'reveal'(揭示) */
   pointType: text('point_type'),
+  /** 创作/同步状态: 'completed'(已完成/已写) | 'in_progress'(正在写) | 'planned'(待写规划) */
+  status: text('status').default('planned'),
+  /** 来源标记: 1=正文实际提取沉淀生成, 0=预先规划/推演生成 */
+  isFromChapter: integer('is_from_chapter').default(0),
   /** 节点标题/名称 */
   title: text('title').notNull(),
   /** 同级排序索引 */
   orderIndex: integer('order_index').default(0),
-  /** 节点目标 (*必填项，解决什么问题) */
-  goal: text('goal'),
-  /** 剧情内容 / 发生经过 / 内容梗概 */
+
+  // --- 大白话 4 核心要素 ---
+  /** 📍 发生了什么事（核心事件经过） */
+  event: text('event'),
+  /** ⚡ 出了什么岔子/意外（关键转折与冲突） */
+  twist: text('twist'),
+  /** 🎯 接下来打算怎么办（下一步行动动机与目标） */
+  nextGoal: text('next_goal'),
+  /** 🕳️ 留下了什么悬念/伏笔（未解决的问题或待填的坑） */
+  suspense: text('suspense'),
+
+  /** 剧情内容 / 发生经过 / 综合摘要与备注 */
   content: text('content'),
-  /** 归属分卷 / 篇章 ID */
-  volumeId: text('volume_id'),
-  /** 主要冲突（人物或力量之间的矛盾） */
+  /** 预计/实际字数篇幅 (如 3000 字) */
+  wordCountEstimate: integer('word_count_estimate').default(3000),
+
+  // --- 关联实体 ---
+  /** 关联角色 IDs (JSON 数字数组格式: [1, 2, 5]) */
+  linkedCharacterIds: text('linked_character_ids', { mode: 'json' }).$type<number[]>(),
+  /** 关联笔记 IDs (JSON 数字数组格式: [10, 12]) */
+  linkedNoteIds: text('linked_note_ids', { mode: 'json' }).$type<number[]>(),
+
+  // --- 兼容旧字段 ---
+  /** 节点目标 (兼容旧版) */
+  goal: text('goal'),
+  /** 主要冲突 (兼容旧版) */
   conflict: text('conflict'),
-  /** 事件描述（发生什么） */
+  /** 事件描述 (兼容旧版) */
   eventDescription: text('event_description'),
-  /** 结果 / 状态变化（事件结束后状态如何变化） */
+  /** 结果 / 状态变化 (兼容旧版) */
   expectedOutcome: text('expected_outcome'),
-  /** 涉及角色（关联人物） */
+  /** 涉及角色文本 (兼容旧版) */
   characters: text('characters'),
-  /** 涉及地点（关联地点） */
+  /** 涉及地点 (兼容旧版) */
   locations: text('locations'),
-  /** 伏笔（新增或回收的伏笔） */
+  /** 伏笔文本 (兼容旧版) */
   foreshadowing: text('foreshadowing'),
-  /** 对应章节（JSON 数字数组格式，如：[1, 2, 3]） */
+  /** 对应章节 (兼容旧版: [1, 2, 3]) */
   linkedChapters: text('linked_chapters', { mode: 'json' }).$type<number[]>(),
-  /** 作者临时说明 / 备注 */
+  /** 作者临时说明 / 备注 (兼容旧版) */
   remarks: text('remarks'),
+
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后修改时间 */
