@@ -1,7 +1,9 @@
 -- Migration: 0014_update_outlines_story_axis.sql
 -- 升级大纲表为自增数字主键 (INTEGER PRIMARY KEY AUTOINCREMENT) 并支持章节故事轴与关联实体
 
-CREATE TABLE IF NOT EXISTS outlines_temp (
+DROP TABLE IF EXISTS outlines_new;
+
+CREATE TABLE outlines_new (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   work_id INTEGER NOT NULL,
   parent_id INTEGER,
@@ -34,3 +36,6 @@ CREATE TABLE IF NOT EXISTS outlines_temp (
   created_at INTEGER,
   updated_at INTEGER
 );
+
+DROP TABLE IF EXISTS outlines;
+ALTER TABLE outlines_new RENAME TO outlines;
