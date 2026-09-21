@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, materials } from "@/db";
+import { getDb, materials, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
 
 const ensureMaterialsColumns = async (db: any) => {
@@ -176,6 +176,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无效的素材 id" }, { status: 400 });
     }
 
+    const existingMat = await db.select().from(materials).where(eq(materials.id, id)).get();
+    if (!existingMat) {
+      return NextResponse.json({ success: false, message: "素材不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingMat.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该素材" }, { status: 403 });
+    }
+
     const updatedData: Record<string, any> = {
       updatedAt: new Date(),
     };
@@ -225,6 +234,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "无效的 id" }, { status: 400 });
+    }
+
+    const existingMat = await db.select().from(materials).where(eq(materials.id, id)).get();
+    if (!existingMat) {
+      return NextResponse.json({ success: false, message: "素材不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingMat.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该素材" }, { status: 403 });
     }
 
     await db.delete(materials).where(eq(materials.id, id)).run();

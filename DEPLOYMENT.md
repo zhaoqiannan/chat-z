@@ -25,22 +25,14 @@ git commit -m "feat: 更新功能描述"
 git push
 ```
 
-### 第 2 步：同步数据库结构与业务数据到线上
+### 第 2 步：同步数据库结构到线上（如有新表或新字段）
 
-#### A. 结构迁移（新增表或新字段时）
 ```bash
 npx wrangler d1 migrations apply chat_db --remote
 ```
-> **⚠️ 提示**：此命令仅同步**表结构定义 (DDL)**。如果显示 `No migrations to apply!`，代表结构已是最新的。
-
-#### B. 数据同步（将本地新增的作品、角色、章节等数据全量推送到线上）
-```bash
-# 1. 自动提取本地数据并与远程结构精准对齐
-python3 scripts/sync_data_perfect.py
-
-# 2. 一键导入到线上 D1 数据库
-npx wrangler d1 execute chat_db --remote --file=sync_data_to_remote.sql --yes
-```
+> **⚠️ 说明与安全规范**：
+> 1. 此命令仅同步**表结构定义 (DDL)**，不会修改或删除任何线上业务数据。如果显示 `No migrations to apply!`，代表结构已是最新的。
+> 2. **严禁将本地测试数据库的数据全量导入或覆盖线上生产库**，防止不同环境间自增主键（ID）冲突导致线上多账号数据被误覆盖。线上业务数据请通过系统界面正常录入维护。
 
 ### 第 3 步：一键打包并全量发布到 Cloudflare
 ```bash

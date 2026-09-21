@@ -1,12 +1,8 @@
-import sqlite3
-import json
-import os
+import sys
 
-with open("remote_columns.json", "r") as f:
-    remote_cols = json.load(f)
-
-db_path = os.path.abspath(".wrangler/state/v3/d1/miniflare-D1DatabaseObject/9ccf6da6a0800caac2b1ceb8a7da5f936ef38ff869b79dad74ceb83919e4d6b4.sqlite")
-conn = sqlite3.connect(db_path)
+print("[SAFETY ERROR] 该脚本会导致本地自增 ID 与线上生产库真实用户数据冲突并造成数据覆盖！")
+print("禁止全量执行 INSERT OR REPLACE 到线上生产库。如需同步表结构，请使用 `npx wrangler d1 migrations apply chat_db --remote`。")
+sys.exit(1)
 cursor = conn.cursor()
 
 sql_statements = []

@@ -24,10 +24,7 @@ import {
   FiCheck,
   FiUser,
   FiFileText,
-  FiEdit2,
-  FiPlus,
-  FiTrash2,
-  FiCornerDownRight,
+  FiEdit2
 } from "react-icons/fi";
 import {
   OutlineNode,

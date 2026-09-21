@@ -191,6 +191,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少角色ID" }, { status: 400 });
     }
 
+    const existingChar = await db.select().from(characters).where(eq(characters.id, id)).get();
+    if (!existingChar) {
+      return NextResponse.json({ success: false, message: "角色不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingChar.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该角色" }, { status: 403 });
+    }
+
     const updateData: any = {
       updatedAt: new Date(),
     };
@@ -260,6 +269,15 @@ export const PATCH = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少角色ID" }, { status: 400 });
     }
 
+    const existingChar = await db.select().from(characters).where(eq(characters.id, id)).get();
+    if (!existingChar) {
+      return NextResponse.json({ success: false, message: "角色不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingChar.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该角色" }, { status: 403 });
+    }
+
     await db.update(characters).set({
       isPinned,
       pinnedAt: isPinned ? new Date() : null,
@@ -292,6 +310,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少角色ID" }, { status: 400 });
     }
 
+    const existingChar = await db.select().from(characters).where(eq(characters.id, id)).get();
+    if (!existingChar) {
+      return NextResponse.json({ success: false, message: "角色不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingChar.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该角色" }, { status: 403 });
+    }
+
     await db.delete(characters).where(eq(characters.id, id)).run();
 
     return NextResponse.json({ success: true, message: "角色删除成功" });
@@ -299,3 +326,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: false, message: error?.message || "删除角色失败" }, { status: 500 });
   }
 });
+

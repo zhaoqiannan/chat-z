@@ -128,6 +128,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少规则ID" }, { status: 400 });
     }
 
+    const existingRule = await db.select().from(worldRules).where(eq(worldRules.id, id)).get();
+    if (!existingRule) {
+      return NextResponse.json({ success: false, message: "规则设定不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingRule.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该规则设定" }, { status: 403 });
+    }
+
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name.trim();
     if (category !== undefined) updateData.category = category?.trim() || null;
@@ -175,6 +184,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少规则ID" }, { status: 400 });
     }
 
+    const existingRule = await db.select().from(worldRules).where(eq(worldRules.id, id)).get();
+    if (!existingRule) {
+      return NextResponse.json({ success: false, message: "规则设定不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingRule.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该规则设定" }, { status: 403 });
+    }
+
     await db.delete(worldRules).where(eq(worldRules.id, id)).run();
 
     return NextResponse.json({ success: true, message: "规则删除成功" });
@@ -182,3 +200,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: false, message: error?.message || "删除规则失败" }, { status: 500 });
   }
 });
+

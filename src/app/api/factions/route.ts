@@ -141,6 +141,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少阵营ID" }, { status: 400 });
     }
 
+    const existingFac = await db.select().from(factions).where(eq(factions.id, id)).get();
+    if (!existingFac) {
+      return NextResponse.json({ success: false, message: "阵营不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingFac.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该阵营" }, { status: 403 });
+    }
+
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name.trim();
     if (leader !== undefined) updateData.leader = leader?.trim() || null;
@@ -188,6 +197,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少阵营ID" }, { status: 400 });
     }
 
+    const existingFac = await db.select().from(factions).where(eq(factions.id, id)).get();
+    if (!existingFac) {
+      return NextResponse.json({ success: false, message: "阵营不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingFac.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该阵营" }, { status: 403 });
+    }
+
     await db.delete(factions).where(eq(factions.id, id)).run();
 
     return NextResponse.json({ success: true, message: "阵营删除成功" });
@@ -195,3 +213,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: false, message: error?.message || "删除阵营失败" }, { status: 500 });
   }
 });
+

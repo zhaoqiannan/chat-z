@@ -146,6 +146,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少物品ID" }, { status: 400 });
     }
 
+    const existingItem = await db.select().from(items).where(eq(items.id, id)).get();
+    if (!existingItem) {
+      return NextResponse.json({ success: false, message: "物品不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingItem.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该物品" }, { status: 403 });
+    }
+
     const updateData: Record<string, any> = { updatedAt: new Date() };
     if (name !== undefined) updateData.name = name.trim();
     if (category !== undefined) updateData.category = category?.trim() || null;
@@ -201,6 +210,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少物品ID" }, { status: 400 });
     }
 
+    const existingItem = await db.select().from(items).where(eq(items.id, id)).get();
+    if (!existingItem) {
+      return NextResponse.json({ success: false, message: "物品不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingItem.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该物品" }, { status: 403 });
+    }
+
     await db.delete(items).where(eq(items.id, id)).run();
 
     return NextResponse.json({ success: true, message: "物品删除成功" });
@@ -208,3 +226,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: false, message: error?.message || "删除物品失败" }, { status: 500 });
   }
 });
+

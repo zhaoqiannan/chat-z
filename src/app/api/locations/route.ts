@@ -156,6 +156,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少地点ID" }, { status: 400 });
     }
 
+    const existingLoc = await db.select().from(locations).where(eq(locations.id, id)).get();
+    if (!existingLoc) {
+      return NextResponse.json({ success: false, message: "地点不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingLoc.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该地点" }, { status: 403 });
+    }
+
     const updateData: any = {
       updatedAt: new Date(),
     };
@@ -214,6 +223,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少地点ID" }, { status: 400 });
     }
 
+    const existingLoc = await db.select().from(locations).where(eq(locations.id, id)).get();
+    if (!existingLoc) {
+      return NextResponse.json({ success: false, message: "地点不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingLoc.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该地点" }, { status: 403 });
+    }
+
     await db.delete(locations).where(eq(locations.id, id)).run();
 
     return NextResponse.json({
@@ -224,3 +242,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: false, message: error?.message || "删除地点失败" }, { status: 500 });
   }
 });
+

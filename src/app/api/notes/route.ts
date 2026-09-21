@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, notes } from "@/db";
+import { getDb, notes, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
 
 const ensureNotesColumns = async (db: any) => {
@@ -135,6 +135,15 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无效的笔记 id" }, { status: 400 });
     }
 
+    const existingNote = await db.select().from(notes).where(eq(notes.id, id)).get();
+    if (!existingNote) {
+      return NextResponse.json({ success: false, message: "笔记不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingNote.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该笔记" }, { status: 403 });
+    }
+
     const updatedData: Record<string, any> = {
       updatedAt: new Date(),
     };
@@ -175,6 +184,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少待删除的笔记 id" }, { status: 400 });
     }
 
+    const existingNote = await db.select().from(notes).where(eq(notes.id, id)).get();
+    if (!existingNote) {
+      return NextResponse.json({ success: false, message: "笔记不存在" }, { status: 404 });
+    }
+    const work = await db.select().from(works).where(and(eq(works.id, existingNote.workId), eq(works.userId, user.userId))).get();
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该笔记" }, { status: 403 });
+    }
+
     await db.delete(notes).where(eq(notes.id, id)).run();
 
     return NextResponse.json({
@@ -185,3 +203,4 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: false, message: err?.message || "删除笔记失败" }, { status: 500 });
   }
 });
+

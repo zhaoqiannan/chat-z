@@ -1,7 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, chapters } from "@/db";
+import {
+  getDb,
+  works,
+  chapters,
+  characters,
+  locations,
+  factions,
+  items,
+  outlines,
+  notes,
+  materials,
+  timelines,
+  worldRules,
+  characterRelations,
+  chapterVersions,
+  chapterAiChats,
+  memoryFragments,
+  plotDeductions,
+} from "@/db";
 import { desc, eq, and } from "drizzle-orm";
 import { logUserActivity } from "@/utils/activityLogger";
 
@@ -294,8 +312,22 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    // 1. 级联删除该作品下的所有章节
+    // 1. 级联清理该作品下的所有子表关联数据，杜绝产生孤儿数据
     await db.delete(chapters).where(eq(chapters.workId, workId));
+    await db.delete(characters).where(eq(characters.workId, workId));
+    await db.delete(locations).where(eq(locations.workId, workId));
+    await db.delete(factions).where(eq(factions.workId, workId));
+    await db.delete(items).where(eq(items.workId, workId));
+    await db.delete(outlines).where(eq(outlines.workId, workId));
+    await db.delete(notes).where(eq(notes.workId, workId));
+    await db.delete(materials).where(eq(materials.workId, workId));
+    await db.delete(timelines).where(eq(timelines.workId, workId));
+    await db.delete(worldRules).where(eq(worldRules.workId, workId));
+    await db.delete(characterRelations).where(eq(characterRelations.workId, workId));
+    await db.delete(chapterVersions).where(eq(chapterVersions.workId, workId));
+    await db.delete(chapterAiChats).where(eq(chapterAiChats.workId, workId));
+    await db.delete(memoryFragments).where(eq(memoryFragments.workId, workId));
+    await db.delete(plotDeductions).where(eq(plotDeductions.workId, workId));
 
     // 2. 删除作品自身
     await db
