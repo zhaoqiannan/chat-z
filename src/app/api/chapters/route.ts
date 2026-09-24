@@ -351,8 +351,24 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     await db.delete(chapters).where(eq(chapters.id, chapterId));
 
-    // 重新统计作品总字数
+    // 重新排序重置后续章节序号，并重新统计作品总字数
     if (!chapter.isVolume) {
+      const remainingChapters = await db
+        .select({ id: chapters.id, chapterNumber: chapters.chapterNumber })
+        .from(chapters)
+        .where(and(eq(chapters.workId, chapter.workId), eq(chapters.isVolume, 0)))
+        .orderBy(asc(chapters.chapterNumber), asc(chapters.createdAt));
+
+      for (let i = 0; i < remainingChapters.length; i++) {
+        const newNum = i + 1;
+        if (remainingChapters[i].chapterNumber !== newNum) {
+          await db
+            .update(chapters)
+            .set({ chapterNumber: newNum })
+            .where(eq(chapters.id, remainingChapters[i].id));
+        }
+      }
+
       await recountWorkWords(db, chapter.workId);
     }
 

@@ -1,9 +1,9 @@
-// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、段落自动缩进与一键智能排版、光标精准插入、响应式高度自适应与视口滚动修复）
+// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、段落自动缩进与一键智能排版、光标精准插入、Ctrl/Cmd+S保存、上次保存时间、全高沉浸写作）
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Progress, Menu } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers } from "react-icons/fi";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu } from "@mantine/core";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2 } from "react-icons/fi";
 import { ChapterItem, createChapterVersion } from "@/rest/chapter";
 import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
@@ -20,6 +20,9 @@ interface EditorAreaProps {
   onToggleAiPanel?: () => void;
   insertTextPayload?: { text: string; timestamp: number } | null;
   targetWords?: number;
+  onDirtyChange?: (isDirty: boolean) => void;
+  onDeleteChapter?: (chapterId: number | string) => void;
+  saveRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
 export default function EditorArea({
@@ -32,6 +35,9 @@ export default function EditorArea({
   onToggleAiPanel,
   insertTextPayload,
   targetWords = 4000,
+  onDirtyChange,
+  onDeleteChapter,
+  saveRef,
 }: EditorAreaProps) {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -40,6 +46,7 @@ export default function EditorArea({
   const [extractingOutline, setExtractingOutline] = useState(false);
   const [versionDrawerOpened, setVersionDrawerOpened] = useState(false);
   const [fragmentDrawerOpened, setFragmentDrawerOpened] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | string | number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,11 +89,25 @@ export default function EditorArea({
       setTitle(chapter.title || "");
       setSubtitle(chapter.subtitle || "");
       setContent(chapter.content || "");
+      setLastSavedAt(chapter.updatedAt || chapter.createdAt || null);
       lastCursorRef.current = { start: chapter.content?.length || 0, end: chapter.content?.length || 0 };
       if (onSelectionChange) onSelectionChange("");
       setTimeout(refreshTextareaHeight, 50);
     }
   }, [chapter?.id, refreshTextareaHeight]);
+
+  const isDirty = useMemo(() => {
+    if (!chapter) return false;
+    return (
+      title !== (chapter.title || "") ||
+      subtitle !== (chapter.subtitle || "") ||
+      content !== (chapter.content || "")
+    );
+  }, [chapter, title, subtitle, content]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const insertAtCursor = (textToInsert: string) => {
     const el = textareaRef.current;
@@ -118,7 +139,6 @@ export default function EditorArea({
   }, [insertTextPayload]);
 
   const liveWordCount = content.replace(/\s+/g, "").length;
-  const progressPercent = Math.min(Math.round((liveWordCount / Math.max(targetWords, 1)) * 100), 100);
 
   const handleFormatIndent = () => {
     if (!content) return;
@@ -187,8 +207,8 @@ export default function EditorArea({
     }
   };
 
-  const handleManualSave = async () => {
-    if (!chapter) return;
+  const handleManualSave = useCallback(async (): Promise<boolean> => {
+    if (!chapter) return false;
     try {
       setSaving(true);
       await onUpdateChapter({
@@ -208,12 +228,44 @@ export default function EditorArea({
           versionTag: "手动保存快照",
         });
       } catch (_) { }
+
+      setLastSavedAt(new Date());
+      useAlert.success("章节保存成功！");
+      return true;
     } catch (e: any) {
       useAlert.error("保存失败: " + (e?.message || "网络异常"));
+      return false;
     } finally {
       setSaving(false);
     }
-  };
+  }, [chapter, title, subtitle, content, liveWordCount, onUpdateChapter, workId]);
+
+  useEffect(() => {
+    if (saveRef) {
+      saveRef.current = handleManualSave;
+    }
+    return () => {
+      if (saveRef) {
+        saveRef.current = null;
+      }
+    };
+  }, [saveRef, handleManualSave]);
+
+  // 全局快捷键保存 (兼容 macOS 的 Cmd+S 与 Windows/Linux 的 Ctrl+S)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleManualSave();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown, true);
+    };
+  }, [handleManualSave]);
 
   const handleTrackCursor = () => {
     const el = textareaRef.current;
@@ -266,6 +318,19 @@ export default function EditorArea({
     }
   };
 
+  const formatExactDateTime = (dateVal?: string | number | Date | null) => {
+    if (!dateVal) return "未记录";
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return "未记录";
+    const YYYY = d.getFullYear();
+    const MM = String(d.getMonth() + 1).padStart(2, "0");
+    const DD = String(d.getDate()).padStart(2, "0");
+    const HH = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const ss = String(d.getSeconds()).padStart(2, "0");
+    return `${YYYY}-${MM}-${DD} ${HH}:${mm}:${ss}`;
+  };
+
   if (!chapter) {
     return (
       <Flex style={{ flex: 1, height: "100%" }} justify="center" align="center" direction="column" gap="sm">
@@ -289,7 +354,7 @@ export default function EditorArea({
       }}
     >
       {/* 顶部面包屑与工具栏 */}
-      <Flex justify="space-between" align="center" px={14} py={10} style={{ borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
+      <Flex justify="space-between" align="center" px={16} py={10} style={{ borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
         <Group gap={8} align="center">
           {onToggleTree && (
             <Tooltip label={treeCollapsed ? "展开目录大纲" : "收起目录大纲"} position="bottom">
@@ -301,26 +366,18 @@ export default function EditorArea({
           <Text fz={12.5} c="#94a3b8">章节</Text>
           <Text fz={12.5} c="#cbd5e1">/</Text>
           <Text fz={13} fw={600} c="#334155">第{chapter.chapterNumber}章 · {title || chapter.title}</Text>
+          {isDirty && (
+            <Badge size="xs" color="orange" variant="light" styles={{ root: { fontSize: 10, padding: "0 6px" } }}>
+              未保存
+            </Badge>
+          )}
         </Group>
 
         <Group gap="xs" align="center">
           <Group gap={6} align="center" mr="xs">
-            <Box style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: "#10b981" }} />
+            <Box style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: isDirty ? "#f59e0b" : "#10b981" }} />
             <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字</Text>
           </Group>
-
-          <Tooltip label="智能提炼本章剧情4要素并同步至大纲故事轴" position="bottom">
-            <Button
-              size="xs"
-              variant="light"
-              color="teal"
-              leftSection={<FiLayers size={13} />}
-              loading={extractingOutline}
-              onClick={handleExtractToOutline}
-            >
-              提取剧情到大纲
-            </Button>
-          </Tooltip>
 
           <Tooltip label="一键智能排版（所有段首缩进2空格）" position="bottom">
             <Button
@@ -328,7 +385,7 @@ export default function EditorArea({
               variant="default"
               leftSection={<FiAlignLeft size={13} color="#0891b2" />}
               onClick={handleFormatIndent}
-              styles={{ root: { borderColor: "#e2e8f0" } }}
+              styles={{ root: { borderColor: "#e2e8f0", height: 28 } }}
             >
               一键缩进
             </Button>
@@ -336,23 +393,31 @@ export default function EditorArea({
 
           <Button
             size="xs"
-            variant="light"
+            variant={isDirty ? "filled" : "light"}
+            color={isDirty ? "blue" : "gray"}
             leftSection={<FiSave size={12} />}
             loading={saving}
             onClick={handleManualSave}
+            styles={{ root: { height: 28, fontWeight: 600 } }}
+            title="快捷键 Ctrl+S / Cmd+S"
           >
-            保存
+            {isDirty ? "保存" : "已保存"}
           </Button>
 
           <Menu position="bottom-end" shadow="md" width={180}>
             <Menu.Target>
-              <ActionIcon variant="subtle" color="gray" size="sm">
-                <FiMoreHorizontal size={15} />
+              <ActionIcon variant="default" size="sm" styles={{ root: { height: 28, width: 28 } }} title="更多操作">
+                <FiMoreHorizontal size={14} />
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item leftSection={<FiLayers size={13} color="#16a34a" />} onClick={handleExtractToOutline}>
-                提取剧情到大纲
+              <Menu.Label>智能与辅助</Menu.Label>
+              <Menu.Item
+                leftSection={<FiLayers size={13} color="#16a34a" />}
+                onClick={handleExtractToOutline}
+                disabled={extractingOutline}
+              >
+                {extractingOutline ? "提取大纲中..." : "提取剧情到大纲"}
               </Menu.Item>
               <Menu.Item leftSection={<FiZap size={13} color="#0284c7" />} onClick={onToggleAiPanel}>
                 唤起 AI 协同助手
@@ -363,15 +428,28 @@ export default function EditorArea({
               <Menu.Item leftSection={<FiClock size={13} color="#64748b" />} onClick={() => setVersionDrawerOpened(true)}>
                 版本生成历史
               </Menu.Item>
+
+              {onDeleteChapter && (
+                <>
+                  <Menu.Divider />
+                  <Menu.Item
+                    color="red"
+                    leftSection={<FiTrash2 size={13} />}
+                    onClick={() => onDeleteChapter(chapter.id)}
+                  >
+                    删除本章
+                  </Menu.Item>
+                </>
+              )}
             </Menu.Dropdown>
           </Menu>
         </Group>
       </Flex>
 
-      {/* 沉浸式正文滚动区域 */}
+      {/* 沉浸式正文全高滚动区域 */}
       <ScrollArea
         style={{ flex: 1, height: "100%" }}
-        p={{ base: "md", md: 16 }}
+        p={{ base: "md", md: 24 }}
         styles={{
           viewport: {
             paddingBottom: 0,
@@ -381,8 +459,9 @@ export default function EditorArea({
         <Box
           style={{
             margin: "0 auto",
-            minHeight: "calc(100vh - 160px)",
-            paddingBottom: "35vh", // 留足底部呼吸空间，确保最后一段内容与光标可轻松滚到屏幕中央
+            maxWidth: 820,
+            minHeight: "calc(100vh - 120px)",
+            paddingBottom: "25vh",
             position: "relative",
           }}
         >
@@ -408,18 +487,28 @@ export default function EditorArea({
               input: {
                 fontSize: 14,
                 color: "#64748b",
-                padding: "0 0 8px 0",
+                padding: "0 0 4px 0",
               },
             }}
           />
 
-          <Box style={{ position: "relative", marginTop: 8 }}>
+          {/* 上次保存时间与状态提示 */}
+          <Group gap="xs" align="center" mt={4} mb={12}>
+            <Group gap={4} align="center">
+              <FiClock size={11.5} color="#94a3b8" />
+              <Text fz={11.5} c="#94a3b8">
+                上次修改时间：{formatExactDateTime(lastSavedAt || chapter.updatedAt || chapter.createdAt)}
+              </Text>
+            </Group>
+          </Group>
+
+          <Box style={{ position: "relative", marginTop: 4 }}>
             <Textarea
               ref={textareaRef}
               variant="unstyled"
               autosize
-              minRows={22}
-              placeholder="在此开始撰写正文（回车自动段首缩进两格）..."
+              minRows={26}
+              placeholder="在此开始撰写正文（回车自动段首缩进两格，支持 Ctrl+S / Cmd+S 快速保存）..."
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
@@ -436,34 +525,13 @@ export default function EditorArea({
                   lineHeight: 1.9,
                   color: "#334155",
                   fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                  padding: "10px 0",
+                  padding: "8px 0",
                 },
               }}
             />
           </Box>
         </Box>
       </ScrollArea>
-
-      {/* 底部状态栏 */}
-      <Flex justify="space-between" align="center" px="xl" py={8} style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#ffffff", flexShrink: 0 }}>
-        <Group gap="xs" align="center">
-          <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字</Text>
-          <Text fz={12} c="#cbd5e1">|</Text>
-          <Text fz={12} c="#64748b">目标 {targetWords.toLocaleString()} 字</Text>
-          <Box style={{ width: 60, marginLeft: 4 }}>
-            <Progress value={progressPercent} size="xs" radius="xl" />
-          </Box>
-        </Group>
-
-        <Group gap="md" align="center">
-          <Text fz={11.5} c="#94a3b8">提示: 回车自动缩进 · 顶部提供「一键缩进」排版</Text>
-          <Tooltip label="唤起/收起 AI 协同助手" position="top">
-            <ActionIcon variant="subtle" size="sm" onClick={onToggleAiPanel}>
-              <FiZap size={14} />
-            </ActionIcon>
-          </Tooltip>
-        </Group>
-      </Flex>
 
       <DrawerVersionHistory
         opened={versionDrawerOpened}

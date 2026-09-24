@@ -33,6 +33,7 @@ import {
   FiGlobe,
   FiSearch as FiResearch,
   FiEdit3,
+  FiTrash2,
 } from "react-icons/fi";
 import { NoteData } from "@/rest/project-extensions";
 
@@ -42,6 +43,7 @@ export interface NoteTreeMenuProps {
   loading: boolean;
   onSelectNote: (note: NoteData) => void;
   onCreateNewNote: (category?: string) => void;
+  onDeleteNote: (note: NoteData) => void;
 }
 
 interface CategoryDef {
@@ -67,6 +69,7 @@ export default function NoteTreeMenu({
   loading,
   onSelectNote,
   onCreateNewNote,
+  onDeleteNote,
 }: NoteTreeMenuProps) {
   const [searchKey, setSearchKey] = useState("");
   // 记录各分类文件夹的展开/折叠状态（默认全部展开）
@@ -87,6 +90,15 @@ export default function NoteTreeMenu({
       [key]: !prev[key],
     }));
   };
+
+  React.useEffect(() => {
+    if (activeNoteId) {
+      const current = notes.find((n) => n.id === activeNoteId);
+      if (current?.isArchived) {
+        setExpandedCategories((prev) => ({ ...prev, archived: true }));
+      }
+    }
+  }, [activeNoteId, notes]);
 
   // 根据搜索关键字过滤笔记
   const filteredNotes = useMemo(() => {
@@ -292,13 +304,38 @@ export default function NoteTreeMenu({
                               </Text>
                             </Group>
 
-                            {note.isPinned && (
-                              <FiBookmark
-                                size={11}
-                                color="#0284c7"
-                                style={{ flexShrink: 0, marginLeft: 4 }}
-                              />
-                            )}
+                            <Group gap={4} align="center" style={{ flexShrink: 0 }}>
+                              {Boolean(note.isPinned) ? (
+                                <Tooltip label="已置顶" position="top" withArrow>
+                                  <Box style={{ display: "flex", alignItems: "center" }}>
+                                    <FiBookmark size={11} color="#0284c7" />
+                                  </Box>
+                                </Tooltip>
+                              ) : null}
+
+                              <Tooltip label="删除笔记" position="top" withArrow>
+                                <ActionIcon
+                                  size="xs"
+                                  variant="subtle"
+                                  color="gray"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDeleteNote(note);
+                                  }}
+                                  styles={{
+                                    root: {
+                                      color: "#94a3b8",
+                                      "&:hover": {
+                                        color: "#ef4444",
+                                        backgroundColor: "#fee2e2",
+                                      },
+                                    },
+                                  }}
+                                >
+                                  <FiTrash2 size={11} />
+                                </ActionIcon>
+                              </Tooltip>
+                            </Group>
                           </Box>
                         );
                       })}

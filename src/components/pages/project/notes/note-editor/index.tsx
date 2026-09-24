@@ -1,9 +1,9 @@
 // 组件：笔记详情与沉浸编辑区（大标题、分类选择、正文Textarea与多维实体大纲转换操作栏）
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, ActionIcon, TextInput, Textarea, Select, ScrollArea, Group, Tooltip } from "@mantine/core";
-import { FiTrash2, FiBookmark, FiArchive, FiLayers, FiBookOpen, FiUser, FiFileText, FiSidebar } from "react-icons/fi";
+import React, { useState, useEffect, useMemo } from "react";
+import { Box, Flex, Text, Button, ActionIcon, TextInput, Textarea, Select, ScrollArea, Group, Tooltip, Badge, Menu } from "@mantine/core";
+import { FiTrash2, FiBookmark, FiArchive, FiLayers, FiBookOpen, FiUser, FiFileText, FiSidebar, FiSave, FiMoreHorizontal } from "react-icons/fi";
 import { NoteData, updateNote } from "@/rest/project-extensions";
 import { createCharacter } from "@/rest/world";
 import { createChapter } from "@/rest/chapter";
@@ -50,6 +50,15 @@ export default function NoteEditor({
     }
   }, [activeNote?.id]);
 
+  const isDirty = useMemo(() => {
+    if (!activeNote) return false;
+    return (
+      title !== (activeNote.title || "") ||
+      content !== (activeNote.content || "") ||
+      category !== (activeNote.category || "idea")
+    );
+  }, [activeNote, title, content, category]);
+
   const handleSave = async () => {
     if (!activeNote) return;
     try {
@@ -66,6 +75,13 @@ export default function NoteEditor({
       useAlert.error("保存失败: " + (e?.message || "网络异常"));
     } finally {
       setLocalSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      handleSave();
     }
   };
 
@@ -152,7 +168,10 @@ export default function NoteEditor({
   }
 
   return (
-    <Box style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", backgroundColor: "#ffffff" }}>
+    <Box
+      onKeyDown={handleKeyDown}
+      style={{ flex: 1, display: "flex", flexDirection: "column", height: "100%", backgroundColor: "#ffffff" }}
+    >
       {/* 顶部面包屑与操作栏 */}
       <Flex justify="space-between" align="center" px={18} py={10} style={{ borderBottom: "1px solid #f1f5f9" }}>
         <Group gap={8} align="center">
@@ -168,34 +187,88 @@ export default function NoteEditor({
           <Text fz={13} fw={600} c="#334155" lineClamp={1}>
             {title || activeNote.title || "未命名笔记"}
           </Text>
+          {isDirty && (
+            <Badge size="xs" color="orange" variant="light" styles={{ root: { fontSize: 10, padding: "0 6px" } }}>
+              未保存
+            </Badge>
+          )}
         </Group>
 
         <Group gap="xs" align="center">
           <Button
             size="xs"
-            variant={activeNote.isPinned ? "filled" : "default"}
-            color={activeNote.isPinned ? "cyan" : "gray"}
-            leftSection={<FiBookmark size={12} />}
-            onClick={onTogglePin}
-            styles={{ root: { height: 28 } }}
+            variant={isDirty ? "filled" : "light"}
+            color={isDirty ? "blue" : "gray"}
+            leftSection={<FiSave size={12} />}
+            onClick={handleSave}
+            loading={saving || localSaving}
+            styles={{ root: { height: 28, fontWeight: 600 } }}
+            title="快捷键 Ctrl+S / Cmd+S"
           >
-            {activeNote.isPinned ? "已置顶" : "置顶"}
+            {isDirty ? "保存" : "已保存"}
           </Button>
 
           <Button
             size="xs"
-            variant={activeNote.isArchived ? "filled" : "default"}
+            variant={Boolean(activeNote.isPinned) ? "filled" : "default"}
+            color={Boolean(activeNote.isPinned) ? "cyan" : "gray"}
+            leftSection={<FiBookmark size={12} />}
+            onClick={onTogglePin}
+            styles={{ root: { height: 28 } }}
+          >
+            {Boolean(activeNote.isPinned) ? "已置顶" : "置顶"}
+          </Button>
+
+          <Button
+            size="xs"
+            variant={Boolean(activeNote.isArchived) ? "filled" : "default"}
             color="gray"
             leftSection={<FiArchive size={12} />}
             onClick={onToggleArchive}
             styles={{ root: { height: 28 } }}
           >
-            {activeNote.isArchived ? "取消归档" : "归档"}
+            {Boolean(activeNote.isArchived) ? "取消归档" : "归档"}
           </Button>
 
-          <ActionIcon variant="subtle" color="red" size="sm" onClick={onDelete} title="删除笔记">
-            <FiTrash2 size={14} />
-          </ActionIcon>
+          <Menu shadow="md" width={180} position="bottom-end">
+            <Menu.Target>
+              <ActionIcon variant="default" size="sm" styles={{ root: { height: 28, width: 28 } }} title="更多操作">
+                <FiMoreHorizontal size={14} />
+              </ActionIcon>
+            </Menu.Target>
+
+            <Menu.Dropdown>
+              <Menu.Label>实体转化与沉淀</Menu.Label>
+              <Menu.Item
+                leftSection={<FiUser size={13} color="#ec4899" />}
+                onClick={handleConvertToCharacter}
+              >
+                转为角色设定
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<FiLayers size={13} color="#3b82f6" />}
+                onClick={handleConvertToOutline}
+              >
+                转为大纲剧情
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<FiBookOpen size={13} color="#10b981" />}
+                onClick={handleConvertToChapter}
+              >
+                转为章节规划
+              </Menu.Item>
+
+              <Menu.Divider />
+
+              <Menu.Item
+                color="red"
+                leftSection={<FiTrash2 size={13} />}
+                onClick={onDelete}
+              >
+                删除笔记
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
       </Flex>
 
@@ -205,7 +278,6 @@ export default function NoteEditor({
           placeholder="笔记标题..."
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          onBlur={handleSave}
           styles={{
             input: {
               fontSize: 22,
@@ -224,7 +296,6 @@ export default function NoteEditor({
             onChange={(val) => {
               if (val) {
                 setCategory(val);
-                updateNote({ id: activeNote.id, category: val }).then(onUpdateSuccess);
               }
             }}
             data={[
@@ -248,6 +319,10 @@ export default function NoteEditor({
             }}
           />
 
+          <Text fz={11.5} c="#64748b" fw={500}>
+            {content ? content.length : 0} 字
+          </Text>
+          <Text fz={11.5} c="#cbd5e1">·</Text>
           <Text fz={11.5} c="#94a3b8">
             创建于 {formatRelativeTime(activeNote.createdAt)}
           </Text>
@@ -262,11 +337,10 @@ export default function NoteEditor({
         <Textarea
           variant="unstyled"
           autosize
-          minRows={20}
+          minRows={24}
           placeholder="在此输入笔记详细内容、大纲推演或灵感草稿..."
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          onBlur={handleSave}
           styles={{
             input: {
               fontSize: 15,
@@ -278,51 +352,6 @@ export default function NoteEditor({
           }}
         />
       </ScrollArea>
-
-      <Flex justify="space-between" align="center" px="28px" py={12} style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#fafbfc" }}>
-        <Group gap={8} wrap="wrap">
-          <Button
-            size="xs"
-            variant={activeNote.isPinned ? "filled" : "default"}
-            color={activeNote.isPinned ? "cyan" : "gray"}
-            leftSection={<FiBookmark size={12} />}
-            onClick={onTogglePin}
-          >
-            {activeNote.isPinned ? "已置顶" : "置顶"}
-          </Button>
-
-          <Button
-            size="xs"
-            variant={activeNote.isArchived ? "filled" : "default"}
-            color={activeNote.isArchived ? "gray" : "gray"}
-            leftSection={<FiArchive size={12} />}
-            onClick={onToggleArchive}
-          >
-            {activeNote.isArchived ? "取消归档" : "归档"}
-          </Button>
-
-          <Button size="xs" variant="default" leftSection={<FiUser size={12} />} onClick={handleConvertToCharacter}>
-            转为实体
-          </Button>
-
-          <Button size="xs" variant="default" leftSection={<FiLayers size={12} />} onClick={handleConvertToOutline}>
-            转为大纲节点
-          </Button>
-
-          <Button size="xs" variant="default" leftSection={<FiBookOpen size={12} />} onClick={handleConvertToChapter}>
-            转为章节规划
-          </Button>
-        </Group>
-
-        <Group gap="xs">
-          <Button size="xs" onClick={handleSave} loading={saving || localSaving}>
-            保存更改
-          </Button>
-          <ActionIcon size="sm" variant="subtle" color="red" onClick={onDelete}>
-            <FiTrash2 size={14} />
-          </ActionIcon>
-        </Group>
-      </Flex>
     </Box>
   );
 }

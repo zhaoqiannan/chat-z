@@ -1,9 +1,9 @@
 // 组件：小说章节创作工作台（三栏联动：极简目录树、沉浸式正文编辑区与右侧 AI 协同助手）
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Box, LoadingOverlay } from "@mantine/core";
+import { Box, LoadingOverlay, Modal, Button, Group, Stack, Text } from "@mantine/core";
 import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
@@ -24,6 +24,12 @@ export default function ChaptersPage() {
   const [loading, setLoading] = useState(false);
   const [rawList, setRawList] = useState<ChapterItem[]>([]);
   const [activeChapter, setActiveChapter] = useState<ChapterItem | null>(null);
+
+  // 未保存拦截与快捷保存
+  const [isChapterDirty, setIsChapterDirty] = useState(false);
+  const [unsavedModalOpened, setUnsavedModalOpened] = useState(false);
+  const [pendingChapter, setPendingChapter] = useState<ChapterItem | null>(null);
+  const saveEditorRef = useRef<(() => Promise<boolean>) | null>(null);
 
   const [treeCollapsed, setTreeCollapsed] = useState(true);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
@@ -74,6 +80,19 @@ export default function ChaptersPage() {
     fetchChapters();
   }, [workId]);
 
+  // 离开页面前的原生浏览器阻拦 (刷新/关闭窗口/回退)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isChapterDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+        return "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isChapterDirty]);
+
   const volumes = rawList.filter((item) => item.isVolume === 1);
   const chaptersList = rawList.filter((item) => item.isVolume === 0);
 
@@ -96,8 +115,34 @@ export default function ChaptersPage() {
   const nextChapterNum = maxNum + 1;
 
   const handleSelectChapter = (chapter: ChapterItem) => {
+    if (isChapterDirty && activeChapter && String(activeChapter.id) !== String(chapter.id)) {
+      setPendingChapter(chapter);
+      setUnsavedModalOpened(true);
+      return;
+    }
     setActiveChapter(chapter);
     setSelectedTextForAi("");
+  };
+
+  const handleDiscardAndNavigate = () => {
+    setIsChapterDirty(false);
+    setUnsavedModalOpened(false);
+    if (pendingChapter) {
+      setActiveChapter(pendingChapter);
+      setPendingChapter(null);
+      setSelectedTextForAi("");
+    }
+  };
+
+  const handleSaveAndStay = async () => {
+    if (saveEditorRef.current) {
+      const success = await saveEditorRef.current();
+      if (success) {
+        setIsChapterDirty(false);
+      }
+    }
+    setUnsavedModalOpened(false);
+    setPendingChapter(null);
   };
 
   const handleOpenDetailModal = (item: ChapterItem) => {
@@ -138,10 +183,15 @@ export default function ChaptersPage() {
   };
 
   const handleDelete = async (id: number | string) => {
+    const target = rawList.find((c) => String(c.id) === String(id));
+    const isVolume = target?.isVolume === 1;
+
     const isConfirmed = await showConfirm({
-      title: "删除章节/分卷",
-      message: "确定要删除该章节/分卷吗？此操作不可撤销。",
-      confirmLabel: "删除",
+      title: isVolume ? "删除分卷确认" : "删除章节二次确认",
+      message: isVolume
+        ? `确定要删除分卷「${target?.title || "未命名分卷"}」吗？\n\n删除后其下所属章节将变为未分卷章节。`
+        : `确定要删除「第${target?.chapterNumber || 1}章 · ${target?.title || "未命名章节"}」吗？\n\n⚠️ 注意：删除此章节将影响后续所有章节，后续章节序号将自动重新排序重置，此操作不可撤销！`,
+      confirmLabel: "确认删除",
       confirmColor: "red",
     });
     if (isConfirmed) {
@@ -150,8 +200,9 @@ export default function ChaptersPage() {
         if (res && res.success) {
           if (activeChapter && String(activeChapter.id) === String(id)) {
             setActiveChapter(null);
+            setIsChapterDirty(false);
           }
-          useAlert.success("章节已成功删除");
+          useAlert.success(isVolume ? "分卷已成功删除" : "章节已成功删除，后续章节号已自动重置");
           await fetchChapters();
         }
       } catch (e: any) {
@@ -203,6 +254,9 @@ export default function ChaptersPage() {
         onSelectionChange={(text) => setSelectedTextForAi(text)}
         onToggleAiPanel={() => setAiPanelCollapsed(!aiPanelCollapsed)}
         insertTextPayload={insertTextPayload}
+        onDirtyChange={setIsChapterDirty}
+        onDeleteChapter={handleDelete}
+        saveRef={saveEditorRef}
       />
 
       {activeChapter && (
@@ -258,6 +312,30 @@ export default function ChaptersPage() {
         nextChapterNum={nextChapterNum}
         onSubmit={handleCreateChapter}
       />
+
+      {/* 未保存修改的阻拦提示弹窗 */}
+      <Modal
+        opened={unsavedModalOpened}
+        onClose={() => setUnsavedModalOpened(false)}
+        title={<Text fw={700} fz={15} c="#b45309">未保存的内容提示</Text>}
+        centered
+        radius="md"
+        size="sm"
+      >
+        <Stack gap="md">
+          <Text fz={13.5} c="#334155" style={{ lineHeight: 1.6 }}>
+            当前章节「第{activeChapter?.chapterNumber}章 · {activeChapter?.title}」存在未保存的修改。离开将丢失未保存的内容，请选择操作：
+          </Text>
+          <Group justify="flex-end" gap="sm" mt="sm">
+            <Button variant="default" color="gray" onClick={handleDiscardAndNavigate}>
+              确认不保存
+            </Button>
+            <Button color="blue" onClick={handleSaveAndStay}>
+              保存
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Box>
   );
 }

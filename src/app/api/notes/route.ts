@@ -54,11 +54,8 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (category === "archived") {
       filtered = filtered.filter((n) => Boolean(n.isArchived));
-    } else {
-      filtered = filtered.filter((n) => !n.isArchived);
-      if (category !== "all") {
-        filtered = filtered.filter((n) => n.category === category);
-      }
+    } else if (category !== "all") {
+      filtered = filtered.filter((n) => !n.isArchived && n.category === category);
     }
 
     if (keyword) {
@@ -178,7 +175,14 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     await ensureNotesColumns(db);
 
     const { searchParams } = new URL(req.url);
-    const id = Number(searchParams.get("id"));
+    let id = Number(searchParams.get("id"));
+
+    if (!id || isNaN(id)) {
+      try {
+        const body = await req.json();
+        id = Number(body?.id);
+      } catch (_) {}
+    }
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少待删除的笔记 id" }, { status: 400 });

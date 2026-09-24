@@ -45,7 +45,7 @@ export const updateNote = async (data: Partial<NoteData> & { id: number | string
 };
 
 export const deleteNote = async (id: number | string) => {
-  return del(`/api/notes`, { id });
+  return del(`/api/notes?id=${id}`, { id });
 };
 
 // 2. 素材相关类型与 API
@@ -140,11 +140,11 @@ export const updateTimelineEvent = async (data: Partial<TimelineEventData> & { i
 };
 
 export const deleteTimeline = async (id: number) => {
-  return del(`/api/timelines`, { id, type: "timeline" });
+  return del(`/api/timelines?id=${id}&type=timeline`, { id, type: "timeline" });
 };
 
 export const deleteTimelineEvent = async (id: number) => {
-  return del(`/api/timelines`, { id, type: "event" });
+  return del(`/api/timelines?id=${id}&type=event`, { id, type: "event" });
 };
 
 // 4. 角色关系相关类型与 API
@@ -189,7 +189,7 @@ export const updateCharacterRelation = async (data: Partial<CharacterRelationDat
 };
 
 export const deleteCharacterRelation = async (id: number) => {
-  return del(`/api/relations`, { id });
+  return del(`/api/relations?id=${id}`, { id });
 };
 
 // 5. 项目设置相关 API
