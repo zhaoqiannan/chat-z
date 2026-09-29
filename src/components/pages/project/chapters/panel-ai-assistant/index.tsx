@@ -1,13 +1,13 @@
 // 组件：右侧 AI 协同创作助手面板（选中文本引用浮层、指令预填确认发送、多级上下文标签、一键采纳写入与单条对话删除）
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Badge, TextInput, Textarea, ScrollArea, Group, Stack, Paper, Loader, Popover, Tooltip } from "@mantine/core";
-import { FiSend, FiPlus, FiX, FiRefreshCw, FiCheck, FiChevronRight, FiZap, FiStar, FiBook, FiUser, FiMapPin, FiShield, FiBox, FiCpu, FiBookmark, FiTrash2, FiCornerDownLeft } from "react-icons/fi";
+import { FiSend, FiPlus, FiX, FiRefreshCw, FiCheck, FiChevronRight, FiZap, FiStar, FiBook, FiUser, FiMapPin, FiShield, FiBox, FiCpu, FiBookmark, FiTrash2, FiCornerDownLeft, FiCopy } from "react-icons/fi";
 import { ChapterAiChatItem, ContextTagOption, getChapterAiChatList, sendChapterAiChat, applyChapterAiChat, getWorkContextTagOptions, createMemoryFragment, deleteChapterAiChat } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
 
-interface PanelAiAssistantProps {
+export interface PanelAiAssistantProps {
   workId: number | string;
   chapterId: number | string;
   currentContent: string;
@@ -18,7 +18,11 @@ interface PanelAiAssistantProps {
   onToggleCollapse?: () => void;
   onClearSelection?: () => void;
   onAcceptText: (text: string, targetSnippet?: string) => void;
+  onLocateSnippet?: (snippet: string) => void;
+  externalTask?: { actionType: string; selectedText: string; customPrompt?: string; timestamp: number } | null;
 }
+
+export type ExtendedChatItem = ChapterAiChatItem & { isPending?: boolean; error?: string };
 
 export default function PanelAiAssistant({
   workId,
@@ -31,8 +35,10 @@ export default function PanelAiAssistant({
   onToggleCollapse,
   onClearSelection,
   onAcceptText,
+  onLocateSnippet,
+  externalTask,
 }: PanelAiAssistantProps) {
-  const [chats, setChats] = useState<ChapterAiChatItem[]>([]);
+  const [chats, setChats] = useState<ExtendedChatItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [inputText, setInputText] = useState("");
@@ -45,6 +51,7 @@ export default function PanelAiAssistant({
 
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const prevChatsLengthRef = useRef(0);
 
   const fetchChats = async () => {
     if (!chapterId) return;
@@ -84,11 +91,15 @@ export default function PanelAiAssistant({
     fetchTags();
   }, [chapterId, workId]);
 
+  // 仅在新增聊天记录或发送中时才向下滚动，采纳状态改变时不触发滚动
   useEffect(() => {
-    if (scrollViewportRef.current) {
-      scrollViewportRef.current.scrollTo({ top: scrollViewportRef.current.scrollHeight, behavior: "smooth" });
+    if (chats.length > prevChatsLengthRef.current || sending) {
+      if (scrollViewportRef.current) {
+        scrollViewportRef.current.scrollTo({ top: scrollViewportRef.current.scrollHeight, behavior: "smooth" });
+      }
     }
-  }, [chats, sending]);
+    prevChatsLengthRef.current = chats.length;
+  }, [chats.length, sending]);
 
   const handleAddTag = (tag: ContextTagOption) => {
     if (!selectedTags.some((t) => t.id === tag.id && t.type === tag.type)) {
@@ -106,32 +117,107 @@ export default function PanelAiAssistant({
     switch (actionType) {
       case "polish":
         return hasSelection
-          ? "请根据上方引用的选中片段进行深度文学润色，提升文笔表现力、动作画面感与情绪张力，保持原有人设与语境。"
+          ? "请对上述划选文本片段进行精炼通顺的文学润色，提升语感与表现力，保持原意与人设不变。"
           : "请对本章节当前全篇内容进行通篇文学润色，优化语句通顺度、行文节奏与环境氛围描写。";
       case "expand":
         return hasSelection
-          ? "请根据上方引用的选中片段进行细节场景扩写，丰富角色的微表情、心理博弈、动作细节与感官描写，增强冲突张力。"
-          : "请结合当前章节的高潮或核心场景进行深度细节扩写，充实细节描写与人物心理活动（约 500 字）。";
+          ? "请对上述划选文本片段进行深度细节扩写，丰富角色的微表情、心理暗流、动作细节与感官描写，不擅自增加新事件。"
+          : "请结合当前章节核心场景进行深度细节扩充，充实细节描写与人物心理活动（约 500 字）。";
       case "shorten":
         return hasSelection
-          ? "请精炼浓缩上方引用的选中片段，剔除冗余修饰与水分废话，强化叙事节奏，使其紧凑干练。"
+          ? "请精简浓缩上述划选文本片段，剔除冗余修饰与重复虚词，强化叙事节奏，使其干练紧凑。"
           : "请对本章内容进行紧凑精简与去水，突出核心主线剧情推进。";
       case "continue":
         return hasSelection
-          ? "请以选中文本为情节转折与承接点，顺畅续写接下来的故事发展与角色对话，保持剧情连贯与戏剧悬念（约 500~800 字）。"
-          : "请根据前文剧情走势与大纲脉络，顺畅续写本章接下来的发展高潮（约 500~800 字）。";
+          ? "请以选中文本为情节接续点，顺畅续写接下来的故事发展与角色对话，保持剧情连贯与行文节奏（约 500~800 字）。"
+          : "请根据前文剧情走势与大纲脉络，顺畅续写接下来的故事（约 500~800 字）。";
       case "tone":
         return hasSelection
-          ? "请根据登场角色的性格特质与人设定位，重构上方引用片段中的对话与神态描写，使其更有辨识度与个性张力。"
+          ? "请根据登场角色的性格特质与人设定位，重构上述文本中的对话与神态描写，增强辨识度与潜台词。"
           : "请优化本章中的角色对白与口吻，增强人物个性张力与戏剧冲突。";
       case "critique":
         return hasSelection
-          ? "请仔细审查上方引用片段中的情节逻辑、前后伏笔与角色动机是否存在矛盾漏洞，并提供具体修改建议。"
-          : "请仔细检查本章的情节逻辑、战力体系与角色行为动机是否存在前后矛盾或漏洞，并提供优化方案。";
+          ? "请对上述划选文本进行深度剧情与逻辑审查，指出潜在的矛盾漏洞，并给出切实可行的修改建议以及一段示范改写文本（供我参考挑选复制）。"
+          : "请仔细检查本章的情节逻辑、战力体系与角色动机是否存在前后矛盾或漏洞，并提供具体修改建议与示范改写文本。";
       default:
         return "";
     }
   };
+
+  const lastExecutedTaskTimestampRef = useRef<number>(0);
+
+  // 并发异步派发与处理任务
+  const executeAsyncTask = useCallback(async (actionType: string, textSnippet: string, customPrompt?: string) => {
+    if (!chapterId || !workId) return;
+
+    const tempId = -Date.now() - Math.floor(Math.random() * 1000);
+    const prompt = customPrompt || getActionPrompt(actionType, textSnippet);
+
+    const pendingItem: ExtendedChatItem = {
+      id: tempId,
+      workId: Number(workId),
+      chapterId: Number(chapterId),
+      userId: "",
+      role: "assistant",
+      content: "",
+      actionType,
+      selectedText: textSnippet,
+      applied: 0,
+      createdAt: new Date().toISOString(),
+      isPending: true,
+    };
+
+    setChats((prev) => [...prev, pendingItem]);
+
+    try {
+      const res = await sendChapterAiChat({
+        workId: Number(workId),
+        chapterId: Number(chapterId),
+        prompt: prompt,
+        actionType: actionType || "chat",
+        selectedText: textSnippet || undefined,
+        currentContent: currentContent || undefined,
+        contextTags: selectedTags,
+      });
+
+      if (res && res.success && res.result) {
+        setChats((prev) =>
+          prev.map((c) => (c.id === tempId ? { ...res.result, isPending: false } : c))
+        );
+      } else {
+        setChats((prev) =>
+          prev.map((c) =>
+            c.id === tempId
+              ? { ...c, content: "生成失败: " + (res?.message || "网络异常"), isPending: false, error: res?.message }
+              : c
+          )
+        );
+      }
+    } catch (e: any) {
+      setChats((prev) =>
+        prev.map((c) =>
+          c.id === tempId
+            ? { ...c, content: "生成异常: " + (e?.message || "网络错误"), isPending: false, error: e?.message }
+            : c
+        )
+      );
+    }
+  }, [chapterId, workId, currentContent, selectedTags]);
+
+  useEffect(() => {
+    if (externalTask && externalTask.timestamp && externalTask.timestamp !== lastExecutedTaskTimestampRef.current) {
+      lastExecutedTaskTimestampRef.current = externalTask.timestamp;
+      if (externalTask.actionType === "custom_focus") {
+        setCurrentAction("custom");
+        setInputText("");
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 80);
+      } else if (externalTask.selectedText) {
+        executeAsyncTask(externalTask.actionType, externalTask.selectedText, externalTask.customPrompt);
+      }
+    }
+  }, [externalTask, executeAsyncTask]);
 
   const handleSelectAction = (actionType: string) => {
     setCurrentAction(actionType);
@@ -146,6 +232,13 @@ export default function PanelAiAssistant({
     const promptToSend = inputText.trim();
     if (!promptToSend && !selectedText) return;
 
+    // 如果选中文本并输入了自定义指令，直接派发并发异步任务并高亮
+    if (selectedText) {
+      setInputText("");
+      executeAsyncTask(currentAction === "chat" ? "custom" : currentAction, selectedText, promptToSend);
+      return;
+    }
+
     try {
       setSending(true);
       setInputText("");
@@ -155,7 +248,7 @@ export default function PanelAiAssistant({
         chapterId: Number(chapterId),
         prompt: promptToSend,
         actionType: currentAction || "chat",
-        selectedText: selectedText || undefined,
+        selectedText: undefined,
         currentContent: currentContent || undefined,
         contextTags: selectedTags,
       });
@@ -240,9 +333,13 @@ export default function PanelAiAssistant({
       case "tone":
         return "语气改写";
       case "critique":
-        return "逻辑纠错";
+        return "剧情审查";
+      case "custom":
+        return "定制修改";
+      case "custom_focus":
+        return "自定义诉求";
       default:
-        return "推演问答";
+        return "创作问答";
     }
   };
 
@@ -356,8 +453,8 @@ export default function PanelAiAssistant({
           <Button size="xs" variant="default" onClick={() => handleSelectAction("tone")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
             语气改写
           </Button>
-          <Button size="xs" variant="default" onClick={() => handleSelectAction("critique")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28 }}>
-            逻辑纠错
+          <Button size="xs" variant="default" onClick={() => handleSelectAction("critique")} style={{ flex: "1 1 30%", fontSize: 11.5, height: 28, borderColor: "#cbd5e1" }}>
+            剧情审查
           </Button>
         </Flex>
       </Box>
@@ -390,6 +487,50 @@ export default function PanelAiAssistant({
               );
             }
 
+            if (item.isPending) {
+              return (
+                <Box key={item.id} style={{ alignSelf: "flex-start", width: "100%" }}>
+                  <Paper p="12px 14px" radius="md" bg="#f8fafc" style={{ border: "1px dashed #94a3b8", boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
+                    <Group justify="space-between" align="center" mb={6}>
+                      <Group gap={6}>
+                        <Badge size="xs" color="blue" variant="filled">
+                          {getActionLabel(item.actionType)}
+                        </Badge>
+                        <Text fz={12} fw={600} c="#334155">
+                          协同任务生成中...
+                        </Text>
+                      </Group>
+                      <Loader size="xs" color="blue" />
+                    </Group>
+
+                    {item.selectedText && (
+                      <Box p="6px 8px" mb={8} bg="#f1f5f9" style={{ borderRadius: 4, borderLeft: "3px solid #3b82f6", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+                        <Text fz={11} c="#475569" lineClamp={2} style={{ flex: 1 }}>
+                          📌 针对片段：“{item.selectedText}”
+                        </Text>
+                        {onLocateSnippet && (
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            color="blue"
+                            onClick={() => onLocateSnippet(item.selectedText || "")}
+                            styles={{ root: { fontSize: 10, height: 18, padding: "0 3px" } }}
+                            title="在正文中定位此片段"
+                          >
+                            🎯 定位
+                          </Button>
+                        )}
+                      </Box>
+                    )}
+
+                    <Text fz={11.5} c="#64748b" style={{ fontStyle: "italic" }}>
+                      AI 正在严密结合世界观与上下文推演文学重构，请稍候...
+                    </Text>
+                  </Paper>
+                </Box>
+              );
+            }
+
             return (
               <Box key={item.id} style={{ alignSelf: "flex-start", width: "100%" }}>
                 <Paper p="10px 12px" radius="md" bg="#f0fdf4" style={{ border: "1px solid #bbf7d0" }}>
@@ -402,6 +543,26 @@ export default function PanelAiAssistant({
                     </Group>
                     {item.applied ? <Badge size="xs" color="teal" variant="light">已采纳</Badge> : null}
                   </Group>
+
+                  {item.selectedText && (
+                    <Box p="4px 8px" mb={6} bg="#ecfdf5" style={{ borderRadius: 4, borderLeft: "3px solid #10b981", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
+                      <Text fz={11} c="#047857" lineClamp={2} style={{ flex: 1 }}>
+                        📌 对应片段：“{item.selectedText}”
+                      </Text>
+                      {onLocateSnippet && (
+                        <Button
+                          size="compact-xs"
+                          variant="subtle"
+                          color="teal"
+                          onClick={() => onLocateSnippet(item.selectedText || "")}
+                          styles={{ root: { fontSize: 10, height: 18, padding: "0 3px" } }}
+                          title="在正文中定位此片段"
+                        >
+                          🎯 定位
+                        </Button>
+                      )}
+                    </Box>
+                  )}
 
                   <Text fz={12.5} c="#14532d" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
                     {item.content}
@@ -416,6 +577,19 @@ export default function PanelAiAssistant({
                       <Button
                         size="compact-xs"
                         variant="subtle"
+                        color="blue"
+                        leftSection={<FiCopy size={11} />}
+                        onClick={() => {
+                          navigator.clipboard.writeText(item.content);
+                          useAlert.success(item.actionType === "critique" ? "已复制审查诊断与建议改写文本！" : "已复制文本内容到剪贴板！");
+                        }}
+                      >
+                        {item.actionType === "critique" ? "复制建议与示范" : "复制文本"}
+                      </Button>
+
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
                         color={fragmentSavedIds[item.id] ? "teal" : "cyan"}
                         leftSection={<FiBookmark size={11} />}
                         onClick={() => handleSaveFragment(item)}
@@ -423,9 +597,19 @@ export default function PanelAiAssistant({
                       >
                         {fragmentSavedIds[item.id] ? "已存为碎片" : "存为碎片"}
                       </Button>
-                      <Button size="compact-xs" color="teal" leftSection={<FiCheck size={11} />} onClick={() => handleAccept(item)}>
-                        采纳写入
-                      </Button>
+
+                      {item.actionType !== "critique" && (
+                        <Button
+                          size="compact-xs"
+                          color={item.applied ? "gray" : "teal"}
+                          variant={item.applied ? "outline" : "filled"}
+                          leftSection={<FiCheck size={11} />}
+                          onClick={() => handleAccept(item)}
+                        >
+                          {item.applied ? "重新采纳替换" : (item.selectedText ? "采纳替换" : "采纳写入")}
+                        </Button>
+                      )}
+
                       <Button size="compact-xs" variant="default" onClick={() => handleRetry(item)}>
                         重试
                       </Button>
@@ -450,31 +634,10 @@ export default function PanelAiAssistant({
         </Stack>
       </ScrollArea>
 
-      {selectedText && (
-        <Box px="md" py={6} bg="#f8fafc" style={{ borderTop: "1px solid #f1f5f9", borderBottom: "1px dashed #e2e8f0" }}>
-          <Flex justify="space-between" align="center">
-            <Group gap={6} style={{ flex: 1, minWidth: 0 }}>
-              <Badge size="xs" variant="light">📌 选中文本</Badge>
-              <Text fz={11.5} c="#334155" truncate="end" style={{ flex: 1 }}>
-                “{selectedText}”
-              </Text>
-              <Text fz={10.5} c="#94a3b8">({selectedText.length} 字)</Text>
-            </Group>
-            {onClearSelection && (
-              <Tooltip label="清除选中引用">
-                <ActionIcon size="xs" variant="subtle" color="gray" onClick={onClearSelection} style={{ marginLeft: 6 }}>
-                  <FiX size={12} />
-                </ActionIcon>
-              </Tooltip>
-            )}
-          </Flex>
-        </Box>
-      )}
-
-      <Box p="xs" px="md" style={{ borderTop: selectedText ? "none" : "1px solid #f1f5f9", backgroundColor: "#ffffff" }}>
+      <Box p="xs" px="md" style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#ffffff" }}>
         <Textarea
           ref={inputRef}
-          placeholder={selectedText ? "针对选中文本输入指令，或直接点击上方动作填入指令后发送..." : "输入协同指令或提问，或点击上方动作预填指令..."}
+          placeholder={selectedText ? "针对正文选中文本输入您的具体调整诉求，回车发送..." : "输入协同指令或提问，或点击上方动作预填指令..."}
           variant="unstyled"
           autosize
           minRows={2}

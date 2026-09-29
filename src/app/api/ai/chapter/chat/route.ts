@@ -115,7 +115,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     let structuredLoreContext = "";
 
     if (charsData.length > 0) {
-      structuredLoreContext += "【核心角色人设与说话风格库（防OOC基准）】：\n" + charsData.map((c) => `- ${c.name} (${c.identity || c.roleType || "角色"}): 性格特质[${c.personality || "未知"}]，核心能力[${c.abilities || "无"}], 说话口吻与经历[${c.description || c.experiences || "无"}]`).join("\n") + "\n\n";
+      structuredLoreContext += "【核心角色档案库（人物行为需符合其性格与当前状态，严防千人一面或无故崩人设）】：\n" + charsData.map((c) => `- ${c.name} (${c.identity || c.roleType || "角色"}): 性格[${c.personality || "未知"}], 能力[${c.abilities || "无"}], 口吻与经历[${c.description || c.experiences || "无"}]`).join("\n") + "\n\n";
     }
     if (locsData.length > 0) {
       structuredLoreContext += "【关联地点设定】：\n" + locsData.map((l) => `- ${l.name} (${l.region || "区域"}): 类型[${l.type}], 特征[${l.features || l.climate || l.terrain || "无"}], 剧情关联[${l.plotPoints || "无"}]`).join("\n") + "\n\n";
@@ -124,144 +124,143 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       structuredLoreContext += "【关联势力阵营】：\n" + facsData.map((f) => `- ${f.name}: 领袖[${f.leader || "未知"}], 立场[${f.alignment || "中立"}], 宗旨信条[${f.doctrine || "无"}]`).join("\n") + "\n\n";
     }
     if (itemsData.length > 0) {
-      structuredLoreContext += "【关联法宝道具】：\n" + itemsData.map((i) => `- ${i.name} (${i.tier || "物品"}): 异能效果[${i.effects}], 使用代价/副作用[${i.drawbacks || "无"}]`).join("\n") + "\n\n";
+      structuredLoreContext += "【关联法宝道具】：\n" + itemsData.map((i) => `- ${i.name} (${i.tier || "物品"}): 效果[${i.effects}], 代价/限制[${i.drawbacks || "无"}]`).join("\n") + "\n\n";
     }
     if (rulesData.length > 0) {
       structuredLoreContext += "【关联世界法则/体系】：\n" + rulesData.map((r) => `- ${r.name}: 机制[${r.mechanisms || "无"}], 禁忌[${r.taboos || "无"}]`).join("\n") + "\n\n";
     }
     if (outlinesData.length > 0) {
-      structuredLoreContext += "【关联故事大纲节拍】：\n" + outlinesData.map((o) => `- ${o.title}: 核心目标[${o.goal}], 关键冲突[${o.conflict || "无"}], 结果变化[${o.expectedOutcome || "无"}]`).join("\n") + "\n\n";
+      structuredLoreContext += "【关联故事大纲节拍】：\n" + outlinesData.map((o) => `- ${o.title}: 核心目标[${o.goal || "推进"}], 关键冲突[${o.conflict || "无"}], 预期结果[${o.expectedOutcome || "无"}]`).join("\n") + "\n\n";
     }
     if (otherChaptersData.length > 0) {
       structuredLoreContext += "【其他关联章节提要】：\n" + otherChaptersData.map((ch) => `- 第${ch.chapterNumber}章 ${ch.title}: 提要[${ch.summary || "无"}]`).join("\n") + "\n\n";
     }
 
-    let systemPrompt = `你是一位顶尖的网文白金作家与金牌主编协同助手，正在与作者共同打磨小说《${work.title}》（题材：${work.tag || "网络小说"}）。
-当前章节：第${chapter.chapterNumber}章《${chapter.title}》${chapter.summary ? `（本章大纲摘要：${chapter.summary}）` : ""}。
+    // 1. SYSTEM 层：确立中性协同助手身份、指令优先级与核心防脑补/人物一致性铁律
+    const SYSTEM_PROMPT = `你是一名专业的小说 AI 协同创作助手，负责协助作者进行正文创作、润色、扩写、精简、续写、语气调整、剧情分析与创作问答。
+你的首要目标不是替作者决定故事走向，而是在作者已有创作意图、作品设定和当前剧情事实基础上，提供准确、稳定、高度可控的协作。
 
-【网文白金级创作与润色核心铁律（必须严格执行）】：
-1. 【拒绝机械复读，实质升级文笔】：润色不是简单的校对或原样抄写！必须深入重构平铺直叙、干瘪寡淡的语句，将其转化为充满画面感、节奏快慢相宜、情绪张力饱满的优质网文正文。
-2. 【人设严格锚定（绝对防 OOC）】：必须严格依照角色人设库中的性格与说话口吻写作。冷酷者言简意赅字字如刀，桀骜者狂放不羁傲骨毕露，智谋者机锋暗藏语带双关。严禁千人一面，严禁任何角色说出出戏的现代网络流行语或崩人设的软弱/客套台词！
-3. 【四维具象化笔法】：
-   - 动作描写具象有力：用高表现力的精准动词替代“他很愤怒地打过去”等空洞表述；
-   - 感官与氛围沉浸：融合光影、音效、气流、压迫感等环境烘托；
-   - 微表情与心理暗流：强化人物对峙时的眼神交锋与心理博弈；
-   - 节奏凌厉：短句造势强化冲击力，长句铺陈增强厚重感，消除“只见”、“突然”、“紧接着”等平庸口癖。
-4. 【作者内嵌批注精准转化】：若正文中出现 '( )' 或 '（ ）' 括号内容（如“（这里补充一段对峙对话）”、“（主角眼神变冷，拔剑）”），此为作者的具体修改指令，必须将其精准化为自然生动的正文描写，并剔除括号标记。
-5. 【纯正文直出，严禁任何废话】：执行正文润色、扩写、续写或改写时，第一行第一个字必须是正文开头，最后一个字必须是正文结尾！绝对禁止输出任何思考过程、任务说明（如“任务：...”、“让我们构思...”）、前后引导语（如“以下是润色后的内容：”）或“【润色版】”等标记！`;
+【核心创作与设定原则】
+1. 保持人物行为与对白符合已有设定与当前情境逻辑。
+2. 保持世界观规则与力量体系严密一致。
+3. 不擅自改变已经确定的剧情事实、人物关系、时间线和因果链条。
+4. 【设定使用与禁止擅自补设定】：提供给你的设定资料为作品事实依据。禁止在没有依据的情况下擅自捏造重大背景历史、新增超规格能力/法宝或篡改人物立场；如需补充细节，采用“最小新增原则”，仅补充完成当前任务所必需的合规信息。
+5. 【人物一致性判断】：结合角色性格、当前情绪、当前目标、立场、已知经历与当下场景压力综合判断，避免脸谱化套路。
 
-    let finalUserMessage = "";
+【指令优先级】
+当不同要求产生冲突时，严格按以下优先级执行：
+1. 作者本次明确提出的具体要求（最高控制权）
+2. 当前 action 对应的任务与模式要求
+3. 当前作品已经确定的设定与剧情事实
+4. 通用写作原则
+注：作者要求若与已确定的世界观事实明显冲突，分析类任务应明确指出冲突，正文创作类任务应优先避免破坏既定因果。
+
+【上下文优先级】
+1. 作者本次明确要求 > 2. 当前选中文本 > 3. 当前章节正文 > 4. 相关角色/地点/势力/道具 > 5. 大纲节拍 > 6. 世界法则 > 7. 其他章节摘要。
+
+【输出模式严格隔离】
+- 【正文直出模式】(polish / expand / shorten / continue / tone):
+  只输出最终正文文本，从首字直接输出到尾字。严禁输出任何思考过程、任务说明（如“好的，这是润色后的内容”）、修改对比或前后引导标记！
+- 【分析审查模式】(critique / chat):
+  条理清晰地输出分析、诊断或构思建议，使用结构化说明。除非作者明确要求生成正文，否则不得把分析内容伪装成小说正文输出。`;
+
+    // 2. CONTEXT 层：组装上下文背景
+    let contextMessage = `【作品基础信息】：书名《${work.title}》（题材：${work.tag || "网络小说"}）
+当前章节：第${chapter.chapterNumber}章《${chapter.title}》${chapter.summary ? `（本章大纲摘要：${chapter.summary}）` : ""}\n\n`;
 
     if (structuredLoreContext) {
-      finalUserMessage += `【本作品核心设定与角色档案库】：\n${structuredLoreContext}\n`;
+      contextMessage += `【作品事实与设定资料】：\n${structuredLoreContext}\n`;
     }
 
     const hasSelection = Boolean(selectedText && selectedText.trim());
     const isFullChapterAction = !hasSelection && Boolean(currentContent && currentContent.trim());
 
     if (hasSelection) {
-      finalUserMessage += `【作者划选的目标文本片段】：\n"""\n${selectedText.trim()}\n"""\n\n`;
+      contextMessage += `【作者选中的目标文本片段】：\n"""\n${selectedText.trim()}\n"""\n\n`;
     } else if (isFullChapterAction) {
-      finalUserMessage += `【当前章节完整正文内容】：\n"""\n${currentContent.trim()}\n"""\n\n`;
+      contextMessage += `【当前章节正文内容】：\n"""\n${currentContent.trim()}\n"""\n\n`;
     }
 
-    const actionNameMap: Record<string, string> = {
-      polish: "智能润色",
-      expand: "场景扩写",
-      shorten: "精简缩写",
-      continue: "情节续写",
-      tone: "语气改写",
-      critique: "逻辑纠错",
-      chat: "创作问答",
+    // 3. ACTION 层：各任务详细准则与模式隔离
+    const isAnalysisMode = actionType === "critique" || actionType === "chat";
+
+    const ACTION_PROMPTS: Record<string, string> = {
+      polish: `【任务：普通润色】
+目标：在严格保留原文信息密度、剧情事实、人物行为、核心情绪与整体语调的前提下提升文字表现力。
+执行要点：
+1. 重点优化：消灭语病、不自然表达、僵硬句式、生硬对白与节奏拖沓。
+2. 只有确实能够提升阅读流畅感时才调整句式结构。
+3. 禁止为了体现“文笔”而无意义地大幅增加剧情、擅自加戏、增加复杂心理或大段空洞环境描写。
+4. 严格只输出润色后的纯正文。`,
+
+      expand: `【任务：细节扩写】
+目标：扩写已有内容，增强场景沉浸感，而非擅自续写新的剧情事件。
+执行要点：
+1. 允许增加：感官细节（视听光影）、具体肢体动作、人物心理暗流、微表情与自然对话细节。
+2. 严厉禁止：改变事件结果、新增关键人物、新增重大设定、改变人物立场或时间线。
+3. 严格只输出扩写后的纯正文。`,
+
+      shorten: `【任务：精简去水】
+目标：在保留核心剧情因果、人物性格与关键情绪转折的前提下，最大程度减少冗余。
+执行要点：
+1. 优先删除：重复信息、无效修饰词、套路化动作、重复心理描写与无关主线的环境堆砌。
+2. 必须保留：关键事实信息、人物关系变化、核心对白与伏笔线索。
+3. 只能减少，严禁为了所谓“提升文采”重新创作新内容。
+4. 严格只输出精简后的纯正文。`,
+
+      continue: `【任务：情节续写】
+目标：承接当前正文最后一个有效叙事节点继续创作。
+执行要点：
+1. 保持叙事视角、时间顺序、人物当前状态、情绪与行文节奏。
+2. 保持当前节奏：如果当前处于日常、过渡或铺垫阶段，应稳步推进，不得为了制造戏剧性而强行制造高潮冲突或突然空降新人物。
+3. 结合人物当前动机与场景真实阻力推进故事。
+4. 严格只输出续写的纯正文（约 500~1000 字）。`,
+
+      tone: `【任务：语气与对白改写】
+目标：调整人物说话语气与神态细节，强化角色鲜明辨识度与潜台词。
+执行要点：
+1. 结合角色性格、当前情绪、动机与与对方的关系进行微调。
+2. 严禁为了突出刻板标签而扭曲原有剧情含义或造成 OOC。
+3. 严格只输出改写后的纯正文。`,
+
+      critique: `【任务：剧情审查（编辑诊断 + 示范改写建议）】
+目标：以资深网文剧情主编视角，审查当前正文/划选片段是否存在逻辑漏洞、人设矛盾或节奏问题，并提供切实可行的修改建议以及一段可供作者直接参考/复制的示范修改文本。
+审查维度：
+一、逻辑自洽与战力/世界观设定冲突
+二、人物行为动机与心理演进是否合理（是否突兀、OOC或沦为工具人）
+三、叙事节奏、铺垫张力与前后伏笔衔接
+输出格式规范（必须条理清晰）：
+一、【问题诊断】
+精准指出具体存在的情节矛盾、逻辑漏洞或节奏问题。
+二、【修改思路与建议】
+列出 1~2 个最符合主线逻辑的具体调整方案与情节补救方向。
+三、【推荐参考改写文本（供作者自由复制采纳）】
+提供一段结构完整、文学语感精炼且修复了上述问题的示范改写正文（约 200~500 字），作者可自由复制挑选替换。
+注：若原文本逻辑通畅，客观陈述其亮点即可，并在第三部分提供进一步增强文学张力的进阶示范写法。`,
+
+      chat: `【任务：创作问答与多方案构思】
+目标：根据作者提出的问题或构思进行专业分析与推演。
+执行要点：
+1. 可提供多个合理的剧情推进方向，并分别列出各自的【优势】、【潜在风险】与【对后续剧情的影响】。
+2. 语言清晰有条理，避免空泛套话，不伪装成小说正文。`,
     };
-    const actionName = actionNameMap[actionType] || "协同创作";
 
-    switch (actionType) {
-      case "polish":
-        if (hasSelection) {
-          finalUserMessage += `【最高执行指令：划选文本深度润色升级】
-请对上述【作者划选的目标文本片段】进行白金级文学精修与深度重塑。
-【核心要求】：
-1. 坚决避免机械复读！请运用高级叙事笔法，大幅提升动作力量感、环境氛围与心理描写层次。
-2. 严守角色性格基调，人物对白与行为严防 OOC。
-3. 保持原有情节脉络与因果逻辑，使阅读体验更加扣人心弦。
-${userPrompt ? `作者定制要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出润色后的纯正文片段，直接从第一个字开始，严禁任何分析说明或前后缀！`;
-        } else {
-          finalUserMessage += `【最高执行指令：全篇章节通篇文学润色重塑】
-请对上述【当前章节完整正文内容】逐段进行白金级文笔精修与戏剧张力升级。
-【核心要求】：
-1. 坚决避免原样抄写！重构平淡流水账段落，增强感官沉浸感与情绪爆发力。
-2. 严格锁定登场人物人设，台词交锋言如其人，严防人物 OOC。
-3. 保持情节完整无损，逐段升华，严禁中途截断或省略。
-${userPrompt ? `作者定制要求：${userPrompt}\n` : ""}
-【输出铁律】：完整输出润色后的全章纯正文，直接从第一句到最后一句，严禁任何前言后语！`;
-        }
-        break;
+    const currentActionPrompt = ACTION_PROMPTS[actionType] || ACTION_PROMPTS.chat;
 
-      case "expand":
-        if (hasSelection) {
-          finalUserMessage += `【指令：划选文本深度场景扩写】
-请对上述【划选目标文本】进行深度细节扩写，补充人物微表情、感官沉浸、肢体动作与心理博弈。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出扩写后的纯正文文本，严禁包含任何思考过程或解释。`;
-        } else {
-          finalUserMessage += `【指令：核心场景深度扩写】
-请结合当前章节的高潮或核心场景进行深度细节扩充，丰富动作与心理活动描写。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出扩写后的纯正文文本，严禁包含任何思考过程或解释。`;
-        }
-        break;
-
-      case "shorten":
-        if (hasSelection) {
-          finalUserMessage += `【指令：选中文本精简缩写】
-请精炼浓缩上述【选中文本片段】，剔除废话赘词，加快叙事节奏，使其干练紧凑。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出精简后的纯正文文本，严禁包含任何思考分析或说明。`;
-        } else {
-          finalUserMessage += `【指令：全篇内容精简去水】
-请对上述【当前章节完整正文内容】进行通篇紧凑精简与去水，强化主线推进。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出精简后的完整正文，严禁包含任何思考分析或说明。`;
-        }
-        break;
-
-      case "continue":
-        finalUserMessage += `【指令：章节情节顺畅续写】
-请根据已有剧情走向与世界观设定，承接前文顺畅续写接下来的故事高潮或对话推进（约 500~1000 字）。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出续写的纯正文故事文本，严禁包含任何前缀引导语或构思分析。`;
-        break;
-
-      case "tone":
-        finalUserMessage += `【指令：角色语气与对白改写（防 OOC）】
-请根据登场角色的性格特质与人设定位，重构上述文本中的对话与神态描写，增强个性辨识度与戏剧冲突。
-${userPrompt ? `作者额外要求：${userPrompt}\n` : ""}
-【输出铁律】：只输出改写后的纯正文文本，严禁包含任何思考过程或分析。`;
-        break;
-
-      case "critique":
-        finalUserMessage += `【指令：剧情逻辑严谨纠错】
-请结合当前章节与世界观设定，严谨审查当前情节是否存在战力崩塌、逻辑漏洞、人设前后矛盾或伏笔冲突，并给出具体可行的修正建议。
-${userPrompt ? `作者具体问题：${userPrompt}\n` : ""}
-【输出要求】：条理清晰地直接列出纠错点与修改建议，无需多余寒暄。`;
-        break;
-
-      case "chat":
-      default:
-        finalUserMessage += `【作者创作指令/提问】：
-${userPrompt || "请结合上述设定与当前章节正文，给出专业的推演构思与创作建议。"}
-【输出要求】：直接给出有深度的专业构思与建议，避免无意义的客套废话与元思考过程。`;
-        break;
+    // 4. AUTHOR REQUEST 层：作者本次明确指令包装
+    let authorRequestMessage = "";
+    if (userPrompt) {
+      authorRequestMessage = `【作者本次明确要求（最高优先级）】：\n${userPrompt}\n`;
     }
+
+    const finalUserContent = `${contextMessage}${currentActionPrompt}\n\n${authorRequestMessage}请依据上述系统原则与优先级执行处理：`;
 
     const messages: ChatMessage[] = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: finalUserMessage },
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: finalUserContent },
     ];
 
-    const targetTemp = actionType === "critique" ? 0.3 : 0.70;
+    const targetTemp = isAnalysisMode ? 0.35 : 0.70;
     const rawAiResponse = await callCloudflareAi(env.AI, messages, {
       temperature: targetTemp,
       maxTokens: 8192,
@@ -272,6 +271,17 @@ ${userPrompt || "请结合上述设定与当前章节正文，给出专业的推
     if (!aiContent || !aiContent.trim()) {
       return NextResponse.json({ success: false, message: "AI 助手未能生成有效回复，请重试" }, { status: 500 });
     }
+
+    const actionNameMap: Record<string, string> = {
+      polish: "智能润色",
+      expand: "场景扩写",
+      shorten: "精简缩写",
+      continue: "情节续写",
+      tone: "语气改写",
+      critique: "逻辑审查",
+      chat: "创作问答",
+    };
+    const actionName = actionNameMap[actionType] || "协同创作";
 
     let userMessageContent = "";
     if (actionType !== "chat") {

@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2 } from "react-icons/fi";
-import { ChapterItem, createChapterVersion } from "@/rest/chapter";
+import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu, Paper, Stack } from "@mantine/core";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy } from "react-icons/fi";
+import { ChapterItem, createChapterVersion, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import DrawerVersionHistory from "../drawer-version-history";
@@ -14,11 +14,16 @@ interface EditorAreaProps {
   chapter: ChapterItem | null;
   workId: number | string;
   treeCollapsed?: boolean;
+  aiPanelCollapsed?: boolean;
+  aiPanelWidth?: number;
   onToggleTree?: () => void;
   onUpdateChapter: (fields: Partial<ChapterItem>) => Promise<void>;
   onSelectionChange?: (selectedText: string) => void;
+  onTriggerAiAction?: (actionType: string, selectedText: string) => void;
+  activeTasks?: ActiveAiTask[];
   onToggleAiPanel?: () => void;
-  insertTextPayload?: { text: string; timestamp: number } | null;
+  insertTextPayload?: { text: string; targetSnippet?: string; timestamp: number } | null;
+  locateSnippetPayload?: { snippet: string; timestamp: number } | null;
   targetWords?: number;
   onDirtyChange?: (isDirty: boolean) => void;
   onDeleteChapter?: (chapterId: number | string) => void;
@@ -29,11 +34,16 @@ export default function EditorArea({
   chapter,
   workId,
   treeCollapsed = false,
+  aiPanelCollapsed = true,
+  aiPanelWidth = 360,
   onToggleTree,
   onUpdateChapter,
   onSelectionChange,
+  onTriggerAiAction,
+  activeTasks = [],
   onToggleAiPanel,
   insertTextPayload,
+  locateSnippetPayload,
   targetWords = 4000,
   onDirtyChange,
   onDeleteChapter,
@@ -47,42 +57,59 @@ export default function EditorArea({
   const [versionDrawerOpened, setVersionDrawerOpened] = useState(false);
   const [fragmentDrawerOpened, setFragmentDrawerOpened] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | string | number | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    selectedText: string;
+  } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const editorViewportRef = useRef<HTMLDivElement>(null);
   const lastCursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const lastPayloadTimestampRef = useRef<number>(0);
+  const lastLocateTimestampRef = useRef<number>(0);
 
   // 触发 autosize textarea 重新计算高度与重排
   const refreshTextareaHeight = useCallback(() => {
-    window.dispatchEvent(new Event("resize"));
-    if (textareaRef.current) {
-      textareaRef.current.dispatchEvent(new Event("input", { bubbles: true }));
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${Math.max(el.scrollHeight, 600)}px`;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
     }
+    window.dispatchEvent(new Event("resize"));
   }, []);
 
-  // 监听容器尺寸变化（左侧目录展开/收起、右侧 AI 面板拖拽或折叠）
+  // 监听容器尺寸变化（左侧目录展开/收起、右侧 AI 面板拖拽或折叠、视口变化）
   useEffect(() => {
     const el = containerRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
+    const viewEl = editorViewportRef.current;
+    if (typeof ResizeObserver === "undefined") return;
 
     const observer = new ResizeObserver(() => {
       refreshTextareaHeight();
     });
 
-    observer.observe(el);
+    if (el) observer.observe(el);
+    if (viewEl) observer.observe(viewEl);
+
     return () => observer.disconnect();
   }, [refreshTextareaHeight]);
 
-  // 当目录折叠状态改变时，延时多次刷新以配合 CSS 动画过渡
+  // 当目录折叠状态或 AI 面板折叠/宽度改变时，延时多次刷新以配合 CSS 动画过渡
   useEffect(() => {
+    refreshTextareaHeight();
     const timers = [
-      setTimeout(refreshTextareaHeight, 30),
-      setTimeout(refreshTextareaHeight, 100),
-      setTimeout(refreshTextareaHeight, 250),
-      setTimeout(refreshTextareaHeight, 400),
+      setTimeout(refreshTextareaHeight, 20),
+      setTimeout(refreshTextareaHeight, 80),
+      setTimeout(refreshTextareaHeight, 180),
+      setTimeout(refreshTextareaHeight, 300),
+      setTimeout(refreshTextareaHeight, 450),
     ];
     return () => timers.forEach(clearTimeout);
-  }, [treeCollapsed, refreshTextareaHeight]);
+  }, [treeCollapsed, aiPanelCollapsed, aiPanelWidth, content, refreshTextareaHeight]);
 
   useEffect(() => {
     if (chapter) {
@@ -92,9 +119,20 @@ export default function EditorArea({
       setLastSavedAt(chapter.updatedAt || chapter.createdAt || null);
       lastCursorRef.current = { start: chapter.content?.length || 0, end: chapter.content?.length || 0 };
       if (onSelectionChange) onSelectionChange("");
-      setTimeout(refreshTextareaHeight, 50);
+      setTimeout(refreshTextareaHeight, 30);
     }
   }, [chapter?.id, refreshTextareaHeight]);
+
+  // 全局关闭右键菜单监听
+  useEffect(() => {
+    const handleGlobalClick = () => {
+      setContextMenu(null);
+    };
+    window.addEventListener("click", handleGlobalClick);
+    return () => {
+      window.removeEventListener("click", handleGlobalClick);
+    };
+  }, []);
 
   const isDirty = useMemo(() => {
     if (!chapter) return false;
@@ -109,34 +147,137 @@ export default function EditorArea({
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const insertAtCursor = (textToInsert: string) => {
-    const el = textareaRef.current;
-    if (!el) {
-      setContent((prev) => (prev ? `${prev}\n\n${textToInsert}` : textToInsert));
-      return;
-    }
+  const applyAiText = useCallback((textToInsert: string, targetSnippet?: string) => {
+    setContent((prevContent) => {
+      const current = prevContent || "";
+      const el = textareaRef.current;
 
-    const start = lastCursorRef.current.start ?? el.selectionStart ?? el.value.length;
-    const end = lastCursorRef.current.end ?? el.selectionEnd ?? el.value.length;
-    const current = content;
-    const nextContent = current.substring(0, start) + textToInsert + current.substring(end);
-    setContent(nextContent);
+      // 1. 如果存在明确的目标片段，优先精确/模糊替换目标文本
+      if (targetSnippet && targetSnippet.trim()) {
+        const cleanSnippet = targetSnippet.trim();
+        let startIdx = current.indexOf(cleanSnippet);
+        let matchLength = cleanSnippet.length;
 
-    const nextCursorPos = start + textToInsert.length;
-    lastCursorRef.current = { start: nextCursorPos, end: nextCursorPos };
+        // 尝试去除换行差异等空白干扰
+        if (startIdx === -1) {
+          const noCrCurrent = current.replace(/\r/g, "");
+          const noCrSnippet = cleanSnippet.replace(/\r/g, "");
+          const idx = noCrCurrent.indexOf(noCrSnippet);
+          if (idx !== -1) {
+            startIdx = idx;
+            matchLength = noCrSnippet.length;
+          } else {
+            // 尝试头尾锚点匹配
+            const prefix = cleanSnippet.slice(0, Math.min(20, cleanSnippet.length));
+            const prefixIdx = current.indexOf(prefix);
+            if (prefixIdx !== -1) {
+              const suffix = cleanSnippet.slice(-Math.min(20, cleanSnippet.length));
+              const suffixIdx = current.indexOf(suffix, prefixIdx);
+              if (suffixIdx !== -1) {
+                startIdx = prefixIdx;
+                matchLength = suffixIdx + suffix.length - prefixIdx;
+              }
+            }
+          }
+        }
 
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(nextCursorPos, nextCursorPos);
-      refreshTextareaHeight();
-    }, 0);
-  };
+        if (startIdx !== -1) {
+          const nextContent = current.substring(0, startIdx) + textToInsert + current.substring(startIdx + matchLength);
+          const nextCursorPos = startIdx + textToInsert.length;
+          lastCursorRef.current = { start: nextCursorPos, end: nextCursorPos };
+          const scrollPos = editorViewportRef.current?.scrollTop;
+          useAlert.success("已精准替换所选协同文本！");
+          setTimeout(() => {
+            if (el) {
+              el.focus({ preventScroll: true });
+              el.setSelectionRange(nextCursorPos, nextCursorPos);
+            }
+            if (editorViewportRef.current && scrollPos !== undefined) {
+              editorViewportRef.current.scrollTop = scrollPos;
+            }
+          }, 20);
+          return nextContent;
+        }
+      }
+
+      // 2. 回退：在当前光标处精准插入或追加
+      if (!el) {
+        useAlert.success("已采纳写入正文！");
+        return current ? `${current}\n\n${textToInsert}` : textToInsert;
+      }
+
+      const start = lastCursorRef.current.start ?? el.selectionStart ?? current.length;
+      const end = lastCursorRef.current.end ?? el.selectionEnd ?? current.length;
+      const nextContent = current.substring(0, start) + textToInsert + current.substring(end);
+      const nextCursorPos = start + textToInsert.length;
+      lastCursorRef.current = { start: nextCursorPos, end: nextCursorPos };
+      const scrollPos = editorViewportRef.current?.scrollTop;
+      useAlert.success("已采纳写入正文！");
+
+      setTimeout(() => {
+        if (el) {
+          el.focus({ preventScroll: true });
+          el.setSelectionRange(nextCursorPos, nextCursorPos);
+        }
+        if (editorViewportRef.current && scrollPos !== undefined) {
+          editorViewportRef.current.scrollTop = scrollPos;
+        }
+      }, 0);
+
+      return nextContent;
+    });
+  }, []);
 
   useEffect(() => {
-    if (insertTextPayload && insertTextPayload.text) {
-      insertAtCursor(insertTextPayload.text);
+    if (insertTextPayload && insertTextPayload.text && insertTextPayload.timestamp !== lastPayloadTimestampRef.current) {
+      lastPayloadTimestampRef.current = insertTextPayload.timestamp;
+      applyAiText(insertTextPayload.text, insertTextPayload.targetSnippet);
     }
-  }, [insertTextPayload]);
+  }, [insertTextPayload, applyAiText]);
+
+  // 定位正文划选片段并平滑滚动
+  useEffect(() => {
+    if (locateSnippetPayload && locateSnippetPayload.snippet && locateSnippetPayload.timestamp !== lastLocateTimestampRef.current) {
+      lastLocateTimestampRef.current = locateSnippetPayload.timestamp;
+      const snippet = locateSnippetPayload.snippet.trim();
+      const current = content;
+      if (!snippet || !current) return;
+
+      let idx = current.indexOf(snippet);
+      let matchLen = snippet.length;
+
+      if (idx === -1) {
+        const noCrCurrent = current.replace(/\r/g, "");
+        const noCrSnippet = snippet.replace(/\r/g, "");
+        idx = noCrCurrent.indexOf(noCrSnippet);
+        if (idx !== -1) {
+          matchLen = noCrSnippet.length;
+        }
+      }
+
+      if (idx !== -1) {
+        const el = textareaRef.current;
+        if (el) {
+          el.focus({ preventScroll: true });
+          el.setSelectionRange(idx, idx + matchLen);
+          lastCursorRef.current = { start: idx, end: idx + matchLen };
+
+          const charRatio = idx / Math.max(1, current.length);
+          const totalHeight = el.scrollHeight || 1000;
+          const targetScroll = Math.max(0, charRatio * totalHeight - 140);
+
+          editorViewportRef.current?.scrollTo({
+            top: targetScroll,
+            behavior: "smooth",
+          });
+
+          useAlert.info("已定位到该片段！");
+        }
+      } else {
+        useAlert.warning("正文中未找到完全匹配的片段（可能已被修改）");
+      }
+    }
+  }, [locateSnippetPayload, content]);
 
   const liveWordCount = content.replace(/\s+/g, "").length;
 
@@ -279,6 +420,98 @@ export default function EditorArea({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? 0;
+    const end = el?.selectionEnd ?? 0;
+    const selected = el ? el.value.substring(start, end).trim() : "";
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      selectedText: selected,
+    });
+  };
+
+  const renderHighlightedBackdrop = (text: string, tasks: ActiveAiTask[] = []) => {
+    if (!text) return null;
+    if (!tasks || tasks.length === 0) {
+      return <span>{text}</span>;
+    }
+
+    interface MatchSpan {
+      start: number;
+      end: number;
+      color: (typeof HIGHLIGHT_COLORS)[0];
+      id: string | number;
+    }
+
+    const matches: MatchSpan[] = [];
+
+    tasks.forEach((task) => {
+      if (!task.snippet || !task.snippet.trim()) return;
+      const cleanSnippet = task.snippet.trim();
+      let idx = text.indexOf(cleanSnippet);
+      if (idx !== -1) {
+        matches.push({
+          start: idx,
+          end: idx + cleanSnippet.length,
+          color: HIGHLIGHT_COLORS[task.colorIndex % HIGHLIGHT_COLORS.length],
+          id: task.id,
+        });
+      }
+    });
+
+    if (matches.length === 0) {
+      return <span>{text}</span>;
+    }
+
+    // 按起始位置升序排序
+    matches.sort((a, b) => a.start - b.start);
+
+    // 过滤重叠区间
+    const nonOverlapping: MatchSpan[] = [];
+    let lastEnd = 0;
+    matches.forEach((m) => {
+      if (m.start >= lastEnd) {
+        nonOverlapping.push(m);
+        lastEnd = m.end;
+      }
+    });
+
+    const nodes: React.ReactNode[] = [];
+    let currentIdx = 0;
+
+    nonOverlapping.forEach((m, i) => {
+      if (m.start > currentIdx) {
+        nodes.push(<span key={`plain-${i}`}>{text.substring(currentIdx, m.start)}</span>);
+      }
+      nodes.push(
+        <mark
+          key={`mark-${m.id}-${i}`}
+          style={{
+            backgroundColor: m.color.bg,
+            borderBottom: `2px solid ${m.color.border}`,
+            borderRadius: "3px",
+            color: "transparent",
+            padding: "1px 0",
+          }}
+        >
+          {text.substring(m.start, m.end)}
+        </mark>
+      );
+      currentIdx = m.end;
+    });
+
+    if (currentIdx < text.length) {
+      nodes.push(<span key="plain-tail">{text.substring(currentIdx)}</span>);
+    }
+
+    return nodes;
+  };
+
   const handleRestoreVersion = async (restoredContent: string) => {
     setContent(restoredContent);
     await onUpdateChapter({ content: restoredContent, wordCount: restoredContent.replace(/\s+/g, "").length });
@@ -286,7 +519,7 @@ export default function EditorArea({
   };
 
   const handleInsertFragment = (fragmentContent: string) => {
-    insertAtCursor(fragmentContent);
+    applyAiText(fragmentContent);
   };
 
   const handleExtractToOutline = async () => {
@@ -449,6 +682,7 @@ export default function EditorArea({
       {/* 沉浸式正文全高滚动区域 */}
       <ScrollArea
         style={{ flex: 1, height: "100%" }}
+        viewportRef={editorViewportRef}
         p={{ base: "md", md: 24 }}
         styles={{
           viewport: {
@@ -502,7 +736,37 @@ export default function EditorArea({
             </Group>
           </Group>
 
-          <Box style={{ position: "relative", marginTop: 4 }}>
+          <Box
+            style={{ position: "relative", marginTop: 4 }}
+            onContextMenu={handleContextMenu}
+          >
+            {/* 高亮背景衬底层 (Backdrop Highlight Layer) */}
+            <div
+              ref={backdropRef}
+              aria-hidden="true"
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                fontSize: 16,
+                lineHeight: 1.9,
+                fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                padding: "8px 0",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                color: "transparent",
+                pointerEvents: "none",
+                zIndex: 1,
+                overflow: "hidden",
+                boxSizing: "border-box",
+              }}
+            >
+              {renderHighlightedBackdrop(content, activeTasks)}
+            </div>
+
+            {/* 前台文本编辑区 (透明背景确保原生打字与高亮对齐) */}
             <Textarea
               ref={textareaRef}
               variant="unstyled"
@@ -513,12 +777,22 @@ export default function EditorArea({
               onChange={(e) => {
                 setContent(e.target.value);
                 handleTrackCursor();
+                setContextMenu(null);
               }}
-              onKeyDown={handleKeyDown}
+              onKeyDown={(e) => {
+                handleKeyDown(e);
+                if (e.key === "Escape") {
+                  setContextMenu(null);
+                }
+              }}
               onSelect={handleTrackCursor}
               onMouseUp={handleTrackCursor}
               onKeyUp={handleTrackCursor}
-              onClick={handleTrackCursor}
+              onClick={() => {
+                handleTrackCursor();
+                setContextMenu(null);
+              }}
+              onContextMenu={handleContextMenu}
               styles={{
                 input: {
                   fontSize: 16,
@@ -526,12 +800,150 @@ export default function EditorArea({
                   color: "#334155",
                   fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                   padding: "8px 0",
+                  backgroundColor: "transparent",
+                  position: "relative",
+                  zIndex: 2,
                 },
               }}
             />
           </Box>
         </Box>
       </ScrollArea>
+
+      {/* 自定义右键快捷操作菜单 (彻底拦截并替代原生弹窗) */}
+      {contextMenu && (
+        <Paper
+          shadow="xl"
+          radius="md"
+          p={6}
+          style={{
+            position: "fixed",
+            left: Math.min(contextMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 190),
+            top: Math.min(contextMenu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 260),
+            zIndex: 1000,
+            backgroundColor: "#ffffff",
+            border: "1px solid #e2e8f0",
+            minWidth: 175,
+            boxShadow: "0 10px 28px rgba(15, 23, 42, 0.16)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Stack gap={2}>
+            <Button
+              size="xs"
+              variant="subtle"
+              color="gray"
+              justify="flex-start"
+              leftSection={<FiCopy size={13} color="#475569" />}
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) {
+                  navigator.clipboard.writeText(txt);
+                  useAlert.success(contextMenu.selectedText ? "已复制选中文本到剪贴板" : "已复制全篇内容到剪贴板");
+                }
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, color: "#334155", fontWeight: 500 } }}
+            >
+              复制 {contextMenu.selectedText ? "选中文本" : "全篇内容"}
+            </Button>
+
+            <Box style={{ height: 1, backgroundColor: "#f1f5f9", margin: "3px 0" }} />
+
+            <Button
+              size="xs"
+              variant="subtle"
+              color="blue"
+              justify="flex-start"
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) onTriggerAiAction?.("polish", txt);
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
+            >
+              ✨ 文学润色
+            </Button>
+
+            <Button
+              size="xs"
+              variant="subtle"
+              color="teal"
+              justify="flex-start"
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) onTriggerAiAction?.("expand", txt);
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
+            >
+              🌱 场景扩写
+            </Button>
+
+            <Button
+              size="xs"
+              variant="subtle"
+              color="orange"
+              justify="flex-start"
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) onTriggerAiAction?.("shorten", txt);
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
+            >
+              ✂️ 精简去水
+            </Button>
+
+            <Button
+              size="xs"
+              variant="subtle"
+              color="grape"
+              justify="flex-start"
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) onTriggerAiAction?.("tone", txt);
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
+            >
+              🎭 语气重塑
+            </Button>
+
+            <Button
+              size="xs"
+              variant="subtle"
+              color="red"
+              justify="flex-start"
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) onTriggerAiAction?.("critique", txt);
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
+            >
+              🔍 逻辑审查
+            </Button>
+
+            <Box style={{ height: 1, backgroundColor: "#f1f5f9", margin: "3px 0" }} />
+
+            <Button
+              size="xs"
+              variant="subtle"
+              color="indigo"
+              justify="flex-start"
+              onClick={() => {
+                const txt = contextMenu.selectedText || content;
+                if (txt) onTriggerAiAction?.("custom_focus", txt);
+                setContextMenu(null);
+              }}
+              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
+            >
+              💬 自定义调整诉求...
+            </Button>
+          </Stack>
+        </Paper>
+      )}
 
       <DrawerVersionHistory
         opened={versionDrawerOpened}

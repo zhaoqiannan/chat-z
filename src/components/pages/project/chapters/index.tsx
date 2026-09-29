@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Box, LoadingOverlay, Modal, Button, Group, Stack, Text } from "@mantine/core";
-import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload } from "@/rest/chapter";
+import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import TreePanel from "./tree-panel";
@@ -32,11 +32,19 @@ export default function ChaptersPage() {
   const saveEditorRef = useRef<(() => Promise<boolean>) | null>(null);
 
   const [treeCollapsed, setTreeCollapsed] = useState(true);
-  const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
+  const [aiPanelCollapsed, setAiPanelCollapsed] = useState(true);
   const [aiPanelWidth, setAiPanelWidth] = useState(360);
   const [isResizingAiPanel, setIsResizingAiPanel] = useState(false);
   const [selectedTextForAi, setSelectedTextForAi] = useState("");
-  const [insertTextPayload, setInsertTextPayload] = useState<{ text: string; timestamp: number } | null>(null);
+  const [insertTextPayload, setInsertTextPayload] = useState<{ text: string; targetSnippet?: string; timestamp: number } | null>(null);
+  const [locateSnippetPayload, setLocateSnippetPayload] = useState<{ snippet: string; timestamp: number } | null>(null);
+  const [externalAiTask, setExternalAiTask] = useState<{
+    actionType: string;
+    selectedText: string;
+    customPrompt?: string;
+    timestamp: number;
+  } | null>(null);
+  const [activeTasks, setActiveTasks] = useState<ActiveAiTask[]>([]);
 
   const [detailModalOpened, setDetailModalOpened] = useState(false);
   const [modalDetailTarget, setModalDetailTarget] = useState<ChapterItem | null>(null);
@@ -211,9 +219,39 @@ export default function ChaptersPage() {
     }
   };
 
-  const handleAcceptAiText = (text: string) => {
-    setInsertTextPayload({ text, timestamp: Date.now() });
+  const handleAcceptAiText = (text: string, targetSnippet?: string) => {
+    setInsertTextPayload({ text, targetSnippet, timestamp: Date.now() });
     setSelectedTextForAi("");
+    if (targetSnippet && targetSnippet.trim()) {
+      const clean = targetSnippet.trim();
+      setActiveTasks((prev) => prev.filter((t) => t.snippet !== clean));
+    }
+  };
+
+  const handleTriggerAiAction = (actionType: string, selectedText: string, customPrompt?: string) => {
+    const tempId = -Date.now() - Math.floor(Math.random() * 1000);
+    const cleanSnippet = selectedText ? selectedText.trim() : "";
+
+    if (cleanSnippet) {
+      setActiveTasks((prev) => [
+        ...prev.filter((t) => t.snippet !== cleanSnippet),
+        {
+          id: tempId,
+          actionType,
+          snippet: cleanSnippet,
+          colorIndex: prev.length % HIGHLIGHT_COLORS.length,
+          isPending: true,
+        },
+      ]);
+    }
+
+    setExternalAiTask({
+      actionType,
+      selectedText,
+      customPrompt,
+      timestamp: Date.now(),
+    });
+    setAiPanelCollapsed(false);
   };
 
   return (
@@ -249,11 +287,16 @@ export default function ChaptersPage() {
         workId={workId}
         chapter={activeChapter}
         treeCollapsed={treeCollapsed}
+        aiPanelCollapsed={aiPanelCollapsed}
+        aiPanelWidth={aiPanelWidth}
         onToggleTree={() => setTreeCollapsed(!treeCollapsed)}
         onUpdateChapter={handleUpdate}
         onSelectionChange={(text) => setSelectedTextForAi(text)}
+        onTriggerAiAction={handleTriggerAiAction}
+        activeTasks={activeTasks}
         onToggleAiPanel={() => setAiPanelCollapsed(!aiPanelCollapsed)}
         insertTextPayload={insertTextPayload}
+        locateSnippetPayload={locateSnippetPayload}
         onDirtyChange={setIsChapterDirty}
         onDeleteChapter={handleDelete}
         saveRef={saveEditorRef}
@@ -279,12 +322,14 @@ export default function ChaptersPage() {
           chapterId={activeChapter.id}
           currentContent={activeChapter.content || ""}
           selectedText={selectedTextForAi}
+          externalTask={externalAiTask}
           collapsed={aiPanelCollapsed}
           width={aiPanelWidth}
           isResizing={isResizingAiPanel}
           onToggleCollapse={() => setAiPanelCollapsed(!aiPanelCollapsed)}
           onClearSelection={() => setSelectedTextForAi("")}
           onAcceptText={handleAcceptAiText}
+          onLocateSnippet={(snippet) => setLocateSnippetPayload({ snippet, timestamp: Date.now() })}
         />
       )}
 

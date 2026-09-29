@@ -152,10 +152,17 @@ export interface UpdateOutlinePayload extends Partial<CreateOutlinePayload> {
 export interface PlotDeductionStep {
   stepIndex?: number;
   title: string;
+  purpose?: string;
+  cause?: string;
+  action?: string;
+  result?: string;
+  characterDecision?: string;
+  stateChange?: string[] | string;
+  nextCondition?: string | null;
   event: string;
-  twist?: string;
-  nextGoal?: string;
-  suspense?: string;
+  twist?: string | null;
+  nextGoal?: string | null;
+  suspense?: string | null;
   characterAction?: string;
   estimatedWords?: number;
   // 兼容旧字段
@@ -173,6 +180,7 @@ export interface PlotDeductionPath {
 
 export interface PlotDeductionResult {
   paths: PlotDeductionPath[];
+  missingConditions?: string[];
 }
 
 export interface PlotDeductionPayload {

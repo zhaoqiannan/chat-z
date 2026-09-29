@@ -37,23 +37,21 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限访问" }, { status: 403 });
     }
 
-    // 计算步数预算：根据预估字数自动折算，或使用指定的 stepCount
-    let effectiveSteps = 3;
+    // 计算参考步数：若用户未指定，则根据复杂度给大模型建议 2~4 步，不再硬性绑死
+    let suggestedSteps = 3;
     if (typeof rawStepCount === "number" && rawStepCount > 0) {
-      effectiveSteps = rawStepCount;
+      suggestedSteps = rawStepCount;
     } else {
       const words = Number(estimatedWords) || 10000;
-      if (words <= 3000) effectiveSteps = 1;
-      else if (words <= 6000) effectiveSteps = 2;
-      else if (words <= 12000) effectiveSteps = 3;
-      else if (words <= 20000) effectiveSteps = 4;
-      else effectiveSteps = Math.min(6, Math.max(3, Math.round(words / 4000)));
+      if (words <= 3000) suggestedSteps = 2;
+      else if (words <= 8000) suggestedSteps = 3;
+      else suggestedSteps = 4;
     }
 
-    const wordsPerStep = Math.round((Number(estimatedWords) || 10000) / effectiveSteps);
+    const wordsPerStep = Math.round((Number(estimatedWords) || 10000) / suggestedSteps);
 
     // 查询关联角色与动态标签
-    let charContext = "暂无特定人物库，按通用主角与反派推演";
+    let charContext = "暂无特定人物库，请根据常理推演核心参演人物";
     if (Array.isArray(selectedCharacterIds) && selectedCharacterIds.length > 0) {
       const numIds = selectedCharacterIds.map(Number).filter((n) => !isNaN(n));
       if (numIds.length > 0) {
@@ -94,67 +92,74 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       ? rulesList.slice(0, 3).map((r) => `【${r.name}】(${r.category}): ${r.mechanisms || r.description || ""}`).join("\n")
       : "";
 
-    const systemPrompt = `你是一位精通戏剧冲突与故事节奏的小说剧情推演大师。
-你的核心任务是：根据作者给出的【起点剧情 A】和【目标终点 B】，在两者之间推演出【逻辑严密、细节真实、因果严丝合缝】的发展演进过程。
+    const systemPrompt = `你是一名专业的小说剧情架桥与因果推演助手。
+你的任务不是替作者编造脱离设定的套路故事，而是帮助作者解决“从【起点剧情 A】如何自然、合乎因果逻辑地发展到【目标终点 B】”。
 
-小说信息：
-- 书名：《${work.title}》
-- 题材：${work.tag || "都市/剧情"}
+【推演核心原则】：
+1. 【补齐因果，而非无病呻吟】：分析 A 与 B 之间缺少哪些必要的状态变化（信息获取、人物关系演变、目标转移、资源获取、认知改变、决策触发等），构建最小因果桥梁。
+2. 【最小必要事件原则】：每个新增事件都必须承担明确推进作用（提供必要信息/改变人物关系/打破僵局）。如果删除该步骤 A➔B 仍能成立，则不要加入多余水剧情。
+3. 【人物行动动机驱动】：角色行动不能为了“剧情需要”而强行动作，必须基于人物的目标、利益、恐惧、性格、已知信息与外部压力。
+4. 【禁止剧情捷径】：严禁依赖“凭空冒出的神秘证据”、“机械降神”、“反派主动自曝认罪”等无依据捷径解决因果缺口。
+5. 【不预设反派与高潮】：剧情节奏由 A、B 与上下文决定。若只是日常过渡或线索调查，保持其自然节奏，严禁强行制造全场轰动或狗血高潮。
+6. 【转折与伏笔均为可选】：twist（突发变故）和 suspense（伏笔线索）仅在自然合理时提供，绝非每步必填。
+7. 【方案数量灵活】：若 A➔B 存在唯一自然路径，提供 1~2 套方案；若存在不同发展取向，最多提供 3 套。
 
-参考规则与世界观背景：
-${ruleContext || "现代/通用商业都市"}
-${noteContext || "暂无特定设定笔记"}
+【字段输出要求】：
+- title: 阶段标题（如：“核对旧档案中的时间差”）
+- purpose: 本阶段解决的核心缺口（如：“解决主角对账本真实性的怀疑”）
+- cause: 为什么发生此阶段（因）
+- action: 核心角色具体做了什么（行）
+- result: 产生的结果与局势变化（果）
+- characterDecision: 角色为什么做出该决策与应对
+- stateChange: 状态变化数组（如：["信息：未知 ➔ 产生怀疑"]）
+- event: 完整的剧情发生与互动经过（结合 cause、action 与 result，80-160字）
+- nextCondition: 下一步继续推进需满足的前提条件
+- twist: 可选突发变故（无则设为 null）
+- suspense: 可选伏笔细节（无则设为 null）
+- estimatedWords: 预估篇幅字数
 
-参演人物背景与性格动机（推演中必须深度结合这些人物的具体行动与对话互动）：
-${charContext}
-
-推演核心要求（⚠️ 严禁假大空的通用套话，严禁出现“暗中搜集情报/顺藤摸瓜/面临潜在阻力”等空洞模版）：
-1. 必须从【起点 A】的当下具体局势出发，结合参演人物的具体身份与性格（谁做了什么、说了什么、遇到了什么具体的现实阻碍）；
-2. 必须一步一步推进到【终点 B】的达成，中间的转折与冲突必须合情合理、有血有肉；
-3. 输出 3 套不同戏剧风味的演进路线，每条路线拆分为刚好 ${effectiveSteps} 个递进步骤（每步大约 ${wordsPerStep} 字）：
-   - 【稳健因果流】：扎实的现实博弈与筹备，利用商业手段、人脉、证据或规则步步为营达成 B；
-   - 【戏剧冲突流】：反派狗急跳墙施加更猛烈的阻击，主角借力打力、公开对峙引爆高潮达成 B；
-   - 【巧妙反转流】：反派以为抓住了主角软肋，实则是主角故意布下的阳谋，反将一军达成 B。
-
-每步字段要求：
-- stepIndex: 步骤序号 (1, 2, ...)
-- title: 具体的场景事件标题（如：“商会晚宴的暗流交锋”、“调取二十年前的第一代专利档案”）
-- event: 具体剧情经过（写明在什么场景、谁做了什么具体的行动、双方发生了怎样的交锋，80-150字）
-- twist: 意外转折/冲突点（对方的具体反击或突发变故，30-60字）
-- nextGoal: 下一步行动计划（针对当前状况，角色接下来的明确动作，20-40字）
-- suspense: 伏笔或细节线索（本阶段埋下的关键伏笔，20-40字）
-- characterAction: 核心人物的关键决策与神态行动
-
-请严格输出为以下 JSON 格式：
+请严格输出为以下合法 JSON 格式，绝不输出任何 Markdown 标记或多余文字：
 {
   "paths": [
     {
       "id": 1,
-      "title": "方案名称（如：稳健因果·步步为营）",
-      "style": "稳健因果",
-      "summary": "一句话核心推进逻辑",
+      "title": "方案标题（如：抽丝剥茧·稳步验证）",
+      "style": "自然因果",
+      "summary": "一句话核心因果演进逻辑",
       "steps": [
         {
           "stepIndex": 1,
-          "title": "具体步骤标题",
-          "event": "具体翔实的剧情发生经过...",
-          "twist": "具体的冲突或阻碍...",
-          "nextGoal": "明确的下一步目标...",
-          "suspense": "留下的线索...",
-          "characterAction": "人物的具体反应与决策...",
+          "title": "阶段标题",
+          "purpose": "解决的因果缺口",
+          "cause": "起因",
+          "action": "具体行动",
+          "result": "阶段结果",
+          "characterDecision": "角色决策动因",
+          "stateChange": ["信息：未知 ➔ 产生怀疑"],
+          "event": "剧情发生经过...",
+          "nextCondition": "下一步前提条件",
+          "twist": null,
+          "suspense": null,
           "estimatedWords": ${wordsPerStep}
         }
       ]
     }
-  ]
-}
-注意：只输出合法 JSON，不要附带任何 Markdown 说明。`;
+  ],
+  "missingConditions": []
+}`;
 
-    const userMessage = `请根据以下信息推演从 A 发展到 B 的具体过程：
+    const userMessage = `【作品】：书名《${work.title}》（题材：${work.tag || "剧情小说"}）
+【参考世界观】：${ruleContext || "通用现实/设定背景"}
+【参考笔记】：${noteContext || "无"}
+【参演人物档案】：
+${charContext}
+
 【起点剧情 A（现状）】：${startPoint.trim()}
 【目标终点 B（预期）】：${targetPoint.trim()}
-【篇幅预算】：约 ${estimatedWords} 字（拆解为 ${effectiveSteps} 个阶段，每阶段约 ${wordsPerStep} 字）
-【推演偏好】：${pacePreference}`;
+【篇幅预算】：约 ${estimatedWords} 字（建议规划 ${suggestedSteps} 个关键因果阶段，可根据实际因果需要灵活调整）
+【演进偏好与要求】：${pacePreference || "自然演进"}
+
+请进行因果架桥分析，输出严密、符合逻辑的剧情演进路径 JSON：`;
 
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
@@ -162,8 +167,8 @@ ${charContext}
     ];
 
     const rawResponse = await callCloudflareAi(env.AI, messages, {
-      temperature: 0.7,
-      maxTokens: 3500,
+      temperature: 0.65,
+      maxTokens: 4096,
     });
 
     const cleaned = cleanNovelStoryText(rawResponse);
@@ -181,7 +186,6 @@ ${charContext}
     }
 
     if (!parsed || !Array.isArray(parsed.paths) || parsed.paths.length === 0) {
-      // 深度根据 A 和 B 生成具体且高质量的动态兜底路线
       const startBrief = startPoint.trim().slice(0, 30);
       const targetBrief = targetPoint.trim().slice(0, 30);
 
@@ -189,78 +193,84 @@ ${charContext}
         paths: [
           {
             id: 1,
-            title: "稳健因果·步步为营",
-            style: "稳健因果",
-            summary: `从【${startBrief}】出发，通过实打实的证据与人脉铺垫，稳健推进至【${targetBrief}】`,
-            steps: effectiveSteps === 1 ? [
+            title: "自然因果·稳步推进",
+            style: "自然因果",
+            summary: `从【${startBrief}】出发，通过关键信息验证与合理行动，自然推进至【${targetBrief}】`,
+            steps: suggestedSteps <= 2 ? [
               {
                 stepIndex: 1,
-                title: "局势转化与彻底反击",
-                event: `承接【${startPoint}】，主角趁胜追击，当众拿出无可辩驳的核心证据与早年奋斗底牌，正面击溃对方的质疑，顺理成章达成【${targetPoint}】。`,
-                twist: "对方试图做最后的负隅顽抗，却反被主角当场抓住更大破绽。",
-                nextGoal: "乘胜追击，巩固胜利果实并彻底奠定话语权。",
-                suspense: "这次正面反击让在场所有大佬对主角的真正底蕴刮目相看。",
-                characterAction: "沉稳应对，不急不躁，用无可挑剔的实力彻底服众。",
-                estimatedWords: wordsPerStep,
+                title: "核实关键线索与局势转化",
+                purpose: "打破起点僵局，获取推进所需的关键支持或事实证据",
+                cause: `承接起点【${startBrief}】遗留的未解疑问与现实阻力`,
+                action: "角色根据掌握的有限线索，主动找到核心知情人或调取记录进行交叉比对",
+                result: "确认了关键因果关系，掌握了主动权",
+                characterDecision: "审时度势，选择以最稳妥的方式验证事实而非盲目行动",
+                stateChange: ["信息：模糊怀疑 ➔ 确凿掌握", "局势：被动 ➔ 明确方向"],
+                event: `在【${startPoint}】之后，角色没有盲目冒进，而是针对核心疑点展开核实，通过可信渠道锁定了关键事实，为后续推进奠定扎实基础。`,
+                nextCondition: `直接依据确凿结果采取行动，达成【${targetPoint}】`,
+                twist: null,
+                suspense: null,
+                estimatedWords: Math.round((Number(estimatedWords) || 10000) / 2),
+              },
+              {
+                stepIndex: 2,
+                title: "采取决定性行动并达成目标",
+                purpose: "根据已具备的前置条件顺理成章达成目标状态 B",
+                cause: "前置核实工作已就绪，时机成熟",
+                action: `角色在合适场合拿出准备充分的方案与结果，顺畅推进至【${targetPoint}】`,
+                result: `成功达成预期目标【${targetBrief}】`,
+                characterDecision: "果断执行，彻底解决起点遗留的核心问题",
+                stateChange: ["目标：推进中 ➔ 顺利达成"],
+                event: `结合前期积累的成果与各方认同，角色从容化解了最后的阻力，所有因果逻辑水到渠成，完美实现【${targetPoint}】。`,
+                nextCondition: null,
+                twist: null,
+                suspense: null,
+                estimatedWords: Math.round((Number(estimatedWords) || 10000) / 2),
               }
             ] : [
               {
                 stepIndex: 1,
-                title: "稳住局面与掌握核心证据",
-                event: `在经历【${startPoint}】后，现场舆论开始扭转。主角并未立刻穷追猛打，而是安排关键助手暗中锁定对方的违规证据链，同时联络行业权威第三方进行公证，为下一步铺平道路。`,
-                twist: "对手暗中动用商圈人脉试图联合封杀，企图压制真相传播。",
-                nextGoal: "拿到当年关键的第一手档案，准备在重要公开场合一次性引爆。",
-                suspense: "对手的后台似乎牵扯到了更高的利益集团。",
-                characterAction: "展现出成熟企业家的沉稳魄力，稳步布局。",
+                title: "发现异常与确定调查切入点",
+                purpose: "使角色意识到当前状态与目标之间的实质差距并找到切入点",
+                cause: `起点【${startBrief}】造成的直接影响与信息缺失`,
+                action: "梳理现有线索，敏锐捕捉到关键漏洞或未被注意的细节",
+                result: "明确了下一步行动的目标与求证方向",
+                characterDecision: "不轻信表面结论，保持谨慎客观的态度",
+                stateChange: ["认知：未察觉 ➔ 发现关键切入点"],
+                event: `在经历【${startPoint}】后，角色仔细比对前后细节，发现了此前被忽略的矛盾点，决定顺此线索深入探查。`,
+                nextCondition: "需要获取第一手资料或关键人物口供",
+                twist: null,
+                suspense: null,
                 estimatedWords: wordsPerStep,
               },
               {
                 stepIndex: 2,
-                title: "公开对峙与揭秘传奇背景",
-                event: `在随后的行业高端峰会上，对手再次挑起事端。主角从容登台，不仅拿出当年白手起家的一张张老图纸与真实专利链条，更有力戳穿对手的所有谎言，全场轰动，完美实现【${targetPoint}】。`,
-                twist: "对手当场语塞，同盟阵营瞬间瓦解倒戈。",
-                nextGoal: "借此契机全面拓展自身商业版图。",
-                suspense: "这场反击战也引来了顶级投资机构的深度关注。",
-                characterAction: "气场全开，用二十年的艰辛奋斗史赢得全场起立鼓掌。",
-                estimatedWords: wordsPerStep,
-              }
-            ],
-          },
-          {
-            id: 2,
-            title: "戏剧冲突·当众打脸",
-            style: "戏剧冲突",
-            summary: `引诱对手狂妄出手，在最高潮处当众揭穿，达成【${targetBrief}】`,
-            steps: effectiveSteps === 1 ? [
-              {
-                stepIndex: 1,
-                title: "高潮反击与绝地翻盘",
-                event: `在【${startPoint}】的基础上，对手不甘失败再次设局挑衅，主角将计就计，在所有媒体与行业巨头面前公开揭晓早年白手起家的创业真相，以绝对实力完成【${targetPoint}】。`,
-                twist: "对手原本以为胜券在握，却不知自己彻底踩入死穴。",
-                nextGoal: "一举奠定行业龙头地位。",
-                suspense: "对方背后的资本方紧急宣布与其切割割席。",
-                characterAction: "言辞犀利，掌控全场节奏。",
-                estimatedWords: wordsPerStep,
-              }
-            ] : [
-              {
-                stepIndex: 1,
-                title: "假意示弱与引蛇出洞",
-                event: `在【${startPoint}】之后，主角故意对外界的打压保持低调，让对手误以为主角已无还手之力而疯狂加码挑衅，在媒体前肆意抹黑。`,
-                twist: "对手得意忘形，当众夸大其词说漏了关键内幕。",
-                nextGoal: "搜集所有公开抹黑的录音与直播证据，准备绝杀。",
-                suspense: "甚至有神秘老友暗中为主角送来关键的原始公证文件。",
-                characterAction: "胸有成竹，静待最佳反击时刻到来。",
+                title: "突破阻碍与获取核心支撑",
+                purpose: "补齐达成目标 B 所必需的关键证据或人际支持",
+                cause: "深入调查触及到实际阻力或既得利益方的防备",
+                action: "角色利用合理手段周旋，成功取得关键支持与核心证据",
+                result: "彻底补全了达成目标所需的核心条件",
+                characterDecision: "在原则范围内灵活变通，化解沟通阻力",
+                stateChange: ["资源：匮乏 ➔ 掌握关键支撑"],
+                event: `在推进过程中遭遇了合理的阻碍，角色凭借沉着判断化解了分歧，顺利拿到足以定论的关键支撑。`,
+                nextCondition: "在关键节点正式公开或落实成果",
+                twist: null,
+                suspense: null,
                 estimatedWords: wordsPerStep,
               },
               {
-                stepIndex: 2,
-                title: "全网直播反转与揭开身世",
-                event: `在万众瞩目的发布会现场，主角正面现身，大屏幕直接切出当年从地摊、小作坊一步一个脚印白手起家的铁证，当场重重打脸对手，达成【${targetPoint}】。`,
-                twist: "对手在镜头前瞬间脸色惨白，声名扫地。",
-                nextGoal: "全面启动新项目，将危机转化为巨大的品牌声量。",
-                suspense: "主角早年的某位故人通过直播认出了主角的身份。",
-                characterAction: "坦荡自豪地讲述奋斗岁月，赢得所有人的敬重。",
+                stepIndex: 3,
+                title: "因果闭环与目标达成",
+                purpose: "全面达成目标状态 B 并稳固新局势",
+                cause: "所有必要前置条件均已齐备",
+                action: `正面推进并落实最终决议，使所有人认可结果`,
+                result: `顺利达成【${targetPoint}】并形成因果闭环`,
+                characterDecision: "沉着收官，巩固来之不易的发展成果",
+                stateChange: ["局势：悬而未决 ➔ 全面达成目标"],
+                event: `所有线索与准备在此刻汇聚，角色以无可辩驳的事实与扎实的准备达成目标，全篇因果严丝合缝，圆满实现【${targetPoint}】。`,
+                nextCondition: null,
+                twist: null,
+                suspense: null,
                 estimatedWords: wordsPerStep,
               }
             ],

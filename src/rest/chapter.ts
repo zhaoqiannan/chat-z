@@ -133,6 +133,24 @@ export interface ContextTagOption {
   desc?: string;
 }
 
+export interface ActiveAiTask {
+  id: string | number;
+  actionType: string;
+  snippet: string;
+  colorIndex: number;
+  isPending?: boolean;
+}
+
+export const HIGHLIGHT_COLORS = [
+  { bg: "rgba(147, 197, 253, 0.45)", border: "#60a5fa", tagBg: "#eff6ff", tagText: "#1d4ed8", name: "天蓝" },
+  { bg: "rgba(167, 243, 208, 0.50)", border: "#4ade80", tagBg: "#f0fdf4", tagText: "#15803d", name: "青翠" },
+  { bg: "rgba(253, 230, 138, 0.55)", border: "#facc15", tagBg: "#fefce8", tagText: "#a16207", name: "暖金" },
+  { bg: "rgba(244, 114, 182, 0.40)", border: "#f472b6", tagBg: "#fdf2f8", tagText: "#be185d", name: "玫粉" },
+  { bg: "rgba(196, 181, 253, 0.50)", border: "#a78bfa", tagBg: "#faf5ff", tagText: "#6b21a8", name: "紫罗兰" },
+  { bg: "rgba(253, 186, 116, 0.50)", border: "#fb923c", tagBg: "#fff7ed", tagText: "#c2410c", name: "日落橙" },
+  { bg: "rgba(94, 234, 212, 0.50)",  border: "#2dd4bf", tagBg: "#f0fdfa", tagText: "#0f766e", name: "薄荷青" },
+];
+
 export interface ChapterAiChatItem {
   id: number;
   workId: number;

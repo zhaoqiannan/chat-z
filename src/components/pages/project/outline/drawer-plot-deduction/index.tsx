@@ -204,7 +204,7 @@ export default function DrawerPlotDeduction({
             deductionStepIndex: stepNum,
             event: stepContent,
             twist: step.twist || step.keyConflict || "",
-            nextGoal: step.nextGoal || "",
+            nextGoal: step.nextCondition || step.nextGoal || "",
             suspense: step.suspense || "",
             content: stepContent,
             wordCountEstimate: step.estimatedWords || Math.round((Number(estimatedWords) || 10000) / path.steps.length),
@@ -251,83 +251,93 @@ export default function DrawerPlotDeduction({
       onClose={onClose}
       title={
         <Group gap="xs">
-          <FiZap size={16} color="#0284c7" />
-          <Text fw={700} fz={16}>
-            A ➔ B 跨度剧情推演工作台
+          <FiZap size={16} color="#2563eb" />
+          <Text fw={700} fz={16} c="#0f172a">
+            剧情因果架桥与推演工作台
           </Text>
         </Group>
       }
       position="right"
       size="55vw"
+      styles={{
+        header: { borderBottom: "1px solid #e2e8f0", paddingBottom: 12 },
+        body: { padding: 16, backgroundColor: "#f8fafc" },
+      }}
     >
       <Stack gap="md" pb="xl">
-        {/* 输入表单 */}
-        <Paper p="sm" withBorder radius="md" bg="gray.0">
-          <Stack gap="xs">
+        {/* 输入表单 - 极简线条风卡片 */}
+        <Paper p="md" radius="md" style={{ border: "1px solid #e2e8f0", backgroundColor: "#ffffff" }}>
+          <Stack gap="sm">
             <Textarea
               label="起点剧情 A（现状 / 刚发生的事）"
-              placeholder="例如：林舟刚被逐出师门，身负重伤逃入荒野..."
+              placeholder="例如：主角刚发现旧档案中的时间戳与证词有出入，目前尚未公开..."
               required
               autosize
               minRows={2}
               maxRows={4}
               value={startPoint}
               onChange={(e) => setStartPoint(e.currentTarget.value)}
+              styles={{ input: { borderColor: "#cbd5e1" } }}
             />
 
             <Textarea
               label="目标终点 B（预期结果 / 想要达到的阶段）"
-              placeholder="例如：林舟查清线索并拜入天下第一宗门..."
+              placeholder="例如：主角在听证会上以确凿证据完成闭环，各方达成共识..."
               required
               autosize
               minRows={2}
               maxRows={4}
               value={targetPoint}
               onChange={(e) => setTargetPoint(e.currentTarget.value)}
+              styles={{ input: { borderColor: "#cbd5e1" } }}
             />
 
             <Textarea
-              label="发展路径期望 / 演进风格描述（选填）"
-              placeholder="例如：平稳过渡，中间经历一些温馨小故事，角色感情升温；或：快节奏多方博弈，充满机锋对话..."
+              label="演进偏好与要求（选填）"
+              placeholder="例如：侧重信息验证与人脉暗流，避免剧烈武力冲突；或：角色心理博弈与试探..."
               autosize
               minRows={2}
-              maxRows={4}
+              maxRows={3}
               value={pathPreference}
               onChange={(e) => setPathPreference(e.currentTarget.value)}
+              styles={{ input: { borderColor: "#cbd5e1" } }}
             />
 
             <Group grow align="flex-start">
               <NumberInput
-                label="预期中间篇幅 (字)"
-                description="AI 将据此自动拆解合理的递进节奏"
+                label="预期总篇幅 (字)"
+                description="AI 据此规划各因果阶段篇幅"
                 min={1000}
                 max={50000}
                 step={1000}
                 value={estimatedWords}
                 onChange={(val) => setEstimatedWords(Number(val) || 10000)}
+                styles={{ input: { borderColor: "#cbd5e1" } }}
               />
 
               <MultiSelect
-                label="关联参演角色"
-                placeholder="选择参与推演的角色..."
+                label="关联参演人物"
+                placeholder="选择参与推演的核心角色..."
                 data={charOptions}
                 value={selectedCharIds}
                 onChange={setSelectedCharIds}
                 searchable
                 clearable
-                leftSection={<FiUser size={14} />}
+                leftSection={<FiUser size={14} color="#64748b" />}
+                styles={{ input: { borderColor: "#cbd5e1" } }}
               />
             </Group>
 
             <MultiSelect
               label="关联参考设定/笔记"
-              placeholder="选择需遵守的世界观或设定笔记..."
+              placeholder="选择需遵守的世界观设定或设定笔记..."
               data={noteOptions}
               value={selectedNoteIds}
               onChange={setSelectedNoteIds}
               searchable
               clearable
-              leftSection={<FiFileText size={14} />}
+              leftSection={<FiFileText size={14} color="#64748b" />}
+              styles={{ input: { borderColor: "#cbd5e1" } }}
             />
 
             <Button
@@ -337,22 +347,23 @@ export default function DrawerPlotDeduction({
               onClick={handleStartDeduction}
               loading={loading}
               mt="xs"
+              style={{ fontWeight: 600 }}
             >
-              开始推演桥接路径
+              开始推演因果桥梁
             </Button>
           </Stack>
         </Paper>
 
-        {/* 推演结果展示区 */}
+        {/* 推演结果展示区 - 极简线条风 */}
         {deductionPaths.length > 0 && (
           <Stack gap="sm">
             <Flex justify="space-between" align="center">
-              <Text fw={700} fz={14} c="#0f172a">
-                推演生成的演进方案（点击切换方案）：
+              <Text fw={700} fz={14} c="#1e293b">
+                生成的演进路径（点击切换方案）：
               </Text>
               <Button
                 size="compact-xs"
-                variant={isEditingPath ? "filled" : "light"}
+                variant={isEditingPath ? "filled" : "outline"}
                 color="indigo"
                 leftSection={<FiEdit2 size={12} />}
                 onClick={() => setIsEditingPath((v) => !v)}
@@ -371,6 +382,10 @@ export default function DrawerPlotDeduction({
                     variant={isSelected ? "filled" : "default"}
                     color={isSelected ? "blue" : "gray"}
                     onClick={() => setSelectedPathId(path.id)}
+                    style={{
+                      border: isSelected ? "none" : "1px solid #cbd5e1",
+                      borderRadius: 6,
+                    }}
                   >
                     {path.title}
                   </Button>
@@ -379,11 +394,11 @@ export default function DrawerPlotDeduction({
             </Group>
 
             {selectedPath && (
-              <Paper p="md" withBorder radius="md" bg="#ffffff">
+              <Paper p="md" radius="md" style={{ border: "1px solid #cbd5e1", backgroundColor: "#ffffff" }}>
                 <Flex justify="space-between" align="center" mb="xs">
                   <Group gap="xs" style={{ flex: 1 }}>
-                    <Badge variant="light" color="blue">
-                      {selectedPath.style || "演进方案"}
+                    <Badge variant="outline" color="blue" size="sm" radius="xs">
+                      {selectedPath.style || "自然因果"}
                     </Badge>
                     {isEditingPath ? (
                       <TextInput
@@ -396,7 +411,7 @@ export default function DrawerPlotDeduction({
                         }}
                       />
                     ) : (
-                      <Text fw={700} fz={15}>
+                      <Text fw={700} fz={15} c="#0f172a">
                         {selectedPath.title}
                       </Text>
                     )}
@@ -416,7 +431,7 @@ export default function DrawerPlotDeduction({
 
                 {isEditingPath ? (
                   <Textarea
-                    label="方案总述"
+                    label="方案核心推进逻辑"
                     size="xs"
                     autosize
                     minRows={2}
@@ -428,103 +443,216 @@ export default function DrawerPlotDeduction({
                     mb="md"
                   />
                 ) : (
-                  <Text fz={13} c="dimmed" mb="md" style={{ lineHeight: 1.6 }}>
-                    <b>核心推进逻辑：</b> {selectedPath.summary}
-                  </Text>
+                  <Box p="xs" mb="md" style={{ backgroundColor: "#f8fafc", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+                    <Text fz={13} c="#334155" style={{ lineHeight: 1.6 }}>
+                      <span style={{ fontWeight: 600, color: "#0f172a" }}>核心因果逻辑：</span> {selectedPath.summary}
+                    </Text>
+                  </Box>
                 )}
 
-                {/* 步骤列表 */}
-                <Stack gap="xs">
-                  {selectedPath.steps.map((step, sIdx) => (
-                    <Paper key={sIdx} p="sm" withBorder radius="sm" bg="gray.0">
-                      <Flex justify="space-between" align="center" mb={6}>
-                        <Group gap="xs" style={{ flex: 1 }}>
-                          <Badge variant="filled" color="indigo" size="xs">
-                            第 {sIdx + 1} 阶段
-                          </Badge>
-                          {isEditingPath ? (
+                {/* 步骤列表 - 简洁线条卡片 */}
+                <Stack gap="sm">
+                  {selectedPath.steps.map((step, sIdx) => {
+                    const stateChanges = Array.isArray(step.stateChange)
+                      ? step.stateChange
+                      : typeof step.stateChange === "string" && step.stateChange
+                      ? [step.stateChange]
+                      : [];
+
+                    return (
+                      <Paper
+                        key={sIdx}
+                        p="sm"
+                        radius="sm"
+                        style={{
+                          border: "1px solid #e2e8f0",
+                          backgroundColor: "#ffffff",
+                          boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                        }}
+                      >
+                        <Flex justify="space-between" align="center" mb={8} style={{ borderBottom: "1px solid #f1f5f9", paddingBottom: 6 }}>
+                          <Group gap="xs" style={{ flex: 1 }}>
+                            <Badge variant="light" color="indigo" size="sm" radius="xs">
+                              第 {sIdx + 1} 阶段
+                            </Badge>
+                            {isEditingPath ? (
+                              <TextInput
+                                size="xs"
+                                style={{ flex: 1, maxWidth: 280 }}
+                                value={step.title}
+                                onChange={(e) => {
+                                  const val = e.currentTarget.value;
+                                  handleUpdateCurrentPath((prev) => {
+                                    const steps = [...prev.steps];
+                                    steps[sIdx] = { ...steps[sIdx], title: val };
+                                    return { ...prev, steps };
+                                  });
+                                }}
+                              />
+                            ) : (
+                              <Text fz={13} fw={700} c="#0f172a">
+                                {step.title}
+                              </Text>
+                            )}
+                          </Group>
+
+                          {step.estimatedWords && (
+                            <Badge variant="outline" color="gray" size="xs" radius="xs">
+                              约 {step.estimatedWords} 字
+                            </Badge>
+                          )}
+                        </Flex>
+
+                        {isEditingPath ? (
+                          <Stack gap={6}>
                             <TextInput
+                              label="本阶段解决缺口 / 目的"
                               size="xs"
-                              style={{ flex: 1, maxWidth: 260 }}
-                              value={step.title}
+                              value={step.purpose || ""}
                               onChange={(e) => {
                                 const val = e.currentTarget.value;
                                 handleUpdateCurrentPath((prev) => {
                                   const steps = [...prev.steps];
-                                  steps[sIdx] = { ...steps[sIdx], title: val };
+                                  steps[sIdx] = { ...steps[sIdx], purpose: val };
                                   return { ...prev, steps };
                                 });
                               }}
                             />
-                          ) : (
-                            <Text fz={13} fw={700} c="#0f172a">
-                              {step.title}
-                            </Text>
-                          )}
-                        </Group>
+                            <Textarea
+                              label="剧情发生与互动经过"
+                              size="xs"
+                              autosize
+                              minRows={2}
+                              value={step.event || step.content || ""}
+                              onChange={(e) => {
+                                const val = e.currentTarget.value;
+                                handleUpdateCurrentPath((prev) => {
+                                  const steps = [...prev.steps];
+                                  steps[sIdx] = { ...steps[sIdx], event: val, content: val };
+                                  return { ...prev, steps };
+                                });
+                              }}
+                            />
+                            <Group grow>
+                              <TextInput
+                                label="触发起因 (Cause)"
+                                size="xs"
+                                value={step.cause || ""}
+                                onChange={(e) => {
+                                  const val = e.currentTarget.value;
+                                  handleUpdateCurrentPath((prev) => {
+                                    const steps = [...prev.steps];
+                                    steps[sIdx] = { ...steps[sIdx], cause: val };
+                                    return { ...prev, steps };
+                                  });
+                                }}
+                              />
+                              <TextInput
+                                label="阶段结果 (Result)"
+                                size="xs"
+                                value={step.result || ""}
+                                onChange={(e) => {
+                                  const val = e.currentTarget.value;
+                                  handleUpdateCurrentPath((prev) => {
+                                    const steps = [...prev.steps];
+                                    steps[sIdx] = { ...steps[sIdx], result: val };
+                                    return { ...prev, steps };
+                                  });
+                                }}
+                              />
+                            </Group>
+                            <TextInput
+                              label="转折变故（选填）"
+                              size="xs"
+                              value={step.twist || ""}
+                              onChange={(e) => {
+                                const val = e.currentTarget.value;
+                                handleUpdateCurrentPath((prev) => {
+                                  const steps = [...prev.steps];
+                                  steps[sIdx] = { ...steps[sIdx], twist: val };
+                                  return { ...prev, steps };
+                                });
+                              }}
+                            />
+                          </Stack>
+                        ) : (
+                          <Stack gap={6}>
+                            {step.purpose && (
+                              <Text fz={12} c="#0369a1">
+                                <span style={{ fontWeight: 600 }}>阶段目的：</span> {step.purpose}
+                              </Text>
+                            )}
 
-                        {step.estimatedWords && (
-                          <Badge variant="outline" color="gray" size="xs">
-                            约 {step.estimatedWords} 字
-                          </Badge>
+                            {/* 因果链条卡片 */}
+                            {(step.cause || step.action || step.result) && (
+                              <Box p={6} style={{ backgroundColor: "#f8fafc", borderRadius: 4, border: "1px solid #f1f5f9" }}>
+                                <Stack gap={3}>
+                                  {step.cause && (
+                                    <Text fz={12} c="#475569">
+                                      <span style={{ fontWeight: 600, color: "#64748b" }}>起因：</span> {step.cause}
+                                    </Text>
+                                  )}
+                                  {step.action && (
+                                    <Text fz={12} c="#475569">
+                                      <span style={{ fontWeight: 600, color: "#64748b" }}>行动：</span> {step.action}
+                                    </Text>
+                                  )}
+                                  {step.result && (
+                                    <Text fz={12} c="#475569">
+                                      <span style={{ fontWeight: 600, color: "#64748b" }}>结果：</span> {step.result}
+                                    </Text>
+                                  )}
+                                </Stack>
+                              </Box>
+                            )}
+
+                            <Text fz={12} c="#334155" style={{ lineHeight: 1.6 }}>
+                              <span style={{ fontWeight: 600, color: "#0f172a" }}>发生经过：</span> {step.event || step.content}
+                            </Text>
+
+                            {step.characterDecision && (
+                              <Text fz={12} c="#475569">
+                                <span style={{ fontWeight: 600, color: "#334155" }}>决策动因：</span> {step.characterDecision}
+                              </Text>
+                            )}
+
+                            {stateChanges.length > 0 && (
+                              <Group gap={6} mt={2}>
+                                <Text fz={11} fw={600} c="#64748b">
+                                  状态变化:
+                                </Text>
+                                {stateChanges.map((sc, scIdx) => (
+                                  <Badge key={scIdx} variant="outline" color="blue" size="xs" radius="xs">
+                                    {sc}
+                                  </Badge>
+                                ))}
+                              </Group>
+                            )}
+
+                            {step.nextCondition && (
+                              <Text fz={12} c="#059669">
+                                <span style={{ fontWeight: 600 }}>下一步前提：</span> {step.nextCondition}
+                              </Text>
+                            )}
+
+                            {/* 仅在存在转折变故时显示 */}
+                            {step.twist && step.twist.trim() && (
+                              <Text fz={12} c="#c2410c">
+                                <span style={{ fontWeight: 600 }}>转折变故：</span> {step.twist}
+                              </Text>
+                            )}
+
+                            {/* 仅在存在伏笔时显示 */}
+                            {step.suspense && step.suspense.trim() && (
+                              <Text fz={12} c="#7c3aed">
+                                <span style={{ fontWeight: 600 }}>伏笔线索：</span> {step.suspense}
+                              </Text>
+                            )}
+                          </Stack>
                         )}
-                      </Flex>
-
-                      {isEditingPath ? (
-                        <Stack gap={4}>
-                          <Textarea
-                            label="发生经过与互动"
-                            size="xs"
-                            autosize
-                            minRows={2}
-                            value={step.event || step.content || ""}
-                            onChange={(e) => {
-                              const val = e.currentTarget.value;
-                              handleUpdateCurrentPath((prev) => {
-                                const steps = [...prev.steps];
-                                steps[sIdx] = { ...steps[sIdx], event: val, content: val };
-                                return { ...prev, steps };
-                              });
-                            }}
-                          />
-                          <TextInput
-                            label="转折冲突点"
-                            size="xs"
-                            value={step.twist || ""}
-                            onChange={(e) => {
-                              const val = e.currentTarget.value;
-                              handleUpdateCurrentPath((prev) => {
-                                const steps = [...prev.steps];
-                                steps[sIdx] = { ...steps[sIdx], twist: val };
-                                return { ...prev, steps };
-                              });
-                            }}
-                          />
-                        </Stack>
-                      ) : (
-                        <Stack gap={4}>
-                          <Text fz={12} c="#334155">
-                            <b>发生经过与互动：</b> {step.event || step.content}
-                          </Text>
-                          {step.twist && (
-                            <Text fz={12} c="orange.8">
-                              <b>转折/推进点：</b> {step.twist}
-                            </Text>
-                          )}
-                          {step.nextGoal && (
-                            <Text fz={12} c="teal.8">
-                              <b>下一步计划：</b> {step.nextGoal}
-                            </Text>
-                          )}
-                          {step.suspense && (
-                            <Text fz={12} c="grape.8">
-                              <b>伏笔/线索：</b> {step.suspense}
-                            </Text>
-                          )}
-                        </Stack>
-                      )}
-                    </Paper>
-                  ))}
+                      </Paper>
+                    );
+                  })}
                 </Stack>
               </Paper>
             )}
