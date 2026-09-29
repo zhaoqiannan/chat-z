@@ -16,6 +16,12 @@ const ensureMaterialsColumns = async (db: any) => {
     await db.run(`ALTER TABLE materials ADD COLUMN ai_summary TEXT`);
   } catch (_) {}
   try {
+    await db.run(`ALTER TABLE materials ADD COLUMN ai_prompt TEXT`);
+  } catch (_) {}
+  try {
+    await db.run(`ALTER TABLE materials ADD COLUMN is_pinned INTEGER DEFAULT 0`);
+  } catch (_) {}
+  try {
     await db.run(`ALTER TABLE materials ADD COLUMN source_url TEXT`);
   } catch (_) {}
   try {
@@ -46,7 +52,12 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "缺少合法的 workId" }, { status: 400 });
     }
 
-    const allList = await db.select().from(materials).where(eq(materials.workId, workId)).orderBy(desc(materials.updatedAt)).all();
+    const allList = await db
+      .select()
+      .from(materials)
+      .where(eq(materials.workId, workId))
+      .orderBy(desc(materials.isPinned), desc(materials.updatedAt))
+      .all();
 
     let filtered = allList;
 
@@ -98,8 +109,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       fileName,
       fileSize,
       aiSummary,
+      aiPrompt,
       sourceUrl,
       extractedLore,
+      isPinned,
       includeInAiContext,
       linkedTarget,
       tags,
@@ -125,8 +138,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       fileName: fileName || title.trim(),
       fileSize: fileSize || null,
       aiSummary: aiSummary || null,
+      aiPrompt: aiPrompt || null,
       sourceUrl: sourceUrl || null,
       extractedLore: extractedLore || null,
+      isPinned: isPinned !== undefined ? (isPinned ? 1 : 0) : 0,
       includeInAiContext: includeInAiContext !== undefined ? (includeInAiContext ? 1 : 0) : 1,
       linkedTarget: linkedTarget || null,
       tags: tags || null,
@@ -164,8 +179,10 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       fileName,
       fileSize,
       aiSummary,
+      aiPrompt,
       sourceUrl,
       extractedLore,
+      isPinned,
       includeInAiContext,
       linkedTarget,
       tags,
@@ -198,8 +215,10 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (fileName !== undefined) updatedData.fileName = fileName;
     if (fileSize !== undefined) updatedData.fileSize = fileSize;
     if (aiSummary !== undefined) updatedData.aiSummary = aiSummary;
+    if (aiPrompt !== undefined) updatedData.aiPrompt = aiPrompt;
     if (sourceUrl !== undefined) updatedData.sourceUrl = sourceUrl;
     if (extractedLore !== undefined) updatedData.extractedLore = extractedLore;
+    if (isPinned !== undefined) updatedData.isPinned = isPinned ? 1 : 0;
     if (includeInAiContext !== undefined) updatedData.includeInAiContext = includeInAiContext ? 1 : 0;
     if (linkedTarget !== undefined) updatedData.linkedTarget = linkedTarget;
     if (tags !== undefined) updatedData.tags = tags;

@@ -1,4 +1,4 @@
-// 组件：人物关系图谱系统（图谱可视化画布与关系表格双Tab切换，拖拽排版与多维羁绊管理）
+// 组件：人物关系图谱系统（图谱可视化画布与关系列表双Tab切换，拖拽排版与缩放控制、多维羁绊管理）
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -27,16 +27,14 @@ import {
 } from "@mantine/core";
 import {
   FiPlus,
+  FiMinus,
   FiEdit,
   FiTrash2,
   FiShare2,
   FiUsers,
   FiSearch,
   FiRefreshCw,
-  FiArrowRight,
-  FiMaximize2,
   FiEye,
-  FiLayers,
 } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
@@ -58,6 +56,7 @@ export default function RelationGraphPage() {
   const [characters, setCharacters] = useState<RelationGraphCharNode[]>([]);
   const [viewMode, setViewMode] = useState<"graph" | "table">("graph");
   const [searchKey, setSearchKey] = useState("");
+  const [zoom, setZoom] = useState(1);
 
   // Modal 状态
   const [modalOpened, setModalOpened] = useState(false);
@@ -218,8 +217,8 @@ export default function RelationGraphPage() {
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!draggingNodeId.current || !canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.min(Math.max(((e.clientX - rect.left) / rect.width) * 100, 5), 95);
-    const y = Math.min(Math.max(((e.clientY - rect.top) / rect.height) * 100, 5), 95);
+    const x = Math.min(Math.max(((e.clientX - rect.left) / (rect.width * zoom)) * 100, 4), 96);
+    const y = Math.min(Math.max(((e.clientY - rect.top) / (rect.height * zoom)) * 100, 4), 96);
 
     const targetId = draggingNodeId.current;
     setNodePositions((prev) => ({
@@ -297,18 +296,17 @@ export default function RelationGraphPage() {
       }}
     >
       <ScrollArea style={{ flex: 1 }} p={{ base: "md", md: "lg" }}>
-        {/* Mantine Tabs 切换组件 */}
+        {/* Tab 切换（参考地点的 Tab UI 设计） */}
         <Tabs
           value={viewMode}
           onChange={(v) => setViewMode((v as "graph" | "table") || "graph")}
-          variant="outline"
           radius="sm"
         >
           {/* 头部 Tab 与控制栏 */}
-          <Flex justify="space-between" align="center" mb="md" wrap="wrap" gap="sm">
+          <Flex justify="space-between" align="center" mb="md" wrap="wrap" gap="sm" style={{ borderBottom: "1px solid #eee" }}>
             <Tabs.List>
               <Tabs.Tab value="graph" leftSection={<FiShare2 size={13} />}>
-                图谱可视化
+                关系图谱画布
               </Tabs.Tab>
               <Tabs.Tab value="table" leftSection={<FiUsers size={13} />}>
                 关系列表
@@ -328,20 +326,58 @@ export default function RelationGraphPage() {
               )}
 
               {viewMode === "graph" && (
-                <Button
-                  variant="default"
-                  size="xs"
-                  leftSection={<FiRefreshCw size={12} />}
-                  onClick={() => initNodePositions(characters)}
-                >
-                  重置布局
-                </Button>
+                <>
+                  {/* 缩放按钮组（按钮控制画布放大缩小与重置） */}
+                  <Group gap={3} align="center" style={{ backgroundColor: "#f1f5f9", borderRadius: 6, padding: "2px 6px" }}>
+                    <Tooltip label="缩小画布" position="top">
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        color="gray"
+                        disabled={zoom <= 0.5}
+                        onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(1))))}
+                      >
+                        <FiMinus size={12} />
+                      </ActionIcon>
+                    </Tooltip>
+                    <Tooltip label="重置缩放 (100%)" position="top">
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        color="gray"
+                        onClick={() => setZoom(1)}
+                        style={{ fontSize: 11, minWidth: 38, padding: 0 }}
+                      >
+                        {Math.round(zoom * 100)}%
+                      </Button>
+                    </Tooltip>
+                    <Tooltip label="放大画布" position="top">
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        color="gray"
+                        disabled={zoom >= 2.0}
+                        onClick={() => setZoom((z) => Math.min(2.0, Number((z + 0.1).toFixed(1))))}
+                      >
+                        <FiPlus size={12} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+
+                  <Button
+                    variant="default"
+                    size="xs"
+                    leftSection={<FiRefreshCw size={12} />}
+                    onClick={() => initNodePositions(characters)}
+                  >
+                    重置布局
+                  </Button>
+                </>
               )}
 
               <Button
                 size="xs"
                 leftSection={<FiPlus size={13} />}
-
                 onClick={handleOpenCreate}
                 disabled={characters.length < 2}
               >
@@ -361,12 +397,16 @@ export default function RelationGraphPage() {
               </Paper>
             ) : (
               <>
-                {/* 视图模式 1: 交互式可视化人物关系拓扑网络 */}
+                {/* 视图模式 1: 交互式可视化人物关系拓扑网络（参考地点画布拖拽与网格排版） */}
                 <Tabs.Panel value="graph">
                   <Box>
                     <Flex justify="space-between" align="center" mb="xs" fz={12} c="#64748b">
-                      <Text fz={12}>💡 提示：按住头像可<Text span fw={700} c="#0891b2">自由拖拽排版</Text>；连线与标记卡片直观显示人物羁绊类型与指向，点击标记可快速编辑。</Text>
-                      <Text fz={12}>已建立关系：<Text span fw={700} c="#0f172a">{relations.length}</Text> 组</Text>
+                      <Text fz={12}>
+                        💡 提示：按住角色头像卡片可<Text span fw={700} c="#0891b2">自由拖拽排版</Text>；连线与居中标记卡片直观显示人物羁绊类型与指向，点击标记可快速编辑。
+                      </Text>
+                      <Text fz={12}>
+                        已建立关系：<Text span fw={700} c="#0f172a">{relations.length}</Text> 组
+                      </Text>
                     </Flex>
 
                     <Paper
@@ -389,227 +429,239 @@ export default function RelationGraphPage() {
                         userSelect: "none",
                       }}
                     >
-                      {/* SVG 连线层 */}
-                      <svg
+                      {/* 可缩放内层容器 */}
+                      <Box
                         style={{
-                          position: "absolute",
-                          top: 0,
-                          left: 0,
                           width: "100%",
                           height: "100%",
-                          pointerEvents: "none",
-                          zIndex: 2,
+                          position: "relative",
+                          transform: `scale(${zoom})`,
+                          transformOrigin: "top left",
+                          transition: "transform 0.15s ease-out",
                         }}
                       >
-                        <defs>
-                          <marker
-                            id="rel-arrow-green"
-                            viewBox="0 0 10 10"
-                            refX="22"
-                            refY="5"
-                            markerWidth="6"
-                            markerHeight="6"
-                            orient="auto-start-reverse"
-                          >
-                            <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
-                          </marker>
-                          <marker
-                            id="rel-arrow-red"
-                            viewBox="0 0 10 10"
-                            refX="22"
-                            refY="5"
-                            markerWidth="6"
-                            markerHeight="6"
-                            orient="auto-start-reverse"
-                          >
-                            <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
-                          </marker>
-                          <marker
-                            id="rel-arrow-pink"
-                            viewBox="0 0 10 10"
-                            refX="22"
-                            refY="5"
-                            markerWidth="6"
-                            markerHeight="6"
-                            orient="auto-start-reverse"
-                          >
-                            <path d="M 0 1 L 10 5 L 0 9 z" fill="#ec4899" />
-                          </marker>
-                          <marker
-                            id="rel-arrow-indigo"
-                            viewBox="0 0 10 10"
-                            refX="22"
-                            refY="5"
-                            markerWidth="6"
-                            markerHeight="6"
-                            orient="auto-start-reverse"
-                          >
-                            <path d="M 0 1 L 10 5 L 0 9 z" fill="#6366f1" />
-                          </marker>
-                          <marker
-                            id="rel-arrow-gray"
-                            viewBox="0 0 10 10"
-                            refX="22"
-                            refY="5"
-                            markerWidth="6"
-                            markerHeight="6"
-                            orient="auto-start-reverse"
-                          >
-                            <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
-                          </marker>
-                        </defs>
+                        {/* SVG 连线层 */}
+                        <svg
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            width: "100%",
+                            height: "100%",
+                            pointerEvents: "none",
+                            zIndex: 2,
+                          }}
+                        >
+                          <defs>
+                            <marker
+                              id="rel-arrow-green"
+                              viewBox="0 0 10 10"
+                              refX="22"
+                              refY="5"
+                              markerWidth="6"
+                              markerHeight="6"
+                              orient="auto-start-reverse"
+                            >
+                              <path d="M 0 1 L 10 5 L 0 9 z" fill="#10b981" />
+                            </marker>
+                            <marker
+                              id="rel-arrow-red"
+                              viewBox="0 0 10 10"
+                              refX="22"
+                              refY="5"
+                              markerWidth="6"
+                              markerHeight="6"
+                              orient="auto-start-reverse"
+                            >
+                              <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+                            </marker>
+                            <marker
+                              id="rel-arrow-pink"
+                              viewBox="0 0 10 10"
+                              refX="22"
+                              refY="5"
+                              markerWidth="6"
+                              markerHeight="6"
+                              orient="auto-start-reverse"
+                            >
+                              <path d="M 0 1 L 10 5 L 0 9 z" fill="#ec4899" />
+                            </marker>
+                            <marker
+                              id="rel-arrow-indigo"
+                              viewBox="0 0 10 10"
+                              refX="22"
+                              refY="5"
+                              markerWidth="6"
+                              markerHeight="6"
+                              orient="auto-start-reverse"
+                            >
+                              <path d="M 0 1 L 10 5 L 0 9 z" fill="#6366f1" />
+                            </marker>
+                            <marker
+                              id="rel-arrow-gray"
+                              viewBox="0 0 10 10"
+                              refX="22"
+                              refY="5"
+                              markerWidth="6"
+                              markerHeight="6"
+                              orient="auto-start-reverse"
+                            >
+                              <path d="M 0 1 L 10 5 L 0 9 z" fill="#64748b" />
+                            </marker>
+                          </defs>
 
+                          {relations.map((rel) => {
+                            const sPos = getNodePos(rel.sourceCharId);
+                            const tPos = getNodePos(rel.targetCharId);
+                            const color = getTagColor(rel.relationTag || "friendly");
+
+                            let markerId = "rel-arrow-green";
+                            if (rel.relationTag === "hostile") markerId = "rel-arrow-red";
+                            if (rel.relationTag === "romantic") markerId = "rel-arrow-pink";
+                            if (rel.relationTag === "family") markerId = "rel-arrow-indigo";
+                            if (rel.relationTag === "neutral") markerId = "rel-arrow-gray";
+
+                            const isHighlighted =
+                              hoveredRelId === rel.id ||
+                              hoveredCharId === Number(rel.sourceCharId) ||
+                              hoveredCharId === Number(rel.targetCharId);
+
+                            return (
+                              <g key={rel.id} style={{ opacity: hoveredCharId && !isHighlighted ? 0.25 : 1, transition: "opacity 0.2s" }}>
+                                <line
+                                  x1={`${sPos.x}%`}
+                                  y1={`${sPos.y}%`}
+                                  x2={`${tPos.x}%`}
+                                  y2={`${tPos.y}%`}
+                                  stroke={color}
+                                  strokeWidth={isHighlighted ? 3 : 2}
+                                  strokeDasharray={rel.relationTag === "neutral" ? "5,5" : "none"}
+                                  markerEnd={`url(#${markerId})`}
+                                />
+                              </g>
+                            );
+                          })}
+                        </svg>
+
+                        {/* 关系连线居中文字标签卡片 (HTML 绝对定位层，保证 100% 渲染且可点击) */}
                         {relations.map((rel) => {
                           const sPos = getNodePos(rel.sourceCharId);
                           const tPos = getNodePos(rel.targetCharId);
+                          const midX = (sPos.x + tPos.x) / 2;
+                          const midY = (sPos.y + tPos.y) / 2;
                           const color = getTagColor(rel.relationTag || "friendly");
-
-                          let markerId = "rel-arrow-green";
-                          if (rel.relationTag === "hostile") markerId = "rel-arrow-red";
-                          if (rel.relationTag === "romantic") markerId = "rel-arrow-pink";
-                          if (rel.relationTag === "family") markerId = "rel-arrow-indigo";
-                          if (rel.relationTag === "neutral") markerId = "rel-arrow-gray";
-
                           const isHighlighted =
                             hoveredRelId === rel.id ||
                             hoveredCharId === Number(rel.sourceCharId) ||
                             hoveredCharId === Number(rel.targetCharId);
 
                           return (
-                            <g key={rel.id} style={{ opacity: hoveredCharId && !isHighlighted ? 0.25 : 1, transition: "opacity 0.2s" }}>
-                              <line
-                                x1={`${sPos.x}%`}
-                                y1={`${sPos.y}%`}
-                                x2={`${tPos.x}%`}
-                                y2={`${tPos.y}%`}
-                                stroke={color}
-                                strokeWidth={isHighlighted ? 3 : 2}
-                                strokeDasharray={rel.relationTag === "neutral" ? "5,5" : "none"}
-                                markerEnd={`url(#${markerId})`}
-                              />
-                            </g>
-                          );
-                        })}
-                      </svg>
-
-                      {/* 关系连线居中文字标签卡片 (HTML 绝对定位层，保证 100% 渲染且可点击) */}
-                      {relations.map((rel) => {
-                        const sPos = getNodePos(rel.sourceCharId);
-                        const tPos = getNodePos(rel.targetCharId);
-                        const midX = (sPos.x + tPos.x) / 2;
-                        const midY = (sPos.y + tPos.y) / 2;
-                        const color = getTagColor(rel.relationTag || "friendly");
-                        const isHighlighted =
-                          hoveredRelId === rel.id ||
-                          hoveredCharId === Number(rel.sourceCharId) ||
-                          hoveredCharId === Number(rel.targetCharId);
-
-                        return (
-                          <Box
-                            key={`badge-${rel.id}`}
-                            onMouseEnter={() => setHoveredRelId(rel.id)}
-                            onMouseLeave={() => setHoveredRelId(null)}
-                            onClick={(e) => handleOpenEdit(rel, e)}
-                            style={{
-                              position: "absolute",
-                              left: `${midX}%`,
-                              top: `${midY}%`,
-                              transform: `translate(-50%, -50%) scale(${isHighlighted ? 1.08 : 1})`,
-                              zIndex: isHighlighted ? 25 : 12,
-                              cursor: "pointer",
-                              transition: "transform 0.15s ease, opacity 0.2s ease",
-                              opacity: hoveredCharId && !isHighlighted ? 0.3 : 1,
-                            }}
-                          >
-                            <Tooltip
-                              label={`${rel.sourceCharName} ➔ ${rel.targetCharName}：${rel.relationType}${rel.description ? ` (${rel.description})` : ""} [点击编辑]`}
-                              position="top"
-                              withArrow
-                              fz={11}
-                            >
-                              <Paper
-                                px={8}
-                                py={2}
-                                radius="xl"
-                                withBorder
-                                shadow={isHighlighted ? "md" : "xs"}
-                                style={{
-                                  backgroundColor: "#ffffff",
-                                  borderColor: color,
-                                  borderWidth: isHighlighted ? 2 : 1.5,
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 4,
-                                  whiteSpace: "nowrap",
-                                  boxShadow: isHighlighted ? `0 4px 12px ${color}33` : "0 2px 5px rgba(0,0,0,0.06)",
-                                }}
-                              >
-                                <Text fz={11} fw={700} c={color}>
-                                  {rel.relationType}
-                                </Text>
-                              </Paper>
-                            </Tooltip>
-                          </Box>
-                        );
-                      })}
-
-                      {/* 节点层 (角色卡片) */}
-                      {characters.map((c) => {
-                        const pos = getNodePos(c.id);
-                        const isMain = c.roleType === "protagonist";
-                        const isHovered = hoveredCharId === c.id;
-
-                        return (
-                          <Box
-                            key={c.id}
-                            onMouseDown={(e) => handleNodeMouseDown(c.id, e)}
-                            onMouseEnter={() => setHoveredCharId(c.id)}
-                            onMouseLeave={() => setHoveredCharId(null)}
-                            style={{
-                              position: "absolute",
-                              left: `${pos.x}%`,
-                              top: `${pos.y}%`,
-                              transform: `translate(-50%, -50%) scale(${isHovered ? 1.05 : 1})`,
-                              cursor: "grab",
-                              zIndex: isHovered ? 30 : 15,
-                              transition: "transform 0.15s ease",
-                            }}
-                          >
-                            <Paper
-                              p="6px 12px"
-                              radius="md"
-                              withBorder
-                              shadow={isHovered ? "md" : "xs"}
+                            <Box
+                              key={`badge-${rel.id}`}
+                              onMouseEnter={() => setHoveredRelId(rel.id)}
+                              onMouseLeave={() => setHoveredRelId(null)}
+                              onClick={(e) => handleOpenEdit(rel, e)}
                               style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 8,
-                                backgroundColor: isMain ? "#f0fdf4" : "#ffffff",
-                                borderColor: isHovered ? "#0284c7" : isMain ? "#22c55e" : "#e2e8f0",
-                                borderWidth: isMain || isHovered ? 2 : 1,
-                                boxShadow: isHovered ? "0 4px 14px rgba(2, 132, 199, 0.2)" : undefined,
+                                position: "absolute",
+                                left: `${midX}%`,
+                                top: `${midY}%`,
+                                transform: `translate(-50%, -50%) scale(${isHighlighted ? 1.08 : 1})`,
+                                zIndex: isHighlighted ? 25 : 12,
+                                cursor: "pointer",
+                                transition: "transform 0.15s ease, opacity 0.2s ease",
+                                opacity: hoveredCharId && !isHighlighted ? 0.3 : 1,
                               }}
                             >
-                              <Avatar
-                                src={c.avatarUrl}
-                                radius="xl"
-                                size="sm"
-                                color={isMain ? "teal" : "cyan"}
+                              <Tooltip
+                                label={`${rel.sourceCharName} ➔ ${rel.targetCharName}：${rel.relationType}${rel.description ? ` (${rel.description})` : ""} [点击编辑]`}
+                                position="top"
+                                withArrow
+                                fz={11}
                               >
-                                {c.name.slice(0, 1)}
-                              </Avatar>
-                              <Box>
-                                <Text fz={12.5} fw={700} c="#0f172a" lineClamp={1}>
-                                  {c.name}
-                                </Text>
-                                <Text fz={10} c="#64748b" lineClamp={1}>
-                                  {c.faction || (isMain ? "主角" : "角色")}
-                                </Text>
-                              </Box>
-                            </Paper>
-                          </Box>
-                        );
-                      })}
+                                <Paper
+                                  px={8}
+                                  py={2}
+                                  radius="xl"
+                                  withBorder
+                                  shadow={isHighlighted ? "md" : "xs"}
+                                  style={{
+                                    backgroundColor: "#ffffff",
+                                    borderColor: color,
+                                    borderWidth: isHighlighted ? 2 : 1.5,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 4,
+                                    whiteSpace: "nowrap",
+                                    boxShadow: isHighlighted ? `0 4px 12px ${color}33` : "0 2px 5px rgba(0,0,0,0.06)",
+                                  }}
+                                >
+                                  <Text fz={11} fw={700} c={color}>
+                                    {rel.relationType}
+                                  </Text>
+                                </Paper>
+                              </Tooltip>
+                            </Box>
+                          );
+                        })}
+
+                        {/* 节点层 (角色卡片) */}
+                        {characters.map((c) => {
+                          const pos = getNodePos(c.id);
+                          const isMain = c.roleType === "protagonist";
+                          const isHovered = hoveredCharId === c.id;
+
+                          return (
+                            <Box
+                              key={c.id}
+                              onMouseDown={(e) => handleNodeMouseDown(c.id, e)}
+                              onMouseEnter={() => setHoveredCharId(c.id)}
+                              onMouseLeave={() => setHoveredCharId(null)}
+                              style={{
+                                position: "absolute",
+                                left: `${pos.x}%`,
+                                top: `${pos.y}%`,
+                                transform: `translate(-50%, -50%) scale(${isHovered ? 1.05 : 1})`,
+                                cursor: "grab",
+                                zIndex: isHovered ? 30 : 15,
+                                transition: "transform 0.15s ease",
+                              }}
+                            >
+                              <Paper
+                                p="6px 12px"
+                                radius="md"
+                                withBorder
+                                shadow={isHovered ? "md" : "xs"}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  backgroundColor: isMain ? "#f0fdf4" : "#ffffff",
+                                  borderColor: isHovered ? "#0284c7" : isMain ? "#22c55e" : "#e2e8f0",
+                                  borderWidth: isMain || isHovered ? 2 : 1,
+                                  boxShadow: isHovered ? "0 4px 14px rgba(2, 132, 199, 0.2)" : undefined,
+                                }}
+                              >
+                                <Avatar
+                                  src={c.avatarUrl}
+                                  radius="xl"
+                                  size="sm"
+                                  color={isMain ? "teal" : "cyan"}
+                                >
+                                  {c.name.slice(0, 1)}
+                                </Avatar>
+                                <Box>
+                                  <Text fz={12.5} fw={700} c="#0f172a" lineClamp={1}>
+                                    {c.name}
+                                  </Text>
+                                  <Text fz={10} c="#64748b" lineClamp={1}>
+                                    {c.faction || (isMain ? "主角" : "角色")}
+                                  </Text>
+                                </Box>
+                              </Paper>
+                            </Box>
+                          );
+                        })}
+                      </Box>
                     </Paper>
                   </Box>
                 </Tabs.Panel>
@@ -645,7 +697,7 @@ export default function RelationGraphPage() {
                           <Table.Tr key={r.id}>
                             <Table.Td>
                               <Group gap={6}>
-                                <Avatar size="xs" radius="xl" >
+                                <Avatar size="xs" radius="xl">
                                   {r.sourceCharName.slice(0, 1)}
                                 </Avatar>
                                 <Text fz={13} fw={700} c="#0f172a">

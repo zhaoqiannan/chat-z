@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, chapters, chapterAiChats, characters, locations, factions, items, worldRules, outlines } from "@/db";
+import { getDb, works, chapters, chapterAiChats, characters, locations, factions, items, worldRules, outlines, materials } from "@/db";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
 
@@ -97,8 +97,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const ruleIds = contextTags.filter((t) => t.type === "rule").map((t) => Number(t.id)).filter(Boolean);
     const outlineIds = contextTags.filter((t) => t.type === "outline").map((t) => Number(t.id)).filter((n) => !isNaN(n) && n > 0);
     const otherChapterIds = contextTags.filter((t) => t.type === "chapter").map((t) => Number(t.id)).filter(Boolean);
+    const materialIds = contextTags.filter((t) => t.type === "material").map((t) => Number(t.id)).filter(Boolean);
 
-    const [charsData, locsData, facsData, itemsData, rulesData, outlinesData, otherChaptersData] = await Promise.all([
+    const [charsData, locsData, facsData, itemsData, rulesData, outlinesData, otherChaptersData, materialsData] = await Promise.all([
       charIds.length > 0
         ? db.select().from(characters).where(inArray(characters.id, charIds)).all()
         : db.select().from(characters).where(eq(characters.workId, workId)).limit(10).all(),
@@ -110,6 +111,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         : db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(6).all(),
       outlineIds.length > 0 ? db.select().from(outlines).where(inArray(outlines.id, outlineIds)).all() : [],
       otherChapterIds.length > 0 ? db.select({ id: chapters.id, title: chapters.title, chapterNumber: chapters.chapterNumber, summary: chapters.summary }).from(chapters).where(inArray(chapters.id, otherChapterIds)).all() : [],
+      materialIds.length > 0
+        ? db.select().from(materials).where(inArray(materials.id, materialIds)).all()
+        : db.select().from(materials).where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1))).limit(6).all(),
     ]);
 
     let structuredLoreContext = "";
@@ -134,6 +138,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
     if (otherChaptersData.length > 0) {
       structuredLoreContext += "【其他关联章节提要】：\n" + otherChaptersData.map((ch) => `- 第${ch.chapterNumber}章 ${ch.title}: 提要[${ch.summary || "无"}]`).join("\n") + "\n\n";
+    }
+    if (materialsData.length > 0) {
+      structuredLoreContext += "【关联素材资料库与作者设定笔记（写作需严格参考此资料，保持世界观与剧情设定一致）】：\n" + materialsData.map((m) => {
+        const noteText = (m.content || "").replace(/<[^>]+>/g, "").trim().slice(0, 300);
+        const loreText = (m.extractedLore || m.aiSummary || "").slice(0, 250);
+        return `- 《${m.title}》: ${loreText ? `[设定要点: ${loreText}] ` : ""}${noteText ? `[重点笔记: ${noteText}]` : ""}`;
+      }).join("\n") + "\n\n";
     }
 
     // 1. SYSTEM 层：确立中性协同助手身份、指令优先级与核心防脑补/人物一致性铁律

@@ -542,10 +542,14 @@ export const materials = sqliteTable('materials', {
   fileSize: text('file_size'),
   /** AI 提炼智能摘要 */
   aiSummary: text('ai_summary'),
+  /** AI 自定义提示词 / 提取指令 */
+  aiPrompt: text('ai_prompt'),
   /** 物理来源 / 原始链接 */
   sourceUrl: text('source_url'),
   /** 提取的硬核设定要点 */
   extractedLore: text('extracted_lore'),
+  /** 是否置顶 (1=置顶, 0=正常) */
+  isPinned: integer('is_pinned').default(0),
   /** 是否加入 AI 写作大模型上下文 (1=是, 0=否) */
   includeInAiContext: integer('include_in_ai_context').default(1),
   /** 关联内容 (如: "关联 3 章", "关联 曙光号") */
@@ -836,6 +840,30 @@ export type NewActivityLog = typeof activityLogs.$inferInsert;
 /** 每日字数统计类型 */
 export type DailyWordStat = typeof dailyWordStats.$inferSelect;
 export type NewDailyWordStat = typeof dailyWordStats.$inferInsert;
+
+// ============================================================================
+// 19. 上传文件存储表 (uploaded_files)
+// ============================================================================
+export const uploadedFiles = sqliteTable('uploaded_files', {
+  /** 自增 ID */
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  /** 所属用户 ID */
+  userId: text('user_id'),
+  /** 原始文件名 */
+  fileName: text('file_name').notNull(),
+  /** MIME 类型 (如 image/png, application/pdf, text/plain) */
+  mimeType: text('mime_type').notNull(),
+  /** 文件大小 */
+  fileSize: text('file_size'),
+  /** Base64 数据内容 */
+  dataBase64: text('data_base64').notNull(),
+  /** 创建时间 */
+  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
+});
+
+export type UploadedFile = typeof uploadedFiles.$inferSelect;
+export type NewUploadedFile = typeof uploadedFiles.$inferInsert;
+
 
 
 

@@ -1,9 +1,6 @@
-// 组件：地理空间与地点地标设定（70vw宽度、地图画布自由拖拽保存坐标、SVG拓扑关联关系连线、主属地标层级、10行Textarea支持换行格式化）
-"use client";
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Tabs, Paper, Group, Card, Tooltip, Badge, Switch } from "@mantine/core";
-import { FiPlus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2 } from "react-icons/fi";
+import { FiPlus, FiMinus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2, FiRotateCcw } from "react-icons/fi";
 import { LocationRecord, getLocationList, createLocation, updateLocation, deleteLocation } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
 import { useAlert } from "@/hooks/useAlert";
@@ -21,6 +18,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
   const [showRelations, setShowRelations] = useState(true);
   const [hoveredId, setHoveredId] = useState<number | null>(null);
   const [savingPosId, setSavingPosId] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasMouseDownPosRef = useRef<{ x: number; y: number; time: number } | null>(null);
@@ -121,8 +119,8 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
     }
 
     const rect = mapRef.current.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+    const clickX = (e.clientX - rect.left) / zoom;
+    const clickY = (e.clientY - rect.top) / zoom;
 
     const percentX = Math.max(3, Math.min(97, Math.round((clickX / rect.width) * 100)));
     const percentY = Math.max(4, Math.min(96, Math.round((clickY / rect.height) * 100)));
@@ -157,8 +155,8 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
         dragInfoRef.current.hasMoved = true;
       }
 
-      const deltaPercentX = (deltaX / rect.width) * 100;
-      const deltaPercentY = (deltaY / rect.height) * 100;
+      const deltaPercentX = (deltaX / (rect.width * zoom)) * 100;
+      const deltaPercentY = (deltaY / (rect.height * zoom)) * 100;
 
       let newX = Math.round(dragInfoRef.current.initialPosX + deltaPercentX);
       let newY = Math.round(dragInfoRef.current.initialPosY + deltaPercentY);
@@ -323,14 +321,52 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
           <Group gap="xs">
             {viewMode === "map" && (
-              <Button
-                size="xs"
-                variant={showRelations ? "light" : "default"}
-                leftSection={showRelations ? <FiEye size={12} /> : <FiEyeOff size={12} />}
-                onClick={() => setShowRelations((v) => !v)}
-              >
-                {showRelations ? "关联连线: 显示" : "关联连线: 隐藏"}
-              </Button>
+              <>
+                <Group gap={3} align="center" style={{ backgroundColor: "#f1f5f9", borderRadius: 6, padding: "2px 6px" }}>
+                  <Tooltip label="缩小画布" position="top">
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      disabled={zoom <= 0.5}
+                      onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(1))))}
+                    >
+                      <FiMinus size={12} />
+                    </ActionIcon>
+                  </Tooltip>
+                  <Tooltip label="重置缩放 (100%)" position="top">
+                    <Button
+                      size="compact-xs"
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => setZoom(1)}
+                      style={{ fontSize: 11, minWidth: 38, padding: 0 }}
+                    >
+                      {Math.round(zoom * 100)}%
+                    </Button>
+                  </Tooltip>
+                  <Tooltip label="放大画布" position="top">
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="gray"
+                      disabled={zoom >= 2.0}
+                      onClick={() => setZoom((z) => Math.min(2.0, Number((z + 0.1).toFixed(1))))}
+                    >
+                      <FiPlus size={12} />
+                    </ActionIcon>
+                  </Tooltip>
+                </Group>
+
+                <Button
+                  size="xs"
+                  variant={showRelations ? "light" : "default"}
+                  leftSection={showRelations ? <FiEye size={12} /> : <FiEyeOff size={12} />}
+                  onClick={() => setShowRelations((v) => !v)}
+                >
+                  {showRelations ? "关联连线: 显示" : "关联连线: 隐藏"}
+                </Button>
+              </>
             )}
 
             <Button size="xs" leftSection={<FiPlus size={13} />} onClick={() => handleOpenCreate()}>
@@ -393,8 +429,18 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                   zIndex: 1,
                 }}
               >
-                {/* SVG 拓扑关联关系连线层 */}
-                {showRelations && (
+                <Box
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    position: "relative",
+                    transform: `scale(${zoom})`,
+                    transformOrigin: "top left",
+                    transition: "transform 0.15s ease-out",
+                  }}
+                >
+                  {/* SVG 拓扑关联关系连线层 */}
+                  {showRelations && (
                   <svg
                     style={{
                       position: "absolute",
@@ -580,6 +626,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                     </Box>
                   );
                 })}
+                </Box>
               </Paper>
             </Box>
           </Tabs.Panel>

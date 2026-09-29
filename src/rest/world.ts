@@ -247,10 +247,9 @@ export const deleteWorldRule = async (id: number | string) => {
   return del(`/api/rules?id=${id}`, { id });
 };
 
-// ============================================================================
-// 6. 图片上传 API (Upload)
-// ============================================================================
-export const uploadImageFile = async (file: File): Promise<{ success: boolean; url?: string; message?: string }> => {
+export const uploadImageFile = async (
+  file: File
+): Promise<{ success: boolean; url?: string; fileSize?: string; fileName?: string; message?: string }> => {
   const formData = new FormData();
   formData.append("file", file);
 

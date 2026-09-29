@@ -61,8 +61,10 @@ export interface MaterialData {
   fileName?: string | null;
   fileSize?: string | null;
   aiSummary?: string | null;
+  aiPrompt?: string | null;
   sourceUrl?: string | null;
   extractedLore?: string | null;
+  isPinned?: number | boolean;
   includeInAiContext?: number | boolean;
   linkedTarget?: string | null;
   tags?: string | null;
@@ -91,7 +93,15 @@ export const deleteMaterial = async (id: number | string) => {
   return del(`/api/materials?id=${id}`, { id });
 };
 
-export const extractMaterialAiSummary = async (data: { title: string; content?: string; sourceUrl?: string }) => {
+export const extractMaterialAiSummary = async (data: {
+  title?: string;
+  content?: string;
+  fileName?: string;
+  fileType?: string;
+  fileUrl?: string;
+  customPrompt?: string;
+  sourceUrl?: string;
+}) => {
   return post(`/api/materials/ai-summary`, data);
 };
 

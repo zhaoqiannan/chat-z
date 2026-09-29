@@ -1,9 +1,9 @@
-// 组件：素材正文与文档查看预览弹窗（80vw 宽屏，支持富文本回显、表格渲染、图片放大、字数统计与文档下载）
+// 组件：素材笔记查看预览弹窗（顶部支持展开收起AI分析提炼、展示笔记内容与复制全文、编辑、关闭操作）
 "use client";
 
-import React from "react";
-import { Modal, Box, Flex, Text, Button, Badge, ActionIcon, Paper, Group, Stack } from "@mantine/core";
-import { FiEye, FiCopy, FiExternalLink, FiFileText, FiImage, FiLink, FiDownloadCloud, FiZap } from "react-icons/fi";
+import React, { useState, useEffect } from "react";
+import { Modal, Box, Flex, Text, Button, Paper, Group } from "@mantine/core";
+import { FiCopy, FiEdit, FiFileText, FiZap, FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { MaterialData } from "@/rest/project-extensions";
 import { RichTextViewer } from "@/components/common/rich-text";
@@ -12,73 +12,38 @@ interface ModalMaterialPreviewProps {
   opened: boolean;
   material: MaterialData | null;
   onClose: () => void;
-  onOpenSummaryModal?: () => void;
+  onOpenEditModal?: () => void;
 }
 
 export default function ModalMaterialPreview({
   opened,
   material,
   onClose,
-  onOpenSummaryModal,
+  onOpenEditModal,
 }: ModalMaterialPreviewProps) {
+  const [aiSectionOpened, setAiSectionOpened] = useState(false);
+
+  useEffect(() => {
+    if (opened) {
+      setAiSectionOpened(false);
+    }
+  }, [opened]);
+
   if (!material) return null;
 
-  const rawContent = material.content || material.extractedLore || "";
-  const plainText = rawContent.replace(/<[^>]+>/g, "").trim();
-  const charCount = plainText.length;
-  const targetUrl = material.sourceUrl || material.fileUrl || "";
+  const rawNoteContent = material.content || "";
+  const plainText = rawNoteContent.replace(/<[^>]+>/g, "").trim();
 
-  const isWordDoc =
-    /\.(docx|doc|dotx|dot)$/i.test(material.fileName || material.title || "") ||
-    /\.(docx|doc)$/i.test(targetUrl);
-
-  const handleCopy = () => {
-    if (!rawContent) return;
-    navigator.clipboard.writeText(plainText || rawContent);
-    useAlert.success("素材正文内容已复制到剪贴板");
-  };
-
-  const handleOpenSource = () => {
-    if (targetUrl) {
-      window.open(targetUrl, "_blank", "noopener,noreferrer");
+  const handleCopyNote = () => {
+    if (!rawNoteContent) {
+      useAlert.warning("暂无素材笔记可供复制");
+      return;
     }
+    navigator.clipboard.writeText(plainText || rawNoteContent);
+    useAlert.success("素材笔记内容已复制到剪贴板");
   };
 
-  const handleOpenOfficeViewer = () => {
-    if (targetUrl) {
-      const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(targetUrl)}`;
-      window.open(viewerUrl, "_blank", "noopener,noreferrer");
-    }
-  };
-
-  const handleDownload = () => {
-    const filename = material.fileName || `${material.title || "素材"}.txt`;
-    if (material.fileUrl && !material.fileUrl.startsWith("data:")) {
-      const a = document.createElement("a");
-      a.href = material.fileUrl;
-      a.download = filename;
-      a.target = "_blank";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      useAlert.success("正在下载附件文件");
-    } else if (rawContent) {
-      const blob = new Blob([plainText || rawContent], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename.endsWith(".txt") || filename.endsWith(".md") || filename.endsWith(".html") ? filename : `${filename}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      useAlert.success("正文内容文本已下载");
-    } else if (targetUrl) {
-      window.open(targetUrl, "_blank");
-    } else {
-      useAlert.warning("暂无可供下载的附件或正文内容");
-    }
-  };
+  const hasAiResult = Boolean(material.aiSummary || material.extractedLore);
 
   return (
     <Modal
@@ -87,26 +52,19 @@ export default function ModalMaterialPreview({
       title={
         <Group gap={8}>
           <FiFileText size={18} color="#0284c7" />
-          <Box>
-            <Text fw={700} fz={16} c="#0f172a">
-              {material.title}
-            </Text>
-            {material.fileSize && (
-              <Text fz={11} c="#94a3b8">
-                文件大小：{material.fileSize}
-              </Text>
-            )}
-          </Box>
+          <Text fw={700} fz={16} c="#0f172a">
+            素材笔记 — {material.title}
+          </Text>
         </Group>
       }
-      size="80vw"
+      size="70vw"
       centered
       radius="md"
       styles={{
         content: {
-          maxWidth: "1350px",
-          minWidth: "360px",
-          maxHeight: "92vh",
+          maxWidth: "1000px",
+          minWidth: "320px",
+          maxHeight: "90vh",
           display: "flex",
           flexDirection: "column",
         },
@@ -123,174 +81,120 @@ export default function ModalMaterialPreview({
         },
       }}
     >
-      <Stack gap="md">
-        {/* 工具操作栏 */}
-        <Flex justify="space-between" align="center" wrap="wrap" gap="xs">
-          <Group gap={6}>
-            <Badge size="sm" variant="light" color="blue">
-              {charCount > 0 ? `${charCount} 字` : "无本地文本"}
-            </Badge>
-            {material.tags && (
-              <Group gap={4}>
-                {material.tags.split(/[,，\s]+/).filter(Boolean).map((t, idx) => (
-                  <Badge key={idx} size="sm" variant="outline" color="gray">
-                    {t}
-                  </Badge>
-                ))}
+      <Box style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* 顶部 AI 分析与提炼结果（展开收起，默认收起） */}
+        {hasAiResult && (
+          <Paper p="sm" bg="#f0f9ff" withBorder radius="md" style={{ borderColor: "#bae6fd" }}>
+            <Flex
+              justify="space-between"
+              align="center"
+              style={{ cursor: "pointer", userSelect: "none" }}
+              onClick={() => setAiSectionOpened((prev) => !prev)}
+            >
+              <Group gap={8}>
+                <FiZap size={15} color="#0284c7" />
+                <Text fz={13} fw={700} c="#0369a1">
+                  AI 分析与提炼结果
+                </Text>
               </Group>
-            )}
-          </Group>
-
-          <Group gap="xs">
-            {(rawContent || material.fileUrl || targetUrl) && (
               <Button
-                size="xs"
-                variant="light"
-                color="indigo"
-                leftSection={<FiDownloadCloud size={13} />}
-                onClick={handleDownload}
-              >
-                下载附件/正文
-              </Button>
-            )}
-
-            {rawContent && (
-              <Button
-                size="xs"
-                variant="light"
-                color="gray"
-                leftSection={<FiCopy size={12} />}
-                onClick={handleCopy}
-              >
-                复制全文
-              </Button>
-            )}
-
-            {targetUrl && (
-              <Button
-                size="xs"
-                variant="light"
+                size="compact-xs"
+                variant="subtle"
                 color="blue"
-                leftSection={<FiExternalLink size={12} />}
-                onClick={handleOpenSource}
+                rightSection={aiSectionOpened ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setAiSectionOpened((prev) => !prev);
+                }}
               >
-                打开原始文档/链接
+                {aiSectionOpened ? "收起" : "展开查看"}
               </Button>
-            )}
+            </Flex>
 
-            {isWordDoc && targetUrl && (
-              <Button
-                size="xs"
-                variant="light"
-                color="teal"
-                leftSection={<FiEye size={12} />}
-                onClick={handleOpenOfficeViewer}
-                title="通过微软 Office 在线云预览渲染完整排版"
-              >
-                Office 在线预览
-              </Button>
-            )}
-          </Group>
-        </Flex>
+            {aiSectionOpened && (
+              <Box mt="xs" pt="xs" style={{ borderTop: "1px dashed #bae6fd" }}>
+                {material.aiSummary && (
+                  <Box mb={material.extractedLore ? "xs" : undefined}>
+                    <Text fz={11.5} fw={700} c="#0369a1" mb={2}>
+                      【用途说明 / 摘要】：
+                    </Text>
+                    <Text fz={12.5} c="#0c4a6e" style={{ lineHeight: 1.6 }}>
+                      {material.aiSummary}
+                    </Text>
+                  </Box>
+                )}
 
-        {/* 独立图片附件预览 (如果类型为 image 且未内嵌在 html 中) */}
-        {material.fileType === "image" && (material.fileUrl || targetUrl) && !rawContent.includes("<img") && (
-          <Paper p="sm" bg="#f8fafc" withBorder radius="md" style={{ textAlign: "center" }}>
-            <Box
-              component="img"
-              src={material.fileUrl || targetUrl}
-              alt={material.title}
-              style={{
-                maxWidth: "100%",
-                maxHeight: "450px",
-                objectFit: "contain",
-                borderRadius: 6,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
-              }}
-            />
+                {material.extractedLore && (
+                  <Box
+                    mt={material.aiSummary ? "xs" : undefined}
+                    pt={material.aiSummary ? "xs" : undefined}
+                    style={material.aiSummary ? { borderTop: "1px dashed #bae6fd" } : undefined}
+                  >
+                    <Text fz={11.5} fw={700} c="#0369a1" mb={2}>
+                      【提炼设定点 / 描写建议】：
+                    </Text>
+                    <Text fz={12.5} c="#0c4a6e" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+                      {material.extractedLore}
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            )}
           </Paper>
         )}
 
-        {/* 富文本正文查看区 */}
-        <Paper p="md" bg="#f8fafc" withBorder radius="md" style={{ borderColor: "#e2e8f0" }}>
-          <Flex justify="space-between" align="center" mb={8}>
-            <Text fz={13.5} fw={700} c="#334155">
-              素材正文与排版内容
-            </Text>
-            {material.aiSummary && (
-              <Badge size="xs" color="teal" variant="light">
-                已生成 AI 摘要
-              </Badge>
-            )}
-          </Flex>
-
-          {rawContent ? (
-            <Paper
-              p="md"
-              bg="#ffffff"
-              withBorder
-              radius="sm"
-              style={{ borderColor: "#e2e8f0", minHeight: 180, maxHeight: 480, overflowY: "auto" }}
-            >
-              <RichTextViewer content={rawContent} />
-            </Paper>
+        {/* 笔记内容展示 */}
+        <Paper
+          p="md"
+          bg="#ffffff"
+          withBorder
+          radius="sm"
+          style={{ borderColor: "#e2e8f0", minHeight: 220, maxHeight: "60vh", overflowY: "auto" }}
+        >
+          {rawNoteContent ? (
+            <RichTextViewer content={rawNoteContent} />
           ) : (
-            <Box style={{ textAlign: "center", padding: "40px 0" }}>
-              <Text fz={13} c="#94a3b8">
-                该素材暂无本地文本正文
+            <Box style={{ textAlign: "center", padding: "60px 0" }}>
+              <Text fz={13.5} c="#94a3b8">
+                该素材暂未录入作者笔记
               </Text>
-              {targetUrl && (
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  color="blue"
-                  mt="xs"
-                  leftSection={<FiExternalLink size={12} />}
-                  onClick={handleOpenSource}
-                >
-                  点击访问外部原始链接
-                </Button>
-              )}
             </Box>
           )}
         </Paper>
 
-        {/* AI 智能摘要展示 */}
-        {material.aiSummary && (
-          <Paper p="md" bg="#f0f9ff" withBorder radius="md" style={{ borderColor: "#bae6fd" }}>
-            <Flex justify="space-between" align="center" mb={6}>
-              <Group gap={6}>
-                <FiZap size={14} color="#0284c7" />
-                <Text fz={13} fw={700} c="#0284c7">
-                  AI 智能提炼摘要
-                </Text>
-              </Group>
-            </Flex>
-            <Text fz={13} c="#0369a1" style={{ lineHeight: 1.65 }}>
-              {material.aiSummary}
-            </Text>
-          </Paper>
-        )}
-
-        <Flex justify="flex-end" gap="xs" mt="sm" pt={12} style={{ borderTop: "1px solid #f1f5f9" }}>
-          {onOpenSummaryModal && (
+        {/* 底部按钮栏：复制全文、编辑、关闭 */}
+        <Flex justify="flex-end" align="center" gap="xs" pt={12} style={{ borderTop: "1px solid #f1f5f9" }}>
+          {rawNoteContent ? (
             <Button
               size="xs"
               variant="light"
+              color="gray"
+              leftSection={<FiCopy size={13} />}
+              onClick={handleCopyNote}
+            >
+              复制全文
+            </Button>
+          ) : null}
+
+          {onOpenEditModal && (
+            <Button
+              size="xs"
               color="blue"
+              leftSection={<FiEdit size={13} />}
               onClick={() => {
                 onClose();
-                onOpenSummaryModal();
+                onOpenEditModal();
               }}
             >
-              编辑设定与 AI 摘要
+              编辑
             </Button>
           )}
+
           <Button variant="default" size="xs" onClick={onClose}>
             关闭
           </Button>
         </Flex>
-      </Stack>
+      </Box>
     </Modal>
   );
 }

@@ -1,15 +1,14 @@
-// 组件：素材资料库系统（统一表格、80vw 宽屏富文本新增/查看弹窗与智能摘要设定一体化）
+// 组件：素材资料库系统（统一表格、宽屏富文本新增/编辑弹窗与笔记查看一体化）
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { Box, LoadingOverlay } from "@mantine/core";
-import { MaterialData, getMaterialList, deleteMaterial } from "@/rest/project-extensions";
+import { MaterialData, getMaterialList, updateMaterial, deleteMaterial } from "@/rest/project-extensions";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import MaterialsTable from "./materials-table";
 import ModalCreateMaterial from "./modal-create-material";
-import ModalMaterialSummary from "./modal-material-summary";
 import ModalMaterialPreview from "./modal-material-preview";
 
 export default function MaterialsPage() {
@@ -21,7 +20,7 @@ export default function MaterialsPage() {
   const [searchKey, setSearchKey] = useState("");
 
   const [createModalOpened, setCreateModalOpened] = useState(false);
-  const [summaryMaterial, setSummaryMaterial] = useState<MaterialData | null>(null);
+  const [editingMaterial, setEditingMaterial] = useState<MaterialData | null>(null);
   const [previewMaterial, setPreviewMaterial] = useState<MaterialData | null>(null);
 
   const fetchList = async () => {
@@ -56,7 +55,7 @@ export default function MaterialsPage() {
     if (isConfirmed) {
       try {
         await deleteMaterial(id);
-        if (summaryMaterial?.id === id) setSummaryMaterial(null);
+        if (editingMaterial?.id === id) setEditingMaterial(null);
         if (previewMaterial?.id === id) setPreviewMaterial(null);
         useAlert.success("素材已成功删除");
         await fetchList();
@@ -66,10 +65,16 @@ export default function MaterialsPage() {
     }
   };
 
-  const handleUpdateSuccess = (updated: MaterialData) => {
-    setList((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    if (summaryMaterial?.id === updated.id) setSummaryMaterial(updated);
-    if (previewMaterial?.id === updated.id) setPreviewMaterial(updated);
+  const handleTogglePin = async (item: MaterialData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const nextPinned = item.isPinned ? 0 : 1;
+      await updateMaterial({ id: item.id, isPinned: nextPinned });
+      useAlert.success(nextPinned ? "已置顶该素材" : "已取消置顶");
+      await fetchList();
+    } catch (err: any) {
+      useAlert.error("置顶操作失败: " + (err?.message || "网络异常"));
+    }
   };
 
   return (
@@ -95,39 +100,45 @@ export default function MaterialsPage() {
             }
           });
         }}
-        onOpenCreateModal={() => setCreateModalOpened(true)}
-        onOpenSummaryModal={(item) => setSummaryMaterial(item)}
+        onOpenCreateModal={() => {
+          setEditingMaterial(null);
+          setCreateModalOpened(true);
+        }}
+        onOpenEditModal={(item) => {
+          setEditingMaterial(item);
+          setCreateModalOpened(true);
+        }}
         onOpenPreviewModal={(item) => setPreviewMaterial(item)}
+        onTogglePin={handleTogglePin}
         onDeleteMaterial={handleDelete}
       />
 
-      {/* 新建/上传素材弹窗 */}
+      {/* 新建/编辑素材弹窗 */}
       <ModalCreateMaterial
         opened={createModalOpened}
-        onClose={() => setCreateModalOpened(false)}
+        onClose={() => {
+          setCreateModalOpened(false);
+          setEditingMaterial(null);
+        }}
         workId={workId}
+        initialData={editingMaterial}
         onSuccess={() => {
           fetchList();
-          useAlert.success("素材创建/上传成功！");
+          useAlert.success(editingMaterial ? "素材修改保存成功！" : "素材创建/上传成功！");
         }}
       />
 
-      {/* 60vw 智能摘要与设定弹窗 */}
-      <ModalMaterialSummary
-        opened={!!summaryMaterial}
-        material={summaryMaterial}
-        onClose={() => setSummaryMaterial(null)}
-        onUpdateSuccess={handleUpdateSuccess}
-      />
-
-      {/* 60vw 素材正文与文档查看弹窗 */}
+      {/* 完整素材笔记查看弹窗 */}
       <ModalMaterialPreview
         opened={!!previewMaterial}
         material={previewMaterial}
         onClose={() => setPreviewMaterial(null)}
-        onOpenSummaryModal={() => {
+        onOpenEditModal={() => {
           if (previewMaterial) {
-            setSummaryMaterial(previewMaterial);
+            const item = previewMaterial;
+            setPreviewMaterial(null);
+            setEditingMaterial(item);
+            setCreateModalOpened(true);
           }
         }}
       />

@@ -2,8 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, characters, locations, factions, items, worldRules, outlines, chapters } from "@/db";
-import { eq } from "drizzle-orm";
+import { getDb, characters, locations, factions, items, worldRules, outlines, chapters, materials } from "@/db";
+import { eq, and } from "drizzle-orm";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -18,7 +18,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "workId 无效" }, { status: 400 });
     }
 
-    const [charList, locList, facList, itemList, ruleList, outlineList, chapterList] = await Promise.all([
+    const [charList, locList, facList, itemList, ruleList, outlineList, chapterList, materialList] = await Promise.all([
       db.select({ id: characters.id, name: characters.name, roleType: characters.roleType, identity: characters.identity }).from(characters).where(eq(characters.workId, workId)).all(),
       db.select({ id: locations.id, name: locations.name, type: locations.type, region: locations.region }).from(locations).where(eq(locations.workId, workId)).all(),
       db.select({ id: factions.id, name: factions.name, scale: factions.scale }).from(factions).where(eq(factions.workId, workId)).all(),
@@ -26,6 +26,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       db.select({ id: worldRules.id, name: worldRules.name, category: worldRules.category }).from(worldRules).where(eq(worldRules.workId, workId)).all(),
       db.select({ id: outlines.id, title: outlines.title, type: outlines.type, goal: outlines.goal }).from(outlines).where(eq(outlines.workId, workId)).all(),
       db.select({ id: chapters.id, title: chapters.title, chapterNumber: chapters.chapterNumber, isVolume: chapters.isVolume, summary: chapters.summary }).from(chapters).where(eq(chapters.workId, workId)).all(),
+      db.select({ id: materials.id, title: materials.title, tags: materials.tags }).from(materials).where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1))).all(),
     ]);
 
     const tags: Array<{ id: string | number; name: string; type: string; desc?: string }> = [];
@@ -36,6 +37,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     itemList.forEach((i) => tags.push({ id: i.id, name: i.name, type: "item", desc: i.tier || i.category || "物品" }));
     ruleList.forEach((r) => tags.push({ id: r.id, name: r.name, type: "rule", desc: r.category || "法则" }));
     outlineList.forEach((o) => tags.push({ id: o.id, name: o.title, type: "outline", desc: o.goal || "大纲" }));
+    materialList.forEach((m) => tags.push({ id: m.id, name: `素材: ${m.title}`, type: "material", desc: m.tags || "素材资料" }));
     chapterList.filter((ch) => !ch.isVolume && ch.id !== currentChapterId).forEach((ch) => tags.push({ id: ch.id, name: `第${ch.chapterNumber}章 ${ch.title}`, type: "chapter", desc: ch.summary || "章节" }));
 
     return NextResponse.json({ success: true, result: tags });

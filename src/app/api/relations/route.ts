@@ -6,20 +6,35 @@ import { eq, and, desc, sql } from "drizzle-orm";
 
 async function ensureRelationsTable(db: any) {
   try {
-    await db.run(sql`CREATE TABLE IF NOT EXISTS character_relations (
+    await db.run(`CREATE TABLE IF NOT EXISTS character_relations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       work_id INTEGER NOT NULL,
-      source_char_id INTEGER NOT NULL,
-      source_char_name TEXT NOT NULL,
-      target_char_id INTEGER NOT NULL,
-      target_char_name TEXT NOT NULL,
-      relation_type TEXT NOT NULL,
+      source_char_id INTEGER,
+      source_char_name TEXT,
+      target_char_id INTEGER,
+      target_char_name TEXT,
+      relation_type TEXT,
       relation_tag TEXT DEFAULT 'friendly',
       description TEXT,
       created_at INTEGER,
       updated_at INTEGER
-    );`);
+    )`);
   } catch (_) {}
+
+  const columns = [
+    `ALTER TABLE character_relations ADD COLUMN source_char_id INTEGER`,
+    `ALTER TABLE character_relations ADD COLUMN source_char_name TEXT`,
+    `ALTER TABLE character_relations ADD COLUMN target_char_id INTEGER`,
+    `ALTER TABLE character_relations ADD COLUMN target_char_name TEXT`,
+    `ALTER TABLE character_relations ADD COLUMN relation_type TEXT`,
+    `ALTER TABLE character_relations ADD COLUMN relation_tag TEXT DEFAULT 'friendly'`,
+    `ALTER TABLE character_relations ADD COLUMN description TEXT`,
+  ];
+  for (const colSql of columns) {
+    try {
+      await db.run(colSql);
+    } catch (_) {}
+  }
 }
 
 /**
