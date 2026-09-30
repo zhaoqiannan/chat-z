@@ -34,7 +34,7 @@ export default function ModalCreateChapter({
 
   useEffect(() => {
     if (opened) {
-      setTitle(`第 ${nextChapterNum} 章 `);
+      setTitle(`第 ${nextChapterNum} 章`);
       setSubtitle("");
       setVolumeId(defaultVolumeId || null);
       setStatus("not_started");
@@ -101,8 +101,8 @@ export default function ModalCreateChapter({
     >
       <Stack gap="xs">
         <TextInput
-          label="章节标题"
-          placeholder="例如：第 1 章 少年与剑"
+          label="章节标题 (自动生成)"
+          placeholder={`例如：第 ${nextChapterNum} 章`}
           size="xs"
           value={title}
           onChange={(e) => setTitle(e.currentTarget.value)}
@@ -111,10 +111,11 @@ export default function ModalCreateChapter({
 
         <TextInput
           label="小标题 / 章节副标题 (选填)"
-          placeholder="例如：一剑霜寒十四州"
+          placeholder="例如：从前有个林狗子"
           size="xs"
           value={subtitle}
           onChange={(e) => setSubtitle(e.currentTarget.value)}
+          autoFocus
         />
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">

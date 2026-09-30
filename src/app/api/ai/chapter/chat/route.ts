@@ -110,7 +110,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         ? db.select().from(worldRules).where(inArray(worldRules.id, ruleIds)).all()
         : db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(6).all(),
       outlineIds.length > 0 ? db.select().from(outlines).where(inArray(outlines.id, outlineIds)).all() : [],
-      otherChapterIds.length > 0 ? db.select({ id: chapters.id, title: chapters.title, chapterNumber: chapters.chapterNumber, summary: chapters.summary }).from(chapters).where(inArray(chapters.id, otherChapterIds)).all() : [],
+      otherChapterIds.length > 0 ? db.select({ id: chapters.id, title: chapters.title, subtitle: chapters.subtitle, chapterNumber: chapters.chapterNumber, summary: chapters.summary }).from(chapters).where(inArray(chapters.id, otherChapterIds)).all() : [],
       materialIds.length > 0
         ? db.select().from(materials).where(inArray(materials.id, materialIds)).all()
         : db.select().from(materials).where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1))).limit(6).all(),
@@ -137,7 +137,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       structuredLoreContext += "【关联故事大纲节拍】：\n" + outlinesData.map((o) => `- ${o.title}: 核心目标[${o.goal || "推进"}], 关键冲突[${o.conflict || "无"}], 预期结果[${o.expectedOutcome || "无"}]`).join("\n") + "\n\n";
     }
     if (otherChaptersData.length > 0) {
-      structuredLoreContext += "【其他关联章节提要】：\n" + otherChaptersData.map((ch) => `- 第${ch.chapterNumber}章 ${ch.title}: 提要[${ch.summary || "无"}]`).join("\n") + "\n\n";
+      structuredLoreContext += "【其他关联章节提要】：\n" + otherChaptersData.map((ch) => `- ${ch.title || `第${ch.chapterNumber}章`}${ch.subtitle ? ` (${ch.subtitle})` : ""}: 提要[${ch.summary || "无"}]`).join("\n") + "\n\n";
     }
     if (materialsData.length > 0) {
       structuredLoreContext += "【关联素材资料库与作者设定笔记（写作需严格参考此资料，保持世界观与剧情设定一致）】：\n" + materialsData.map((m) => {
@@ -177,7 +177,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     // 2. CONTEXT 层：组装上下文背景
     let contextMessage = `【作品基础信息】：书名《${work.title}》（题材：${work.tag || "网络小说"}）
-当前章节：第${chapter.chapterNumber}章《${chapter.title}》${chapter.summary ? `（本章大纲摘要：${chapter.summary}）` : ""}\n\n`;
+当前章节：《${chapter.title || `第${chapter.chapterNumber}章`}${chapter.subtitle ? `  ${chapter.subtitle}` : ""}》${chapter.summary ? `（本章大纲摘要：${chapter.summary}）` : ""}\n\n`;
 
     if (structuredLoreContext) {
       contextMessage += `【作品事实与设定资料】：\n${structuredLoreContext}\n`;

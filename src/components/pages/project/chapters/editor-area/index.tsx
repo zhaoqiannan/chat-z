@@ -629,7 +629,9 @@ export default function EditorArea({
           )}
           <Text fz={12.5} c="#94a3b8">章节</Text>
           <Text fz={12.5} c="#cbd5e1">/</Text>
-          <Text fz={13} fw={600} c="#334155">第{chapter.chapterNumber}章 · {title || chapter.title}</Text>
+          <Text fz={13} fw={600} c="#334155">
+            {title || chapter.title || `第${chapter.chapterNumber}章`}{(subtitle || chapter.subtitle) ? `  ${subtitle || chapter.subtitle}` : ""}
+          </Text>
           {isDirty && (
             <Badge size="xs" color="orange" variant="light" styles={{ root: { fontSize: 10, padding: "0 6px" } }}>
               未保存

@@ -38,7 +38,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     ruleList.forEach((r) => tags.push({ id: r.id, name: r.name, type: "rule", desc: r.category || "法则" }));
     outlineList.forEach((o) => tags.push({ id: o.id, name: o.title, type: "outline", desc: o.goal || "大纲" }));
     materialList.forEach((m) => tags.push({ id: m.id, name: `素材: ${m.title}`, type: "material", desc: m.tags || "素材资料" }));
-    chapterList.filter((ch) => !ch.isVolume && ch.id !== currentChapterId).forEach((ch) => tags.push({ id: ch.id, name: `第${ch.chapterNumber}章 ${ch.title}`, type: "chapter", desc: ch.summary || "章节" }));
+    chapterList.filter((ch) => !ch.isVolume && ch.id !== currentChapterId).forEach((ch) => tags.push({ id: ch.id, name: `${ch.title || `第${ch.chapterNumber}章`}`, type: "chapter", desc: ch.summary || "章节" }));
 
     return NextResponse.json({ success: true, result: tags });
   } catch (error: any) {

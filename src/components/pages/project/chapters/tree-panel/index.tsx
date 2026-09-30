@@ -187,7 +187,7 @@ export default function TreePanel({
                               truncate="end"
                               style={{ flex: 1 }}
                             >
-                              第{ch.chapterNumber}章 {ch.title}
+                              {ch.title || `第${ch.chapterNumber}章`}{ch.subtitle ? `  ${ch.subtitle}` : ""}
                             </Text>
                           </Group>
 
@@ -240,7 +240,7 @@ export default function TreePanel({
                           truncate="end"
                           style={{ flex: 1 }}
                         >
-                          第{ch.chapterNumber}章 {ch.title}
+                          {ch.title || `第${ch.chapterNumber}章`}{ch.subtitle ? `  ${ch.subtitle}` : ""}
                         </Text>
                       </Group>
                       <Text fz={11} c="#94a3b8" style={{ flexShrink: 0, marginLeft: 6 }}>
@@ -259,7 +259,7 @@ export default function TreePanel({
         <Box p="xs" style={{ borderTop: "1px solid #f1f5f9", backgroundColor: "#fafbfc" }}>
           <Flex justify="space-between" align="center" mb={4}>
             <Text fz={12} fw={600} c="#334155" truncate="end" style={{ maxWidth: 160 }}>
-              第{currentActiveChapter.chapterNumber}章 · {currentActiveChapter.title}
+              {currentActiveChapter.title || `第${currentActiveChapter.chapterNumber}章`}{currentActiveChapter.subtitle ? `  ${currentActiveChapter.subtitle}` : ""}
             </Text>
             <Badge size="xs" variant="light" >写作中</Badge>
           </Flex>

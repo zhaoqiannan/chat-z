@@ -369,7 +369,7 @@ export default function ChaptersPage() {
       >
         <Stack gap="md">
           <Text fz={13.5} c="#334155" style={{ lineHeight: 1.6 }}>
-            当前章节「第{activeChapter?.chapterNumber}章 · {activeChapter?.title}」存在未保存的修改。离开将丢失未保存的内容，请选择操作：
+            当前章节「{activeChapter?.title || `第${activeChapter?.chapterNumber}章`}{activeChapter?.subtitle ? `  ${activeChapter?.subtitle}` : ""}」存在未保存的修改。离开将丢失未保存的内容，请选择操作：
           </Text>
           <Group justify="flex-end" gap="sm" mt="sm">
             <Button variant="default" color="gray" onClick={handleDiscardAndNavigate}>
