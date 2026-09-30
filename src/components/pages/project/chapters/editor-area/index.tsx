@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu, Paper, Stack } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy } from "react-icons/fi";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy, FiAlignJustify, FiMinimize2 } from "react-icons/fi";
 import { ChapterItem, createChapterVersion, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
@@ -284,7 +284,7 @@ export default function EditorArea({
   const handleFormatIndent = () => {
     if (!content) return;
     const formatted = content
-      .split("\n")
+      .split(/\r?\n/)
       .map((line) => {
         const trimmed = line.replace(/^[ 　\t]+/, "").trimEnd();
         return trimmed ? `　　${trimmed}` : "";
@@ -292,6 +292,37 @@ export default function EditorArea({
       .join("\n");
     setContent(formatted);
     setTimeout(refreshTextareaHeight, 20);
+    useAlert.success("已完成一键段首缩进");
+  };
+
+  const handleFormatDoubleNewline = () => {
+    if (!content) return;
+    const validLines = content
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim() !== "");
+
+    if (validLines.length === 0) return;
+
+    const formatted = validLines.join("\n\n");
+    setContent(formatted);
+    setTimeout(refreshTextareaHeight, 20);
+    useAlert.success("已完成整理分段（段落间空一行）");
+  };
+
+  const handleFormatCompactNewline = () => {
+    if (!content) return;
+    const validLines = content
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => line.trim() !== "");
+
+    if (validLines.length === 0) return;
+
+    const formatted = validLines.join("\n");
+    setContent(formatted);
+    setTimeout(refreshTextareaHeight, 20);
+    useAlert.success("已取消段间空行（恢复紧凑段落）");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -612,18 +643,6 @@ export default function EditorArea({
             <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字</Text>
           </Group>
 
-          <Tooltip label="一键智能排版（所有段首缩进2空格）" position="bottom">
-            <Button
-              size="xs"
-              variant="default"
-              leftSection={<FiAlignLeft size={13} color="#0891b2" />}
-              onClick={handleFormatIndent}
-              styles={{ root: { borderColor: "#e2e8f0", height: 28 } }}
-            >
-              一键缩进
-            </Button>
-          </Tooltip>
-
           <Button
             size="xs"
             variant={isDirty ? "filled" : "light"}
@@ -637,13 +656,35 @@ export default function EditorArea({
             {isDirty ? "保存" : "已保存"}
           </Button>
 
-          <Menu position="bottom-end" shadow="md" width={180}>
+          <Menu position="bottom-end" shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon variant="default" size="sm" styles={{ root: { height: 28, width: 28 } }} title="更多操作">
                 <FiMoreHorizontal size={14} />
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Label>文本排版</Menu.Label>
+              <Menu.Item
+                leftSection={<FiAlignLeft size={13} color="#0891b2" />}
+                onClick={handleFormatIndent}
+              >
+                一键段首缩进
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<FiAlignJustify size={13} color="#6366f1" />}
+                onClick={handleFormatDoubleNewline}
+              >
+                整理分段 (段间空行)
+              </Menu.Item>
+              <Menu.Item
+                leftSection={<FiMinimize2 size={13} color="#8b5cf6" />}
+                onClick={handleFormatCompactNewline}
+              >
+                取消分段 (紧凑段落)
+              </Menu.Item>
+
+              <Menu.Divider />
+
               <Menu.Label>智能与辅助</Menu.Label>
               <Menu.Item
                 leftSection={<FiLayers size={13} color="#16a34a" />}
