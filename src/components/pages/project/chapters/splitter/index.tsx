@@ -87,8 +87,9 @@ export default function Splitter({
           width: 24,
           height: "100%",
           display: "flex",
+          flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
+          paddingTop: 12,
           borderLeft: "1px solid #e2e8f0",
           backgroundColor: "#f8fafc",
           zIndex: 25,
@@ -98,7 +99,7 @@ export default function Splitter({
         onClick={onToggleCollapse}
       >
         <Tooltip label="展开 AI 协同创作助手" position="left" withArrow>
-          <ActionIcon size="xs" variant="subtle" >
+          <ActionIcon size="xs" variant="subtle" color="gray">
             <FiChevronLeft size={13} />
           </ActionIcon>
         </Tooltip>

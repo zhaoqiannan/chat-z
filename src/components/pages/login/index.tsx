@@ -20,9 +20,9 @@ export default function LoginPage() {
     useEffect(() => {
         const userInfoStr = localStorage.getItem('user_info');
         if (userInfoStr) {
-            router.replace('/workspace');
+            window.location.href = '/workspace';
         }
-    }, [router]);
+    }, []);
 
     const handleLogin = async () => {
         if (!username || !password) {
@@ -36,7 +36,7 @@ export default function LoginPage() {
 
         try {
             await loginUser({ username, password });
-            router.replace('/workspace');
+            window.location.href = '/workspace';
         } catch (err: any) {
             setError(err?.message || '登录失败');
         } finally {

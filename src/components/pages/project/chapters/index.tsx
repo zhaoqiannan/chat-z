@@ -31,7 +31,7 @@ export default function ChaptersPage() {
   const [pendingChapter, setPendingChapter] = useState<ChapterItem | null>(null);
   const saveEditorRef = useRef<(() => Promise<boolean>) | null>(null);
 
-  const [treeCollapsed, setTreeCollapsed] = useState(true);
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(true);
   const [aiPanelWidth, setAiPanelWidth] = useState(360);
   const [isResizingAiPanel, setIsResizingAiPanel] = useState(false);
@@ -52,7 +52,11 @@ export default function ChaptersPage() {
   const [chapterModalOpened, setChapterModalOpened] = useState(false);
   const [createChapterVolumeId, setCreateChapterVolumeId] = useState<number | string | null>(null);
 
-  const fetchChapters = async () => {
+  const activeChapterRef = useRef<ChapterItem | null>(null);
+  activeChapterRef.current = activeChapter;
+  const initialTargetHandledRef = useRef(false);
+
+  const fetchChapters = async (targetId?: number | string) => {
     if (!workId) return;
     try {
       setLoading(true);
@@ -61,7 +65,20 @@ export default function ChaptersPage() {
         const list: ChapterItem[] = res.result;
         setRawList(list);
 
-        if (targetChapterId) {
+        // 优先使用显式指定的 targetId，其次保持当前正在编辑的章节，避免保存后跳到最新或默认章节
+        const currentActiveId = targetId ?? activeChapterRef.current?.id;
+
+        if (currentActiveId) {
+          const found = list.find((item) => String(item.id) === String(currentActiveId));
+          if (found) {
+            setActiveChapter(found);
+            return;
+          }
+        }
+
+        // 仅在首次挂载且未选择章节时响应 URL 中的 targetChapterId
+        if (!initialTargetHandledRef.current && targetChapterId) {
+          initialTargetHandledRef.current = true;
           const target = list.find((item) => String(item.id) === String(targetChapterId));
           if (target) {
             setActiveChapter(target);
@@ -69,13 +86,8 @@ export default function ChaptersPage() {
           }
         }
 
-        if (activeChapter) {
-          const found = list.find((item) => String(item.id) === String(activeChapter.id));
-          setActiveChapter(found || (list.find((c) => !c.isVolume) || null));
-        } else {
-          const firstChapter = list.find((c) => !c.isVolume);
-          setActiveChapter(firstChapter || null);
-        }
+        const firstChapter = list.find((c) => !c.isVolume);
+        setActiveChapter(firstChapter || null);
       }
     } catch (e) {
       console.error(e);
@@ -128,6 +140,7 @@ export default function ChaptersPage() {
       setUnsavedModalOpened(true);
       return;
     }
+    initialTargetHandledRef.current = true;
     setActiveChapter(chapter);
     setSelectedTextForAi("");
   };
@@ -136,6 +149,7 @@ export default function ChaptersPage() {
     setIsChapterDirty(false);
     setUnsavedModalOpened(false);
     if (pendingChapter) {
+      initialTargetHandledRef.current = true;
       setActiveChapter(pendingChapter);
       setPendingChapter(null);
       setSelectedTextForAi("");
@@ -168,14 +182,16 @@ export default function ChaptersPage() {
   const handleCreateChapter = async (data: CreateChapterPayload) => {
     const res = await createChapter(data);
     if (res && res.success) {
-      await fetchChapters();
+      const createdId = res.result?.id;
+      await fetchChapters(createdId);
     }
   };
 
   const handleUpdate = async (data: Partial<ChapterItem>) => {
     if (!activeChapter) return;
+    const currentId = activeChapter.id;
     const updatePayload: UpdateChapterPayload = {
-      id: activeChapter.id,
+      id: currentId,
       title: data.title !== undefined ? data.title : activeChapter.title,
       subtitle: data.subtitle !== undefined ? data.subtitle : activeChapter.subtitle,
       content: data.content !== undefined ? data.content : activeChapter.content,
@@ -185,8 +201,8 @@ export default function ChaptersPage() {
 
     const res = await updateChapter(updatePayload);
     if (res && res.success) {
-      setActiveChapter((prev) => (prev ? { ...prev, ...data } : null));
-      await fetchChapters();
+      setActiveChapter((prev) => (prev && String(prev.id) === String(currentId) ? { ...prev, ...data } : prev));
+      await fetchChapters(currentId);
     }
   };
 

@@ -281,33 +281,19 @@ export default function EditorArea({
 
   const liveWordCount = content.replace(/\s+/g, "").length;
 
-  const handleFormatIndent = () => {
-    if (!content) return;
-    const formatted = content
-      .split(/\r?\n/)
-      .map((line) => {
-        const trimmed = line.replace(/^[ 　\t]+/, "").trimEnd();
-        return trimmed ? `　　${trimmed}` : "";
-      })
-      .join("\n");
-    setContent(formatted);
-    setTimeout(refreshTextareaHeight, 20);
-    useAlert.success("已完成一键段首缩进");
-  };
-
-  const handleFormatDoubleNewline = () => {
+  const handleFormatAll = () => {
     if (!content) return;
     const validLines = content
       .split(/\r?\n/)
-      .map((line) => line.trimEnd())
+      .map((line) => line.replace(/^[ 　\t]+/, "").trimEnd())
       .filter((line) => line.trim() !== "");
 
     if (validLines.length === 0) return;
 
-    const formatted = validLines.join("\n\n");
+    const formatted = validLines.map((line) => `　　${line}`).join("\n\n");
     setContent(formatted);
     setTimeout(refreshTextareaHeight, 20);
-    useAlert.success("已完成整理分段（段落间空一行）");
+    useAlert.success("已完成一键格式化（段首缩进与整理分段）");
   };
 
   const handleFormatCompactNewline = () => {
@@ -322,7 +308,7 @@ export default function EditorArea({
     const formatted = validLines.join("\n");
     setContent(formatted);
     setTimeout(refreshTextareaHeight, 20);
-    useAlert.success("已取消段间空行（恢复紧凑段落）");
+    useAlert.success("已取消分段（恢复紧凑段落）");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -658,6 +644,18 @@ export default function EditorArea({
             {isDirty ? "保存" : "已保存"}
           </Button>
 
+          <Button
+            size="xs"
+            variant="default"
+            color="gray"
+            leftSection={<FiAlignLeft size={13} color="#0284c7" />}
+            onClick={handleFormatAll}
+            styles={{ root: { height: 28, fontWeight: 500, fontSize: 12 } }}
+            title="一键整理分段与段首缩进"
+          >
+            一键格式化
+          </Button>
+
           <Menu position="bottom-end" shadow="md" width={200}>
             <Menu.Target>
               <ActionIcon variant="default" size="sm" styles={{ root: { height: 28, width: 28 } }} title="更多操作">
@@ -665,24 +663,12 @@ export default function EditorArea({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Label>文本排版</Menu.Label>
               <Menu.Item
-                leftSection={<FiAlignLeft size={13} color="#0891b2" />}
-                onClick={handleFormatIndent}
+                leftSection={<FiZap size={14} color="#0284c7" />}
+                onClick={onToggleAiPanel}
+                styles={{ item: { fontWeight: 600 } }}
               >
-                一键段首缩进
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<FiAlignJustify size={13} color="#6366f1" />}
-                onClick={handleFormatDoubleNewline}
-              >
-                整理分段 (段间空行)
-              </Menu.Item>
-              <Menu.Item
-                leftSection={<FiMinimize2 size={13} color="#8b5cf6" />}
-                onClick={handleFormatCompactNewline}
-              >
-                取消分段 (紧凑段落)
+                唤起 AI 协同助手
               </Menu.Item>
 
               <Menu.Divider />
@@ -695,14 +681,21 @@ export default function EditorArea({
               >
                 {extractingOutline ? "提取大纲中..." : "提取剧情到大纲"}
               </Menu.Item>
-              <Menu.Item leftSection={<FiZap size={13} color="#0284c7" />} onClick={onToggleAiPanel}>
-                唤起 AI 协同助手
-              </Menu.Item>
               <Menu.Item leftSection={<FiBookmark size={13} color="#06b6d4" />} onClick={() => setFragmentDrawerOpened(true)}>
                 记忆碎片灵感库
               </Menu.Item>
               <Menu.Item leftSection={<FiClock size={13} color="#64748b" />} onClick={() => setVersionDrawerOpened(true)}>
                 版本生成历史
+              </Menu.Item>
+
+              <Menu.Divider />
+
+              <Menu.Label>文本排版</Menu.Label>
+              <Menu.Item
+                leftSection={<FiMinimize2 size={13} color="#8b5cf6" />}
+                onClick={handleFormatCompactNewline}
+              >
+                取消分段 (紧凑段落)
               </Menu.Item>
 
               {onDeleteChapter && (
