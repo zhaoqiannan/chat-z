@@ -18,9 +18,19 @@ export default function LoginPage() {
     const router = useRouter();
 
     useEffect(() => {
-        const userInfoStr = localStorage.getItem('user_info');
-        if (userInfoStr) {
-            window.location.href = '/workspace';
+        const hasAuthCookie = document.cookie.split(';').some((item) => {
+            const [k, v] = item.trim().split('=');
+            return k === 'auth_token' && (v === 'true' || !!v);
+        });
+
+        if (!hasAuthCookie) {
+            localStorage.removeItem('user_info');
+            localStorage.removeItem('access_token');
+        } else {
+            const userInfoStr = localStorage.getItem('user_info');
+            if (userInfoStr) {
+                window.location.href = '/workspace/';
+            }
         }
     }, []);
 
@@ -36,7 +46,7 @@ export default function LoginPage() {
 
         try {
             await loginUser({ username, password });
-            window.location.href = '/workspace';
+            window.location.href = '/workspace/';
         } catch (err: any) {
             setError(err?.message || '登录失败');
         } finally {

@@ -1,4 +1,3 @@
-// 组件：角色档案新建与编辑弹窗（70vw宽度、固定88vh限高、body流畅滚动、粘性底部操作栏、精简label与10行Textarea）
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
@@ -13,6 +12,7 @@ interface ModalCharacterFormProps {
   onClose: () => void;
   workId: string;
   editingItem: CharacterItem | null;
+  defaultRoleType?: string;
   onSuccess: () => Promise<void>;
 }
 
@@ -21,6 +21,7 @@ export default function ModalCharacterForm({
   onClose,
   workId,
   editingItem,
+  defaultRoleType,
   onSuccess,
 }: ModalCharacterFormProps) {
   const [formLoading, setFormLoading] = useState(false);
@@ -72,7 +73,7 @@ export default function ModalCharacterForm({
       setAge("");
       setIdentity("");
       setFaction("");
-      setRoleType("major");
+      setRoleType(defaultRoleType || "major");
       setAppearance("");
       setAvatarUrl("");
       setTags("");
@@ -84,7 +85,7 @@ export default function ModalCharacterForm({
       setInspirationFragments("");
       setBackground("");
     }
-  }, [editingItem, opened]);
+  }, [editingItem, opened, defaultRoleType]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -206,7 +207,7 @@ export default function ModalCharacterForm({
               { value: "protagonist", label: "主角" },
               { value: "major", label: "重要配角" },
               { value: "antagonist", label: "反派" },
-              { value: "supporting", label: "普通配角" },
+              { value: "supporting", label: "配角" },
               { value: "mob", label: "龙套" },
             ]}
           />

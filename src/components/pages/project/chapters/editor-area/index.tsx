@@ -364,6 +364,27 @@ export default function EditorArea({
       }, 0);
     }
   };
+  const handleCopyContent = async () => {
+    if (!content) {
+      useAlert.warning("当前章节正文内容为空");
+      return;
+    }
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(content);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = content;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      useAlert.success("已复制本章正文内容至剪贴板！");
+    } catch (err) {
+      useAlert.error("复制失败，请手动选择复制");
+    }
+  };
 
   const handleManualSave = useCallback(async (): Promise<boolean> => {
     if (!chapter) return false;
@@ -630,6 +651,18 @@ export default function EditorArea({
             <Box style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: isDirty ? "#f59e0b" : "#10b981" }} />
             <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字</Text>
           </Group>
+
+          <Tooltip label="一键复制本章内容" position="bottom">
+            <ActionIcon
+              variant="default"
+              size="sm"
+              onClick={handleCopyContent}
+              styles={{ root: { height: 28, width: 28 } }}
+              title="一键复制本章正文"
+            >
+              <FiCopy size={13} color="#475569" />
+            </ActionIcon>
+          </Tooltip>
 
           <Button
             size="xs"

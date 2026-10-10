@@ -16,7 +16,7 @@ export async function middleware(req: NextRequest) {
   const isLoginPage = pathname === "/login" || pathname === "/login/";
 
   const token = req.cookies.get("auth_token")?.value;
-  const isLogin = token === "true";
+  const isLogin = token === "true" || !!token;
 
   let response: NextResponse;
 
