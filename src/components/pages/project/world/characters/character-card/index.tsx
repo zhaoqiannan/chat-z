@@ -1,10 +1,9 @@
 "use client";
 
 import React from "react";
-import { Box, Flex, Text, Badge, ActionIcon, Card, Tooltip, Menu, Avatar, Group } from "@mantine/core";
-import { FiEdit, FiTrash2, FiBookmark, FiMoreHorizontal, FiEye, FiBookOpen, FiShield } from "react-icons/fi";
+import { Box, Flex, Text, Badge, Card, Menu, Avatar, Group, Button } from "@mantine/core";
 import { CharacterItem } from "@/rest/world";
-import { ROLE_THEME_MAP, DEFAULT_ROLE_THEME } from "../constants";
+import { ROLE_NAME_MAP, BRAND } from "../constants";
 
 interface CharacterCardProps {
   item: CharacterItem;
@@ -21,9 +20,10 @@ export default function CharacterCard({
   onTogglePin,
   onDelete,
 }: CharacterCardProps) {
-  const roleTheme = ROLE_THEME_MAP[item.roleType] || DEFAULT_ROLE_THEME;
+  const roleName = ROLE_NAME_MAP[item.roleType] || "配角";
   const tagsList = item.tags ? item.tags.split(/[,，\s]+/).filter(Boolean) : [];
   const oneLineDesc = item.personalIntro || item.personality || item.identity || "";
+  const isProtagonist = item.roleType === "protagonist";
 
   return (
     <Card
@@ -34,20 +34,20 @@ export default function CharacterCard({
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        minHeight: 128,
-        borderColor: item.isPinned ? "#cbd5e1" : "#e2e8f0",
-        backgroundColor: item.isPinned ? "#fafbfc" : "#ffffff",
-        boxShadow: item.isPinned ? "0 2px 6px rgba(15, 23, 42, 0.05)" : "0 1px 3px rgba(15, 23, 42, 0.03)",
-        transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+        minHeight: 124,
+        backgroundColor: item.isPinned ? BRAND.bgSubtle : "#ffffff",
+        borderColor: item.isPinned ? BRAND.borderMedium : "#e8ecf0",
+        boxShadow: item.isPinned ? `0 1px 4px ${BRAND.bgLight}` : "0 1px 2px rgba(0, 0, 0, 0.02)",
+        transition: "all 0.2s ease",
         cursor: "pointer",
         position: "relative",
       }}
       styles={{
         root: {
           "&:hover": {
-            borderColor: "#94a3b8",
-            boxShadow: "0 6px 18px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.04)",
-            transform: "translateY(-2px)",
+            borderColor: BRAND.primary,
+            boxShadow: `0 4px 14px ${BRAND.bgLight}`,
+            transform: "translateY(-1px)",
           },
         },
       }}
@@ -59,17 +59,17 @@ export default function CharacterCard({
             <Avatar
               src={item.avatarUrl || undefined}
               radius="xl"
-              size={38}
+              size={36}
               styles={{
                 root: {
-                  border: `1.5px solid ${roleTheme.avatarBorder}`,
-                  backgroundColor: roleTheme.avatarBg,
+                  backgroundColor: BRAND.bgLight,
+                  border: `1px solid ${BRAND.borderLight}`,
                   flexShrink: 0,
                 },
                 placeholder: {
                   fontSize: 14,
                   fontWeight: 700,
-                  color: roleTheme.avatarColor,
+                  color: BRAND.text,
                 },
               }}
             >
@@ -93,16 +93,15 @@ export default function CharacterCard({
                       fontSize: 10.5,
                       height: 18,
                       padding: "0 6px",
-                      fontWeight: 600,
+                      fontWeight: isProtagonist ? 700 : 500,
                       flexShrink: 0,
-                      backgroundColor: roleTheme.badgeBg,
-                      border: `1px solid ${roleTheme.badgeBorder}`,
-                      color: roleTheme.badgeColor,
+                      backgroundColor: isProtagonist ? BRAND.bgMedium : BRAND.bgLight,
+                      border: `1px solid ${isProtagonist ? BRAND.borderMedium : BRAND.borderLight}`,
+                      color: isProtagonist ? BRAND.textDark : BRAND.text,
                     },
                   }}
                 >
-                  {item.roleType === "protagonist" && "👑 "}
-                  {roleTheme.name}
+                  {roleName}
                 </Badge>
               </Flex>
 
@@ -114,44 +113,60 @@ export default function CharacterCard({
             </Box>
           </Group>
 
-          <Group gap={4} align="center" style={{ flexShrink: 0 }} ml={4}>
-            <Tooltip label={item.isPinned ? "取消置顶" : "置顶角色"} position="top" withArrow offset={4}>
-              <ActionIcon
-                size="xs"
-                variant="subtle"
-                color={item.isPinned ? "yellow" : "gray"}
-                onClick={(e) => onTogglePin(item, e)}
-              >
-                <FiBookmark
-                  size={14}
-                  style={{
-                    fill: item.isPinned ? "#f59e0b" : "none",
-                    color: item.isPinned ? "#f59e0b" : "#94a3b8",
-                  }}
-                />
-              </ActionIcon>
-            </Tooltip>
+          <Group gap={4} align="center" style={{ flexShrink: 0 }} ml={4} onClick={(e) => e.stopPropagation()}>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={(e) => onTogglePin(item, e)}
+              styles={{
+                root: {
+                  fontSize: 10.5,
+                  height: 20,
+                  padding: "0 5px",
+                  color: item.isPinned ? BRAND.text : "#94a3b8",
+                  backgroundColor: item.isPinned ? BRAND.bgLight : "transparent",
+                  fontWeight: item.isPinned ? 600 : 400,
+                  "&:hover": {
+                    backgroundColor: BRAND.bgLight,
+                    color: BRAND.text,
+                  },
+                },
+              }}
+            >
+              {item.isPinned ? "已置顶" : "置顶"}
+            </Button>
 
-            <Menu position="bottom-end" shadow="md" width={120}>
+            <Menu position="bottom-end" shadow="md" width={100}>
               <Menu.Target>
-                <ActionIcon
-                  size="xs"
+                <Button
+                  size="compact-xs"
                   variant="subtle"
-                  color="gray"
-                  onClick={(e) => e.stopPropagation()}
+                  styles={{
+                    root: {
+                      fontSize: 11,
+                      height: 20,
+                      padding: "0 4px",
+                      color: "#94a3b8",
+                      letterSpacing: 1,
+                      "&:hover": {
+                        backgroundColor: "#f1f5f9",
+                        color: "#0f172a",
+                      },
+                    },
+                  }}
                 >
-                  <FiMoreHorizontal size={14} color="#94a3b8" />
-                </ActionIcon>
+                  ···
+                </Button>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item leftSection={<FiEye size={12} />} onClick={(e) => { e.stopPropagation(); onViewDetail(item); }}>
+                <Menu.Item onClick={() => onViewDetail(item)}>
                   查看档案
                 </Menu.Item>
-                <Menu.Item leftSection={<FiEdit size={12} />} onClick={(e) => { e.stopPropagation(); onEdit(item); }}>
+                <Menu.Item onClick={() => onEdit(item)}>
                   编辑档案
                 </Menu.Item>
                 <Menu.Divider />
-                <Menu.Item color="red" leftSection={<FiTrash2 size={12} />} onClick={(e) => onDelete(item, e)}>
+                <Menu.Item color="red" onClick={(e) => onDelete(item, e)}>
                   删除角色
                 </Menu.Item>
               </Menu.Dropdown>
@@ -165,15 +180,14 @@ export default function CharacterCard({
               <Badge
                 size="xs"
                 variant="outline"
-                leftSection={<FiShield size={9.5} />}
                 styles={{
                   root: {
                     fontSize: 10.5,
                     padding: "0 6px",
                     height: 18,
-                    borderColor: "#e2e8f0",
-                    backgroundColor: "#f8fafc",
-                    color: "#475569",
+                    borderColor: BRAND.borderLight,
+                    backgroundColor: BRAND.bgSubtle,
+                    color: BRAND.text,
                     fontWeight: 500,
                   },
                 }}
@@ -228,13 +242,10 @@ export default function CharacterCard({
         pt={8}
         style={{ borderTop: "1px solid #f1f5f9" }}
       >
-        <Group gap={5} align="center" style={{ minWidth: 0, flex: 1 }}>
-          <FiBookOpen size={12} color="#64748b" />
-          <Text fz={11} c="#64748b" fw={500} truncate="end">
-            {item.appearanceChapters ? `出场：${item.appearanceChapters}` : "全书贯穿"}
-          </Text>
-        </Group>
-        <Text fz={10.5} c="#94a3b8" style={{ flexShrink: 0 }}>
+        <Text fz={11} c="#64748b" fw={500} truncate="end" style={{ flex: 1, minWidth: 0 }}>
+          {item.appearanceChapters ? `出场：${item.appearanceChapters}` : "全书贯穿"}
+        </Text>
+        <Text fz={10.5} c={BRAND.text} fw={500} style={{ flexShrink: 0 }}>
           查看详情 →
         </Text>
       </Flex>

@@ -16,21 +16,13 @@ import {
   Collapse,
   Paper,
 } from "@mantine/core";
-import {
-  FiPlus,
-  FiSearch,
-  FiUser,
-  FiAlertTriangle,
-  FiChevronRight,
-  FiMaximize2,
-  FiMinimize2,
-} from "react-icons/fi";
+import { FiChevronRight } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { CharacterItem, getCharacterList, deleteCharacter, togglePinCharacter } from "@/rest/world";
 import CharacterCard from "./character-card";
 import ModalCharacterForm from "./modal-character-form";
 import ModalCharacterDetail from "./modal-character-detail";
-import { ROLE_LEVELS, ROLE_THEME_MAP } from "./constants";
+import { ROLE_LEVELS, BRAND } from "./constants";
 
 interface CharactersTabProps {
   workId: string;
@@ -277,9 +269,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             size="sm"
             styles={{
               root: {
-                backgroundColor: "#f1f5f9",
-                border: "1px solid #e2e8f0",
-                color: "#475569",
+                backgroundColor: BRAND.bgLight,
+                border: `1px solid ${BRAND.borderLight}`,
+                color: BRAND.text,
                 fontWeight: 600,
                 fontSize: 11,
               },
@@ -292,7 +284,6 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
         <Group gap="sm">
           <TextInput
             placeholder="搜索姓名、尊号、身份、势力、标签..."
-            leftSection={<FiSearch size={14} color="#94a3b8" />}
             value={searchKey}
             onChange={(e) => setSearchKey(e.target.value)}
             size="xs"
@@ -304,7 +295,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                 borderColor: "#e2e8f0",
                 color: "#0f172a",
                 "&:focus": {
-                  borderColor: "#94a3b8",
+                  borderColor: BRAND.primary,
                   backgroundColor: "#ffffff",
                 },
               },
@@ -314,17 +305,15 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           <Button
             size="xs"
             radius="md"
-            leftSection={<FiPlus size={14} />}
             onClick={() => handleOpenCreate()}
             styles={{
               root: {
                 fontWeight: 600,
-                backgroundColor: "#0f172a",
+                backgroundColor: BRAND.primary,
                 color: "#ffffff",
-                boxShadow: "0 1px 3px rgba(15, 23, 42, 0.12)",
                 transition: "all 0.15s ease",
                 "&:hover": {
-                  backgroundColor: "#1e293b",
+                  backgroundColor: BRAND.primaryHover,
                 },
               },
             }}
@@ -334,7 +323,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
         </Group>
       </Flex>
 
-      {/* 分类切换器标签栏：精炼胶囊切换与折叠控制 */}
+      {/* 分类切换器标签栏：主色调透明色微高亮胶囊 */}
       <Flex
         justify="space-between"
         align="center"
@@ -356,13 +345,13 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                 padding: "0 12px",
                 fontSize: 12.5,
                 fontWeight: selectedTab === "all" ? 600 : 500,
-                backgroundColor: selectedTab === "all" ? "#0f172a" : "transparent",
-                color: selectedTab === "all" ? "#ffffff" : "#64748b",
-                border: "1px solid transparent",
+                backgroundColor: selectedTab === "all" ? BRAND.bgLight : "transparent",
+                color: selectedTab === "all" ? BRAND.text : "#64748b",
+                border: selectedTab === "all" ? `1px solid ${BRAND.borderLight}` : "1px solid transparent",
                 transition: "all 0.15s ease",
                 "&:hover": {
-                  backgroundColor: selectedTab === "all" ? "#1e293b" : "#f1f5f9",
-                  color: selectedTab === "all" ? "#ffffff" : "#0f172a",
+                  backgroundColor: selectedTab === "all" ? BRAND.bgMedium : "#f8fafc",
+                  color: selectedTab === "all" ? BRAND.textDark : "#0f172a",
                 },
               },
             }}
@@ -374,9 +363,10 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                   fontSize: 11,
                   padding: "0 6px",
                   borderRadius: 10,
-                  backgroundColor: selectedTab === "all" ? "rgba(255, 255, 255, 0.2)" : "#f1f5f9",
-                  color: selectedTab === "all" ? "#ffffff" : "#64748b",
+                  backgroundColor: selectedTab === "all" ? BRAND.bgMedium : "#f1f5f9",
+                  color: selectedTab === "all" ? BRAND.textDark : "#64748b",
                   lineHeight: "16px",
+                  fontWeight: selectedTab === "all" ? 600 : 400,
                 }}
               >
                 {list.length}
@@ -400,35 +390,28 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                     padding: "0 12px",
                     fontSize: 12.5,
                     fontWeight: isCurrent ? 600 : 500,
-                    backgroundColor: isCurrent ? "#0f172a" : "transparent",
-                    color: isCurrent ? "#ffffff" : "#64748b",
-                    border: "1px solid transparent",
+                    backgroundColor: isCurrent ? BRAND.bgLight : "transparent",
+                    color: isCurrent ? BRAND.text : "#64748b",
+                    border: isCurrent ? `1px solid ${BRAND.borderLight}` : "1px solid transparent",
                     transition: "all 0.15s ease",
                     "&:hover": {
-                      backgroundColor: isCurrent ? "#1e293b" : "#f1f5f9",
-                      color: isCurrent ? "#ffffff" : "#0f172a",
+                      backgroundColor: isCurrent ? BRAND.bgMedium : "#f8fafc",
+                      color: isCurrent ? BRAND.textDark : "#0f172a",
                     },
                   },
                 }}
               >
                 <Group gap={6} align="center">
-                  <Box
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: isCurrent ? "#ffffff" : level.accentBar,
-                    }}
-                  />
                   <span>{level.name}</span>
                   <Box
                     style={{
                       fontSize: 11,
                       padding: "0 6px",
                       borderRadius: 10,
-                      backgroundColor: isCurrent ? "rgba(255, 255, 255, 0.2)" : "#f1f5f9",
-                      color: isCurrent ? "#ffffff" : "#64748b",
+                      backgroundColor: isCurrent ? BRAND.bgMedium : "#f1f5f9",
+                      color: isCurrent ? BRAND.textDark : "#64748b",
                       lineHeight: "16px",
+                      fontWeight: isCurrent ? 600 : 400,
                     }}
                   >
                     {count}
@@ -444,14 +427,13 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             size="xs"
             variant="subtle"
             color="gray"
-            leftSection={isAllExpanded ? <FiMinimize2 size={12} /> : <FiMaximize2 size={12} />}
             onClick={isAllExpanded ? handleCollapseAll : handleExpandAll}
             styles={{
               root: {
                 fontSize: 12,
                 color: "#64748b",
                 "&:hover": {
-                  backgroundColor: "#f1f5f9",
+                  backgroundColor: "#f8fafc",
                   color: "#0f172a",
                 },
               },
@@ -470,25 +452,10 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           radius="md"
           style={{
             textAlign: "center",
-            borderColor: "#e2e8f0",
+            borderColor: "#e8ecf0",
             backgroundColor: "#fafbfc",
           }}
         >
-          <Box
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 28,
-              backgroundColor: "#f1f5f9",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 16px auto",
-              color: "#64748b",
-            }}
-          >
-            <FiUser size={28} strokeWidth={1.6} />
-          </Box>
           <Text fz={16} fw={700} c="#0f172a" mb={6}>
             暂无角色档案
           </Text>
@@ -498,15 +465,13 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           <Button
             size="sm"
             radius="md"
-            leftSection={<FiPlus size={14} />}
             onClick={() => handleOpenCreate("protagonist")}
             styles={{
               root: {
-                backgroundColor: "#0f172a",
+                backgroundColor: BRAND.primary,
                 color: "#ffffff",
-                boxShadow: "0 1px 3px rgba(15, 23, 42, 0.12)",
                 "&:hover": {
-                  backgroundColor: "#1e293b",
+                  backgroundColor: BRAND.primaryHover,
                 },
               },
             }}
@@ -515,7 +480,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           </Button>
         </Paper>
       ) : searchKey.trim() && filteredList.length === 0 ? (
-        <Paper p={48} withBorder radius="md" style={{ textAlign: "center", borderColor: "#e2e8f0", backgroundColor: "#fafbfc" }}>
+        <Paper p={48} withBorder radius="md" style={{ textAlign: "center", borderColor: "#e8ecf0", backgroundColor: "#fafbfc" }}>
           <Text fz={14} fw={600} c="#334155" mb={6}>
             未搜索到匹配的角色档案
           </Text>
@@ -533,9 +498,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             <Group gap={8} align="center">
               <Box
                 style={{
-                  width: 3.5,
+                  width: 3,
                   height: 16,
-                  backgroundColor: currentLevelDef?.accentBar || "#0f172a",
+                  backgroundColor: BRAND.primary,
                   borderRadius: 2,
                 }}
               />
@@ -546,9 +511,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                 size="xs"
                 styles={{
                   root: {
-                    backgroundColor: currentLevelDef?.badgeBg,
-                    border: `1px solid ${currentLevelDef?.badgeBorder}`,
-                    color: currentLevelDef?.badgeColor,
+                    backgroundColor: BRAND.bgLight,
+                    border: `1px solid ${BRAND.borderLight}`,
+                    color: BRAND.text,
                     fontWeight: 600,
                   },
                 }}
@@ -560,7 +525,6 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             <Button
               size="xs"
               variant="default"
-              leftSection={<FiPlus size={12} />}
               onClick={() => handleOpenCreate(selectedTab)}
               styles={{
                 root: {
@@ -580,12 +544,11 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
               direction="column"
               py={48}
               style={{
-                border: "1px dashed #e2e8f0",
+                border: `1px dashed ${BRAND.borderLight}`,
                 borderRadius: 8,
-                backgroundColor: "#fafbfc",
+                backgroundColor: BRAND.bgSubtle,
               }}
             >
-              <FiUser size={34} color="#94a3b8" strokeWidth={1.5} style={{ marginBottom: 8 }} />
               <Text fz={13.5} fw={600} c="#1e293b" mb={4}>
                 暂无「{currentLevelDef?.name}」角色
               </Text>
@@ -594,14 +557,13 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
               </Text>
               <Button
                 size="xs"
-                leftSection={<FiPlus size={12} />}
                 onClick={() => handleOpenCreate(selectedTab)}
                 styles={{
                   root: {
-                    backgroundColor: "#0f172a",
+                    backgroundColor: BRAND.primary,
                     color: "#ffffff",
                     "&:hover": {
-                      backgroundColor: "#1e293b",
+                      backgroundColor: BRAND.primaryHover,
                     },
                   },
                 }}
@@ -640,7 +602,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
               <Box
                 key={level.key}
                 style={{
-                  border: "1px solid #e2e8f0",
+                  border: "1px solid #e8ecf0",
                   borderRadius: 8,
                   overflow: "hidden",
                   backgroundColor: "#ffffff",
@@ -654,7 +616,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                   style={{
                     width: "100%",
                     padding: "11px 16px",
-                    backgroundColor: isOpen ? "#fafbfc" : "#ffffff",
+                    backgroundColor: isOpen ? BRAND.bgSubtle : "#ffffff",
                     borderBottom: isOpen ? "1px solid #f1f5f9" : "none",
                     transition: "all 0.15s ease",
                     cursor: "pointer",
@@ -677,9 +639,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
 
                     <Box
                       style={{
-                        width: 3.5,
+                        width: 3,
                         height: 14,
-                        backgroundColor: level.accentBar,
+                        backgroundColor: BRAND.primary,
                         borderRadius: 2,
                       }}
                     />
@@ -696,9 +658,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                           fontSize: 11,
                           height: 18,
                           padding: "0 6px",
-                          backgroundColor: level.badgeBg,
-                          border: `1px solid ${level.badgeBorder}`,
-                          color: level.badgeColor,
+                          backgroundColor: BRAND.bgLight,
+                          border: `1px solid ${BRAND.borderLight}`,
+                          color: BRAND.text,
                         },
                       }}
                     >
@@ -710,8 +672,6 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                     <Button
                       size="compact-xs"
                       variant="subtle"
-                      color="gray"
-                      leftSection={<FiPlus size={11} />}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleOpenCreate(level.key);
@@ -722,10 +682,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                           fontWeight: 500,
                           height: 24,
                           padding: "0 8px",
-                          color: "#475569",
+                          color: BRAND.text,
                           "&:hover": {
-                            backgroundColor: "#f1f5f9",
-                            color: "#0f172a",
+                            backgroundColor: BRAND.bgLight,
                           },
                         },
                       }}
@@ -744,9 +703,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                         direction="column"
                         py={24}
                         style={{
-                          border: "1px dashed #e2e8f0",
+                          border: `1px dashed ${BRAND.borderLight}`,
                           borderRadius: 6,
-                          backgroundColor: "#fafbfc",
+                          backgroundColor: BRAND.bgSubtle,
                         }}
                       >
                         <Text fz={12.5} c="#64748b" mb={8}>
@@ -755,7 +714,6 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                         <Button
                           size="compact-xs"
                           variant="default"
-                          leftSection={<FiPlus size={11} />}
                           onClick={() => handleOpenCreate(level.key)}
                         >
                           添加首位{level.name}
@@ -808,12 +766,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
       <Modal
         opened={deleteModalOpened}
         onClose={() => setDeleteModalOpened(false)}
-        title={
-          <Group gap={6} align="center">
-            <FiAlertTriangle color="#ef4444" size={16} />
-            <Text fw={600} fz={14}>确认删除角色档案</Text>
-          </Group>
-        }
+        title={<Text fw={600} fz={14}>确认删除角色档案</Text>}
         centered
         size="sm"
         radius="md"

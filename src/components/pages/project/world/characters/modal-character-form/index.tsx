@@ -6,6 +6,7 @@ import { FiUploadCloud, FiZap } from "react-icons/fi";
 import { CharacterItem, createCharacter, updateCharacter, uploadImageFile } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
 import { useAlert } from "@/hooks/useAlert";
+import { BRAND } from "../constants";
 
 interface ModalCharacterFormProps {
   opened: boolean;
@@ -175,10 +176,8 @@ export default function ModalCharacterForm({
               <Button
                 size="compact-xs"
                 variant="subtle"
-
-                leftSection={<FiZap size={10} />}
                 onClick={() => setNameGenOpened(true)}
-                styles={{ root: { fontSize: 10, height: 18, padding: "0 4px" } }}
+                styles={{ root: { fontSize: 10, height: 18, padding: "0 6px", color: BRAND.text } }}
               >
                 智能起名
               </Button>
@@ -373,10 +372,10 @@ export default function ModalCharacterForm({
           onClick={handleSave}
           styles={{
             root: {
-              backgroundColor: "#0f172a",
+              backgroundColor: BRAND.primary,
               color: "#ffffff",
               "&:hover": {
-                backgroundColor: "#1e293b",
+                backgroundColor: BRAND.primaryHover,
               },
             },
           }}

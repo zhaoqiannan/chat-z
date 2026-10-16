@@ -2,9 +2,8 @@
 
 import React from "react";
 import { Box, Flex, Text, Button, Badge, Modal, Stack, SimpleGrid, Group, Avatar } from "@mantine/core";
-import { FiEdit2, FiShield, FiBookOpen, FiTrendingUp } from "react-icons/fi";
 import { CharacterItem } from "@/rest/world";
-import { ROLE_THEME_MAP, DEFAULT_ROLE_THEME } from "../constants";
+import { ROLE_NAME_MAP, BRAND } from "../constants";
 
 interface ModalCharacterDetailProps {
   opened: boolean;
@@ -21,7 +20,8 @@ export default function ModalCharacterDetail({
 }: ModalCharacterDetailProps) {
   if (!character) return null;
 
-  const roleTheme = ROLE_THEME_MAP[character.roleType] || DEFAULT_ROLE_THEME;
+  const roleName = ROLE_NAME_MAP[character.roleType] || "配角";
+  const isProtagonist = character.roleType === "protagonist";
 
   const formatTime = (time?: string | number) => {
     if (!time) return "刚刚";
@@ -39,7 +39,7 @@ export default function ModalCharacterDetail({
       onClose={onClose}
       title={
         <Group gap={8} align="center">
-          <Box style={{ width: 3, height: 16, backgroundColor: roleTheme.accentBar, borderRadius: 2 }} />
+          <Box style={{ width: 3, height: 16, backgroundColor: BRAND.primary, borderRadius: 2 }} />
           <Text fw={700} fz={15} c="#0f172a">角色档案详情</Text>
         </Group>
       }
@@ -60,13 +60,13 @@ export default function ModalCharacterDetail({
             size={52}
             styles={{
               root: {
-                border: `1.5px solid ${roleTheme.avatarBorder}`,
-                backgroundColor: roleTheme.avatarBg,
+                backgroundColor: BRAND.bgLight,
+                border: `1.5px solid ${BRAND.borderLight}`,
               },
               placeholder: {
                 fontSize: 18,
                 fontWeight: 700,
-                color: roleTheme.avatarColor,
+                color: BRAND.text,
               },
             }}
           >
@@ -82,25 +82,24 @@ export default function ModalCharacterDetail({
                 size="xs"
                 styles={{
                   root: {
-                    fontWeight: 600,
+                    fontWeight: isProtagonist ? 700 : 500,
                     padding: "0 6px",
-                    backgroundColor: roleTheme.badgeBg,
-                    border: `1px solid ${roleTheme.badgeBorder}`,
-                    color: roleTheme.badgeColor,
+                    backgroundColor: isProtagonist ? BRAND.bgMedium : BRAND.bgLight,
+                    border: `1px solid ${isProtagonist ? BRAND.borderMedium : BRAND.borderLight}`,
+                    color: isProtagonist ? BRAND.textDark : BRAND.text,
                   },
                 }}
               >
-                {character.roleType === "protagonist" && "👑 "}
-                {roleTheme.name}
+                {roleName}
               </Badge>
               {character.isPinned ? (
                 <Badge
                   size="xs"
                   styles={{
                     root: {
-                      backgroundColor: "#fffbeb",
-                      border: "1px solid #fde68a",
-                      color: "#b45309",
+                      backgroundColor: BRAND.bgLight,
+                      border: `1px solid ${BRAND.borderLight}`,
+                      color: BRAND.text,
                       fontWeight: 600,
                     },
                   }}
@@ -129,20 +128,14 @@ export default function ModalCharacterDetail({
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
           <Box p="10px 12px" style={{ border: "1px solid #f1f5f9", borderRadius: 6, backgroundColor: "#fafbfc" }}>
-            <Group gap={6} fz={11} c="#64748b" mb={3}>
-              <FiShield size={12} />
-              <Text fz={11} fw={500}>身份与势力</Text>
-            </Group>
+            <Text fz={11} fw={500} c="#64748b" mb={3}>身份与势力</Text>
             <Text fz={12.5} fw={600} c="#1e293b">
               {character.identity || "暂无身份"} {character.faction ? `(${character.faction})` : ""}
             </Text>
           </Box>
 
           <Box p="10px 12px" style={{ border: "1px solid #f1f5f9", borderRadius: 6, backgroundColor: "#fafbfc" }}>
-            <Group gap={6} fz={11} c="#64748b" mb={3}>
-              <FiBookOpen size={12} />
-              <Text fz={11} fw={500}>出场章节</Text>
-            </Group>
+            <Text fz={11} fw={500} c="#64748b" mb={3}>出场章节</Text>
             <Text fz={12.5} fw={600} c="#334155">
               {character.appearanceChapters || "全书贯穿"}
             </Text>
@@ -204,12 +197,9 @@ export default function ModalCharacterDetail({
         )}
 
         {character.characterArc && (
-          <Box p="10px 12px" style={{ border: "1px solid #e2e8f0", borderRadius: 6, backgroundColor: "#f8fafc" }}>
-            <Group gap={6} fz={11.5} c="#334155" mb={4}>
-              <FiTrendingUp size={12} />
-              <Text fz={12} fw={700}>人物成长弧线</Text>
-            </Group>
-            <Text fz={12.5} c="#475569" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
+          <Box p="10px 12px" style={{ border: `1px solid ${BRAND.borderLight}`, borderRadius: 6, backgroundColor: BRAND.bgSubtle }}>
+            <Text fz={12} fw={700} c={BRAND.text} mb={4}>人物成长弧线</Text>
+            <Text fz={12.5} c="#334155" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
               {character.characterArc}
             </Text>
           </Box>
@@ -226,17 +216,16 @@ export default function ModalCharacterDetail({
         </Button>
         <Button
           size="xs"
-          leftSection={<FiEdit2 size={11} />}
           onClick={() => {
             onClose();
             onOpenEdit(character);
           }}
           styles={{
             root: {
-              backgroundColor: "#0f172a",
+              backgroundColor: BRAND.primary,
               color: "#ffffff",
               "&:hover": {
-                backgroundColor: "#1e293b",
+                backgroundColor: BRAND.primaryHover,
               },
             },
           }}

@@ -1,91 +1,34 @@
-export interface RoleThemeConfig {
+export interface RoleLevelDef {
   key: string;
   name: string;
   defaultOpen: boolean;
-  color: string;
-  badgeBg: string;
-  badgeBorder: string;
-  badgeColor: string;
-  avatarBg: string;
-  avatarBorder: string;
-  avatarColor: string;
-  accentBar: string;
 }
 
-export const ROLE_THEME_MAP: Record<string, RoleThemeConfig> = {
-  protagonist: {
-    key: "protagonist",
-    name: "主角",
-    defaultOpen: true,
-    color: "amber",
-    badgeBg: "#fffbeb",
-    badgeBorder: "#fde68a",
-    badgeColor: "#b45309",
-    avatarBg: "#fef3c7",
-    avatarBorder: "#fde68a",
-    avatarColor: "#b45309",
-    accentBar: "#f59e0b",
-  },
-  major: {
-    key: "major",
-    name: "重要配角",
-    defaultOpen: true,
-    color: "blue",
-    badgeBg: "#eff6ff",
-    badgeBorder: "#bfdbfe",
-    badgeColor: "#1d4ed8",
-    avatarBg: "#eff6ff",
-    avatarBorder: "#dbeafe",
-    avatarColor: "#2563eb",
-    accentBar: "#3b82f6",
-  },
-  antagonist: {
-    key: "antagonist",
-    name: "反派",
-    defaultOpen: true,
-    color: "rose",
-    badgeBg: "#fff1f2",
-    badgeBorder: "#fecdd3",
-    badgeColor: "#be123c",
-    avatarBg: "#fff1f2",
-    avatarBorder: "#fecdd3",
-    avatarColor: "#e11d48",
-    accentBar: "#f43f5e",
-  },
-  supporting: {
-    key: "supporting",
-    name: "配角",
-    defaultOpen: true,
-    color: "emerald",
-    badgeBg: "#f0fdf4",
-    badgeBorder: "#bbf7d0",
-    badgeColor: "#15803d",
-    avatarBg: "#f0fdf4",
-    avatarBorder: "#dcfce7",
-    avatarColor: "#16a34a",
-    accentBar: "#10b981",
-  },
-  mob: {
-    key: "mob",
-    name: "龙套",
-    defaultOpen: false,
-    color: "slate",
-    badgeBg: "#f8fafc",
-    badgeBorder: "#e2e8f0",
-    badgeColor: "#475569",
-    avatarBg: "#f1f5f9",
-    avatarBorder: "#e2e8f0",
-    avatarColor: "#64748b",
-    accentBar: "#94a3b8",
-  },
-};
-
-export const ROLE_LEVELS: RoleThemeConfig[] = [
-  ROLE_THEME_MAP.protagonist,
-  ROLE_THEME_MAP.major,
-  ROLE_THEME_MAP.antagonist,
-  ROLE_THEME_MAP.supporting,
-  ROLE_THEME_MAP.mob,
+export const ROLE_LEVELS: RoleLevelDef[] = [
+  { key: "protagonist", name: "主角", defaultOpen: true },
+  { key: "major", name: "重要配角", defaultOpen: true },
+  { key: "antagonist", name: "反派", defaultOpen: true },
+  { key: "supporting", name: "配角", defaultOpen: true },
+  { key: "mob", name: "龙套", defaultOpen: false },
 ];
 
-export const DEFAULT_ROLE_THEME = ROLE_THEME_MAP.supporting;
+export const ROLE_NAME_MAP: Record<string, string> = {
+  protagonist: "主角",
+  major: "重要配角",
+  antagonist: "反派",
+  supporting: "配角",
+  mob: "龙套",
+};
+
+// 统一主色调与其透明度体系 (单主色调 + 层次透明度)
+export const BRAND = {
+  primary: "#00b2e0",
+  primaryHover: "#009ec8",
+  text: "#00839e",
+  textDark: "#006c82",
+  bgSubtle: "rgba(0, 201, 255, 0.03)",
+  bgLight: "rgba(0, 201, 255, 0.08)",
+  bgMedium: "rgba(0, 201, 255, 0.14)",
+  borderLight: "rgba(0, 201, 255, 0.18)",
+  borderMedium: "rgba(0, 201, 255, 0.32)",
+};
