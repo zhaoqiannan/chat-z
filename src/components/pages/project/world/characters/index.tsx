@@ -14,7 +14,6 @@ import {
   Modal,
   Badge,
   Collapse,
-  UnstyledButton,
   Paper,
 } from "@mantine/core";
 import {
@@ -31,24 +30,11 @@ import { CharacterItem, getCharacterList, deleteCharacter, togglePinCharacter } 
 import CharacterCard from "./character-card";
 import ModalCharacterForm from "./modal-character-form";
 import ModalCharacterDetail from "./modal-character-detail";
+import { ROLE_LEVELS, ROLE_THEME_MAP } from "./constants";
 
 interface CharactersTabProps {
   workId: string;
 }
-
-interface RoleLevelDef {
-  key: string;
-  name: string;
-  defaultOpen: boolean;
-}
-
-const ROLE_LEVELS: RoleLevelDef[] = [
-  { key: "protagonist", name: "主角", defaultOpen: true },
-  { key: "major", name: "重要配角", defaultOpen: true },
-  { key: "antagonist", name: "反派", defaultOpen: true },
-  { key: "supporting", name: "配角", defaultOpen: true },
-  { key: "mob", name: "龙套", defaultOpen: false },
-];
 
 export default function CharactersTab({ workId }: CharactersTabProps) {
   const [loading, setLoading] = useState(false);
@@ -281,12 +267,26 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
     <Box pos="relative" style={{ minHeight: "100%", backgroundColor: "#ffffff" }}>
       <LoadingOverlay visible={loading} />
 
-      {/* 顶部主工具栏：标题与角色数 + 搜索输入框 + 新建角色主色调按钮 */}
+      {/* 顶部主工具栏：标题与角色数 + 搜索输入框 + 新建角色按钮 */}
       <Flex justify="space-between" align="center" gap="md" wrap="wrap" mb="xs">
         <Group gap={10} align="center">
           <Text fz={18} fw={800} c="#0f172a" style={{ letterSpacing: -0.2 }}>
             角色工作台
           </Text>
+          <Badge
+            size="sm"
+            styles={{
+              root: {
+                backgroundColor: "#f1f5f9",
+                border: "1px solid #e2e8f0",
+                color: "#475569",
+                fontWeight: 600,
+                fontSize: 11,
+              },
+            }}
+          >
+            共 {list.length} 位角色
+          </Badge>
         </Group>
 
         <Group gap="sm">
@@ -297,13 +297,14 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             onChange={(e) => setSearchKey(e.target.value)}
             size="xs"
             radius="md"
-            style={{ width: 270 }}
+            style={{ width: 280 }}
             styles={{
               input: {
                 backgroundColor: "#f8fafc",
                 borderColor: "#e2e8f0",
+                color: "#0f172a",
                 "&:focus": {
-                  borderColor: "#00c9ff",
+                  borderColor: "#94a3b8",
                   backgroundColor: "#ffffff",
                 },
               },
@@ -312,14 +313,19 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
 
           <Button
             size="xs"
-            color="blue"
             radius="md"
             leftSection={<FiPlus size={14} />}
             onClick={() => handleOpenCreate()}
             styles={{
               root: {
                 fontWeight: 600,
-                boxShadow: "0 2px 8px rgba(0, 201, 255, 0.25)",
+                backgroundColor: "#0f172a",
+                color: "#ffffff",
+                boxShadow: "0 1px 3px rgba(15, 23, 42, 0.12)",
+                transition: "all 0.15s ease",
+                "&:hover": {
+                  backgroundColor: "#1e293b",
+                },
               },
             }}
           >
@@ -328,7 +334,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
         </Group>
       </Flex>
 
-      {/* 分类切换器标签栏：主色调高亮胶囊与全折叠控制 */}
+      {/* 分类切换器标签栏：精炼胶囊切换与折叠控制 */}
       <Flex
         justify="space-between"
         align="center"
@@ -342,23 +348,40 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           <Button
             size="xs"
             radius="md"
-            variant={selectedTab === "all" ? "light" : "subtle"}
-            color="blue"
+            variant="subtle"
             onClick={() => setSelectedTab("all")}
             styles={{
               root: {
                 height: 30,
                 padding: "0 12px",
                 fontSize: 12.5,
-                fontWeight: selectedTab === "all" ? 700 : 500,
-                backgroundColor: selectedTab === "all" ? "#e0f7fc" : "transparent",
-                color: selectedTab === "all" ? "#0096bd" : "#475569",
-                border: selectedTab === "all" ? "1px solid #80e5fa" : "1px solid transparent",
+                fontWeight: selectedTab === "all" ? 600 : 500,
+                backgroundColor: selectedTab === "all" ? "#0f172a" : "transparent",
+                color: selectedTab === "all" ? "#ffffff" : "#64748b",
+                border: "1px solid transparent",
                 transition: "all 0.15s ease",
+                "&:hover": {
+                  backgroundColor: selectedTab === "all" ? "#1e293b" : "#f1f5f9",
+                  color: selectedTab === "all" ? "#ffffff" : "#0f172a",
+                },
               },
             }}
           >
-            全部 ({list.length})
+            <Group gap={6} align="center">
+              <span>全部</span>
+              <Box
+                style={{
+                  fontSize: 11,
+                  padding: "0 6px",
+                  borderRadius: 10,
+                  backgroundColor: selectedTab === "all" ? "rgba(255, 255, 255, 0.2)" : "#f1f5f9",
+                  color: selectedTab === "all" ? "#ffffff" : "#64748b",
+                  lineHeight: "16px",
+                }}
+              >
+                {list.length}
+              </Box>
+            </Group>
           </Button>
 
           {ROLE_LEVELS.map((level) => {
@@ -369,23 +392,48 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                 key={level.key}
                 size="xs"
                 radius="md"
-                variant={isCurrent ? "light" : "subtle"}
-                color="blue"
+                variant="subtle"
                 onClick={() => setSelectedTab(level.key)}
                 styles={{
                   root: {
                     height: 30,
                     padding: "0 12px",
                     fontSize: 12.5,
-                    fontWeight: isCurrent ? 700 : 500,
-                    backgroundColor: isCurrent ? "#e0f7fc" : "transparent",
-                    color: isCurrent ? "#0096bd" : "#475569",
-                    border: isCurrent ? "1px solid #80e5fa" : "1px solid transparent",
+                    fontWeight: isCurrent ? 600 : 500,
+                    backgroundColor: isCurrent ? "#0f172a" : "transparent",
+                    color: isCurrent ? "#ffffff" : "#64748b",
+                    border: "1px solid transparent",
                     transition: "all 0.15s ease",
+                    "&:hover": {
+                      backgroundColor: isCurrent ? "#1e293b" : "#f1f5f9",
+                      color: isCurrent ? "#ffffff" : "#0f172a",
+                    },
                   },
                 }}
               >
-                {level.name} ({count})
+                <Group gap={6} align="center">
+                  <Box
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: isCurrent ? "#ffffff" : level.accentBar,
+                    }}
+                  />
+                  <span>{level.name}</span>
+                  <Box
+                    style={{
+                      fontSize: 11,
+                      padding: "0 6px",
+                      borderRadius: 10,
+                      backgroundColor: isCurrent ? "rgba(255, 255, 255, 0.2)" : "#f1f5f9",
+                      color: isCurrent ? "#ffffff" : "#64748b",
+                      lineHeight: "16px",
+                    }}
+                  >
+                    {count}
+                  </Box>
+                </Group>
               </Button>
             );
           })}
@@ -398,7 +446,16 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             color="gray"
             leftSection={isAllExpanded ? <FiMinimize2 size={12} /> : <FiMaximize2 size={12} />}
             onClick={isAllExpanded ? handleCollapseAll : handleExpandAll}
-            styles={{ root: { fontSize: 12, color: "#64748b" } }}
+            styles={{
+              root: {
+                fontSize: 12,
+                color: "#64748b",
+                "&:hover": {
+                  backgroundColor: "#f1f5f9",
+                  color: "#0f172a",
+                },
+              },
+            }}
           >
             {isAllExpanded ? "全部收起" : "全部展开"}
           </Button>
@@ -414,7 +471,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           style={{
             textAlign: "center",
             borderColor: "#e2e8f0",
-            backgroundColor: "#ffffff",
+            backgroundColor: "#fafbfc",
           }}
         >
           <Box
@@ -422,12 +479,12 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
               width: 56,
               height: 56,
               borderRadius: 28,
-              backgroundColor: "#e0f7fc",
+              backgroundColor: "#f1f5f9",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               margin: "0 auto 16px auto",
-              color: "#0096bd",
+              color: "#64748b",
             }}
           >
             <FiUser size={28} strokeWidth={1.6} />
@@ -435,18 +492,22 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           <Text fz={16} fw={700} c="#0f172a" mb={6}>
             暂无角色档案
           </Text>
-          <Text fz={13} c="#64748b" mb={20} maw={400} mx="auto">
+          <Text fz={13} c="#64748b" mb={20} maw={420} mx="auto">
             设定主角、重要配角、反派等核心人物，梳理人设、尊号与出场轨迹。
           </Text>
           <Button
             size="sm"
-            color="blue"
             radius="md"
             leftSection={<FiPlus size={14} />}
             onClick={() => handleOpenCreate("protagonist")}
             styles={{
               root: {
-                boxShadow: "0 2px 8px rgba(0, 201, 255, 0.25)",
+                backgroundColor: "#0f172a",
+                color: "#ffffff",
+                boxShadow: "0 1px 3px rgba(15, 23, 42, 0.12)",
+                "&:hover": {
+                  backgroundColor: "#1e293b",
+                },
               },
             }}
           >
@@ -454,14 +515,14 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           </Button>
         </Paper>
       ) : searchKey.trim() && filteredList.length === 0 ? (
-        <Paper p={48} withBorder radius="md" style={{ textAlign: "center", borderColor: "#e2e8f0" }}>
+        <Paper p={48} withBorder radius="md" style={{ textAlign: "center", borderColor: "#e2e8f0", backgroundColor: "#fafbfc" }}>
           <Text fz={14} fw={600} c="#334155" mb={6}>
             未搜索到匹配的角色档案
           </Text>
           <Text fz={12} c="#94a3b8" mb={14}>
             请尝试调整关键词或清空搜索条件
           </Text>
-          <Button size="xs" variant="light" color="blue" onClick={() => setSearchKey("")}>
+          <Button size="xs" variant="default" onClick={() => setSearchKey("")}>
             清空搜索
           </Button>
         </Paper>
@@ -472,26 +533,41 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
             <Group gap={8} align="center">
               <Box
                 style={{
-                  width: 3,
+                  width: 3.5,
                   height: 16,
-                  backgroundColor: "#00b2e0",
+                  backgroundColor: currentLevelDef?.accentBar || "#0f172a",
                   borderRadius: 2,
                 }}
               />
               <Text fz={15.5} fw={700} c="#0f172a">
                 {currentLevelDef?.name}
               </Text>
-              <Badge size="xs" variant="light" color="blue">
+              <Badge
+                size="xs"
+                styles={{
+                  root: {
+                    backgroundColor: currentLevelDef?.badgeBg,
+                    border: `1px solid ${currentLevelDef?.badgeBorder}`,
+                    color: currentLevelDef?.badgeColor,
+                    fontWeight: 600,
+                  },
+                }}
+              >
                 共 {currentTabItems.length} 位
               </Badge>
             </Group>
 
             <Button
               size="xs"
-              variant="light"
-              color="blue"
+              variant="default"
               leftSection={<FiPlus size={12} />}
               onClick={() => handleOpenCreate(selectedTab)}
+              styles={{
+                root: {
+                  color: "#0f172a",
+                  fontWeight: 500,
+                },
+              }}
             >
               添加{currentLevelDef?.name}
             </Button>
@@ -504,23 +580,31 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
               direction="column"
               py={48}
               style={{
-                border: "1px dashed #b3effc",
+                border: "1px dashed #e2e8f0",
                 borderRadius: 8,
-                backgroundColor: "#fafdff",
+                backgroundColor: "#fafbfc",
               }}
             >
-              <FiUser size={34} color="#0096bd" strokeWidth={1.5} style={{ marginBottom: 8 }} />
+              <FiUser size={34} color="#94a3b8" strokeWidth={1.5} style={{ marginBottom: 8 }} />
               <Text fz={13.5} fw={600} c="#1e293b" mb={4}>
                 暂无「{currentLevelDef?.name}」角色
               </Text>
-              <Text fz={12} c="#64748b" mb={12}>
+              <Text fz={12} c="#64748b" mb={14}>
                 点击下方按钮录入首位角色档案
               </Text>
               <Button
                 size="xs"
-                color="blue"
                 leftSection={<FiPlus size={12} />}
                 onClick={() => handleOpenCreate(selectedTab)}
+                styles={{
+                  root: {
+                    backgroundColor: "#0f172a",
+                    color: "#ffffff",
+                    "&:hover": {
+                      backgroundColor: "#1e293b",
+                    },
+                  },
+                }}
               >
                 添加首位{currentLevelDef?.name}
               </Button>
@@ -563,24 +647,18 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                   boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
                 }}
               >
-                <UnstyledButton
+                <Flex
                   onClick={() => toggleSection(level.key)}
+                  justify="space-between"
+                  align="center"
                   style={{
                     width: "100%",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    padding: "10px 16px",
-                    backgroundColor: isOpen ? "#fafdff" : "#ffffff",
-                    borderBottom: isOpen ? "1px solid #edf2f7" : "none",
+                    padding: "11px 16px",
+                    backgroundColor: isOpen ? "#fafbfc" : "#ffffff",
+                    borderBottom: isOpen ? "1px solid #f1f5f9" : "none",
                     transition: "all 0.15s ease",
-                  }}
-                  styles={{
-                    root: {
-                      "&:hover": {
-                        backgroundColor: "#f8fafc",
-                      },
-                    },
+                    cursor: "pointer",
+                    userSelect: "none",
                   }}
                 >
                   <Group gap={10} align="center">
@@ -589,7 +667,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        color: isOpen ? "#0096bd" : "#64748b",
+                        color: "#64748b",
                         transition: "transform 0.2s ease",
                         transform: isOpen ? "rotate(90deg)" : "rotate(0deg)",
                       }}
@@ -599,9 +677,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
 
                     <Box
                       style={{
-                        width: 3,
+                        width: 3.5,
                         height: 14,
-                        backgroundColor: "#00b2e0",
+                        backgroundColor: level.accentBar,
                         borderRadius: 2,
                       }}
                     />
@@ -612,14 +690,15 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
 
                     <Badge
                       size="xs"
-                      variant="light"
-                      color="blue"
                       styles={{
                         root: {
                           fontWeight: 600,
                           fontSize: 11,
                           height: 18,
                           padding: "0 6px",
+                          backgroundColor: level.badgeBg,
+                          border: `1px solid ${level.badgeBorder}`,
+                          color: level.badgeColor,
                         },
                       }}
                     >
@@ -630,23 +709,31 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                   <Group gap="xs" onClick={(e) => e.stopPropagation()}>
                     <Button
                       size="compact-xs"
-                      variant="light"
-                      color="blue"
+                      variant="subtle"
+                      color="gray"
                       leftSection={<FiPlus size={11} />}
-                      onClick={() => handleOpenCreate(level.key)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenCreate(level.key);
+                      }}
                       styles={{
                         root: {
                           fontSize: 11.5,
                           fontWeight: 500,
                           height: 24,
                           padding: "0 8px",
+                          color: "#475569",
+                          "&:hover": {
+                            backgroundColor: "#f1f5f9",
+                            color: "#0f172a",
+                          },
                         },
                       }}
                     >
                       添加{level.name}
                     </Button>
                   </Group>
-                </UnstyledButton>
+                </Flex>
 
                 <Collapse expanded={isOpen}>
                   <Box p="14px 16px" bg="#ffffff">
@@ -657,9 +744,9 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                         direction="column"
                         py={24}
                         style={{
-                          border: "1px dashed #b3effc",
+                          border: "1px dashed #e2e8f0",
                           borderRadius: 6,
-                          backgroundColor: "#fafdff",
+                          backgroundColor: "#fafbfc",
                         }}
                       >
                         <Text fz={12.5} c="#64748b" mb={8}>
@@ -667,8 +754,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
                         </Text>
                         <Button
                           size="compact-xs"
-                          variant="light"
-                          color="blue"
+                          variant="default"
                           leftSection={<FiPlus size={11} />}
                           onClick={() => handleOpenCreate(level.key)}
                         >

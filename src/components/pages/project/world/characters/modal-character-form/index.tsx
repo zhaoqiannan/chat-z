@@ -367,7 +367,20 @@ export default function ModalCharacterForm({
         <Button variant="default" size="xs" onClick={onClose}>
           取消
         </Button>
-        <Button size="xs" loading={formLoading} onClick={handleSave}>
+        <Button
+          size="xs"
+          loading={formLoading}
+          onClick={handleSave}
+          styles={{
+            root: {
+              backgroundColor: "#0f172a",
+              color: "#ffffff",
+              "&:hover": {
+                backgroundColor: "#1e293b",
+              },
+            },
+          }}
+        >
           保存角色档案
         </Button>
       </Flex>
