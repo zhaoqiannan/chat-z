@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Box, Flex, Text, Badge, Card, Menu, Avatar, Group, Button } from "@mantine/core";
+import { Box, Flex, Text, Badge, Card, Menu, Avatar, Group, ActionIcon, Tooltip } from "@mantine/core";
+import { FiBookmark, FiMoreHorizontal } from "react-icons/fi";
 import { CharacterItem } from "@/rest/world";
 import { ROLE_NAME_MAP, BRAND } from "../constants";
 
@@ -35,9 +36,9 @@ export default function CharacterCard({
         flexDirection: "column",
         justifyContent: "space-between",
         minHeight: 124,
-        backgroundColor: item.isPinned ? BRAND.bgSubtle : "#ffffff",
-        borderColor: item.isPinned ? BRAND.borderMedium : "#e8ecf0",
-        boxShadow: item.isPinned ? `0 1px 4px ${BRAND.bgLight}` : "0 1px 2px rgba(0, 0, 0, 0.02)",
+        backgroundColor: "#ffffff",
+        borderColor: item.isPinned ? BRAND.borderMedium : "#edf2f7",
+        boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
         transition: "all 0.2s ease",
         cursor: "pointer",
         position: "relative",
@@ -46,7 +47,7 @@ export default function CharacterCard({
         root: {
           "&:hover": {
             borderColor: BRAND.primary,
-            boxShadow: `0 4px 14px ${BRAND.bgLight}`,
+            boxShadow: `0 4px 12px ${BRAND.bgLight}`,
             transform: "translateY(-1px)",
           },
         },
@@ -54,11 +55,12 @@ export default function CharacterCard({
       onClick={() => onViewDetail(item)}
     >
       <Box>
-        <Flex justify="space-between" align="flex-start" mb={10}>
-          <Group gap={10} align="center" style={{ flex: 1, minWidth: 0 }}>
+        {/* 第一行：头像（avatar-circle）+ 姓名（显示全不省略）+ 置顶图标 + 更多按钮 */}
+        <Flex justify="space-between" align="center" mb={10}>
+          <Group gap={10} align="center" style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
             <Avatar
               src={item.avatarUrl || undefined}
-              radius="xl"
+              radius="100%"
               size={36}
               styles={{
                 root: {
@@ -76,78 +78,51 @@ export default function CharacterCard({
               {item.name ? item.name.slice(0, 1) : "?"}
             </Avatar>
 
-            <Box style={{ minWidth: 0, flex: 1 }}>
-              <Flex align="center" gap={6} wrap="nowrap">
-                <Text fz={14.5} fw={700} c="#0f172a" truncate="end">
-                  {item.name}
-                </Text>
-                {item.gender && (
-                  <Text fz={11} c="#94a3b8" style={{ flexShrink: 0 }}>
-                    ({item.gender})
-                  </Text>
-                )}
-                <Badge
-                  size="xs"
-                  styles={{
-                    root: {
-                      fontSize: 10.5,
-                      height: 18,
-                      padding: "0 6px",
-                      fontWeight: isProtagonist ? 700 : 500,
-                      flexShrink: 0,
-                      backgroundColor: isProtagonist ? BRAND.bgMedium : BRAND.bgLight,
-                      border: `1px solid ${isProtagonist ? BRAND.borderMedium : BRAND.borderLight}`,
-                      color: isProtagonist ? BRAND.textDark : BRAND.text,
-                    },
-                  }}
-                >
-                  {roleName}
-                </Badge>
-              </Flex>
-
-              {item.alias && (
-                <Text fz={11.5} c="#64748b" truncate="end" mt={2}>
-                  尊号：{item.alias}
-                </Text>
-              )}
-            </Box>
-          </Group>
-
-          <Group gap={4} align="center" style={{ flexShrink: 0 }} ml={4} onClick={(e) => e.stopPropagation()}>
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              onClick={(e) => onTogglePin(item, e)}
-              styles={{
-                root: {
-                  fontSize: 10.5,
-                  height: 20,
-                  padding: "0 5px",
-                  color: item.isPinned ? BRAND.text : "#94a3b8",
-                  backgroundColor: item.isPinned ? BRAND.bgLight : "transparent",
-                  fontWeight: item.isPinned ? 600 : 400,
-                  "&:hover": {
-                    backgroundColor: BRAND.bgLight,
-                    color: BRAND.text,
-                  },
-                },
+            <Text
+              fz={14.5}
+              fw={700}
+              c="#0f172a"
+              style={{
+                lineHeight: 1.35,
+                wordBreak: "break-word",
               }}
             >
-              {item.isPinned ? "已置顶" : "置顶"}
-            </Button>
+              {item.name}
+            </Text>
+          </Group>
 
-            <Menu position="bottom-end" shadow="md" width={100}>
+          <Group gap={4} align="center" style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+            <Tooltip label={item.isPinned ? "取消置顶" : "置顶角色"} position="top" withArrow offset={4}>
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                onClick={(e) => onTogglePin(item, e)}
+                styles={{
+                  root: {
+                    color: item.isPinned ? BRAND.primary : "#94a3b8",
+                    "&:hover": {
+                      backgroundColor: BRAND.bgLight,
+                    },
+                  },
+                }}
+              >
+                <FiBookmark
+                  size={15}
+                  style={{
+                    fill: item.isPinned ? BRAND.primary : "none",
+                  }}
+                />
+              </ActionIcon>
+            </Tooltip>
+
+            <Menu position="bottom-end" shadow="md" width={110}>
               <Menu.Target>
-                <Button
-                  size="compact-xs"
+                <ActionIcon
+                  size="sm"
                   variant="subtle"
                   styles={{
                     root: {
-                      fontSize: 11,
-                      height: 20,
-                      padding: "0 4px",
                       color: "#94a3b8",
-                      letterSpacing: 1,
                       "&:hover": {
                         backgroundColor: "#f1f5f9",
                         color: "#0f172a",
@@ -155,8 +130,8 @@ export default function CharacterCard({
                     },
                   }}
                 >
-                  ···
-                </Button>
+                  <FiMoreHorizontal size={15} />
+                </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item onClick={() => onViewDetail(item)}>
@@ -174,36 +149,103 @@ export default function CharacterCard({
           </Group>
         </Flex>
 
-        {(item.faction || item.identity) && (
-          <Flex align="center" gap={6} wrap="wrap" mb={8}>
-            {item.faction && (
-              <Badge
-                size="xs"
-                variant="outline"
-                styles={{
-                  root: {
-                    fontSize: 10.5,
-                    padding: "0 6px",
-                    height: 18,
-                    borderColor: BRAND.borderLight,
-                    backgroundColor: BRAND.bgSubtle,
-                    color: BRAND.text,
-                    fontWeight: 500,
-                  },
-                }}
-              >
-                {item.faction}
-              </Badge>
-            )}
+        {/* 第二行：性别、定位、年龄、身份等，比标签颜色稍深的 Badge 显示 */}
+        <Flex align="center" gap={6} wrap="wrap" mb={10}>
+          <Badge
+            size="xs"
+            styles={{
+              root: {
+                fontSize: 11,
+                height: 20,
+                padding: "0 7px",
+                fontWeight: isProtagonist ? 600 : 500,
+                backgroundColor: isProtagonist ? BRAND.bgMedium : BRAND.bgLight,
+                border: `1px solid ${isProtagonist ? BRAND.borderMedium : BRAND.borderLight}`,
+                color: isProtagonist ? BRAND.textDark : BRAND.text,
+              },
+            }}
+          >
+            {roleName}
+          </Badge>
 
-            {item.identity && (
-              <Text fz={11.5} c="#475569" truncate="end" style={{ maxWidth: 160 }}>
-                {item.identity}
-              </Text>
-            )}
-          </Flex>
-        )}
+          {item.gender && (
+            <Badge
+              size="xs"
+              styles={{
+                root: {
+                  fontSize: 11,
+                  height: 20,
+                  padding: "0 7px",
+                  fontWeight: 500,
+                  backgroundColor: BRAND.bgLight,
+                  border: `1px solid ${BRAND.borderLight}`,
+                  color: BRAND.text,
+                },
+              }}
+            >
+              {item.gender}
+            </Badge>
+          )}
 
+          {item.age && (
+            <Badge
+              size="xs"
+              styles={{
+                root: {
+                  fontSize: 11,
+                  height: 20,
+                  padding: "0 7px",
+                  fontWeight: 500,
+                  backgroundColor: BRAND.bgLight,
+                  border: `1px solid ${BRAND.borderLight}`,
+                  color: BRAND.text,
+                },
+              }}
+            >
+              {item.age.includes("岁") ? item.age : `${item.age}岁`}
+            </Badge>
+          )}
+
+          {item.identity && (
+            <Badge
+              size="xs"
+              styles={{
+                root: {
+                  fontSize: 11,
+                  height: 20,
+                  padding: "0 7px",
+                  fontWeight: 500,
+                  backgroundColor: BRAND.bgLight,
+                  border: `1px solid ${BRAND.borderLight}`,
+                  color: BRAND.text,
+                },
+              }}
+            >
+              {item.identity}
+            </Badge>
+          )}
+
+          {item.faction && (
+            <Badge
+              size="xs"
+              styles={{
+                root: {
+                  fontSize: 11,
+                  height: 20,
+                  padding: "0 7px",
+                  fontWeight: 500,
+                  backgroundColor: BRAND.bgLight,
+                  border: `1px solid ${BRAND.borderLight}`,
+                  color: BRAND.text,
+                },
+              }}
+            >
+              {item.faction}
+            </Badge>
+          )}
+        </Flex>
+
+        {/* 标签以下部分保持现有 */}
         {tagsList.length > 0 && (
           <Group gap={4} wrap="wrap" mb={8}>
             {tagsList.slice(0, 3).map((tag, idx) => (
@@ -236,6 +278,7 @@ export default function CharacterCard({
         )}
       </Box>
 
+      {/* 底部出场章节与详情链接保持现有 */}
       <Flex
         justify="space-between"
         align="center"
