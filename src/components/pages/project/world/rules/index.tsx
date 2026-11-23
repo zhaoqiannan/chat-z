@@ -2,46 +2,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Modal,
-  TextInput,
-  Select,
-  Stack,
-  SimpleGrid,
-  LoadingOverlay,
-  Paper,
-  Group,
-  Tooltip,
-  Collapse,
-  Divider,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiEdit2,
-  FiTrash2,
-  FiSearch,
-  FiSliders,
-  FiChevronDown,
-  FiChevronUp,
-  FiBookmark,
-} from "react-icons/fi";
-import {
-  WorldRuleItem,
-  getWorldRuleList,
-  createWorldRule,
-  updateWorldRule,
-  deleteWorldRule,
-  getCharacterList,
-  CharacterItem,
-  getFactionList,
-  FactionItem,
-} from "@/rest/world";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Select, Stack, SimpleGrid, Paper, Group, Tooltip, Collapse, Divider } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiSliders, FiChevronDown, FiChevronUp, FiBookmark } from "react-icons/fi";
+import { WorldRuleItem, getWorldRuleList, createWorldRule, updateWorldRule, deleteWorldRule, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import { RichTextEditor, RichTextViewer } from "@/components/common/rich-text";
@@ -334,7 +298,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
           )}
 
           {facVal ? (
-            <Badge size="xs" variant="light" color="teal">
+            <Badge size="xs" variant="light" color="cyan">
               🛡️ {facVal}
             </Badge>
           ) : (
@@ -355,7 +319,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
 
   return (
     <Box pos="relative">
-      <LoadingOverlay visible={loading} />
+      <LoadingMask visible={loading} />
 
       {/* 顶部工具栏：搜索框、一键全部展开/收起、新建规则按钮 */}
       <Flex justify="space-between" align="center" mb="lg" gap="sm" wrap="wrap">

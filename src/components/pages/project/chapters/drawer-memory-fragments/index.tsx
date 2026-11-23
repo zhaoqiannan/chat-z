@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, SimpleGrid, Card, ScrollArea, Modal, TextInput, Textarea, LoadingOverlay, Group } from "@mantine/core";
+import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, SimpleGrid, Card, ScrollArea, Modal, TextInput, Textarea, Group } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiBookmark, FiPlus, FiTrash2, FiCopy, FiCheck, FiCornerDownLeft, FiZap, FiEdit3 } from "react-icons/fi";
 import { MemoryFragmentItem, getMemoryFragmentList, createMemoryFragment, deleteMemoryFragment } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
@@ -155,7 +156,7 @@ export default function DrawerMemoryFragments({
           </Flex>
 
           <Box pos="relative" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-            <LoadingOverlay visible={loading} />
+            <LoadingMask visible={loading} />
 
             {fragments.length === 0 && !loading ? (
               <Stack align="center" justify="center" p={60} c="#94a3b8" gap={6} style={{ flex: 1 }}>
@@ -184,7 +185,7 @@ export default function DrawerMemoryFragments({
                           <Badge
                             size="xs"
                             variant="outline"
-                            color={frag.sourceType === "ai_chat" ? "teal" : "cyan"}
+                            color={frag.sourceType === "ai_chat" ? "cyan" : "cyan"}
                             styles={{ root: { height: 16, fontSize: 9.5 } }}
                           >
                             {frag.sourceType === "ai_chat" ? "AI推演" : "灵感碎片"}
@@ -218,7 +219,7 @@ export default function DrawerMemoryFragments({
                           <ActionIcon
                             size="xs"
                             variant="subtle"
-                            color={copiedId === frag.id ? "teal" : "gray"}
+                            color={copiedId === frag.id ? "cyan" : "gray"}
                             onClick={() => handleCopy(frag.id, frag.content)}
                           >
                             {copiedId === frag.id ? <FiCheck size={11} /> : <FiCopy size={11} />}

@@ -1,17 +1,7 @@
 "use client";
 
 import React from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Progress,
-  SimpleGrid,
-  Paper,
-  Tooltip,
-  ActionIcon,
-  Badge,
-} from "@mantine/core";
+import { Box, Flex, Text, Progress, SimpleGrid, Paper, Tooltip, ActionIcon, Badge } from "@mantine/core";
 import { modals } from "@mantine/modals";
 import { FiPlus, FiChevronRight, FiEdit2, FiTrash2 } from "react-icons/fi";
 import { BsPinAngle, BsPinFill } from "react-icons/bs";

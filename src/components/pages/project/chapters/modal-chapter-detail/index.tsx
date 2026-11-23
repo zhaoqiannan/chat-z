@@ -112,7 +112,7 @@ export default function ModalChapterDetail({
             <Text fz={10.5} c="#94a3b8">创作状态</Text>
             <Badge
               size="xs"
-              color={status === "completed" ? "teal" : status === "revising" ? "yellow" : "gray"}
+              color={status === "completed" ? "cyan" : status === "revising" ? "yellow" : "gray"}
               variant="outline"
               styles={{ root: { fontSize: 10, height: 18 } }}
             >

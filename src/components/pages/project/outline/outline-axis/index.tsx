@@ -2,37 +2,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Badge,
-  ActionIcon,
-  Stack,
-  Paper,
-  Group,
-  Button,
-  Tooltip,
-  Checkbox,
-  Collapse,
-} from "@mantine/core";
-import {
-  FiEdit2,
-  FiTrash2,
-  FiArrowUp,
-  FiArrowDown,
-  FiFileText,
-  FiChevronDown,
-  FiChevronUp,
-  FiBookOpen,
-  FiExternalLink,
-  FiZap,
-  FiEdit3,
-  FiCornerDownRight,
-  FiPlus,
-  FiClock,
-  FiMapPin,
-} from "react-icons/fi";
+import { Box, Flex, Text, Badge, ActionIcon, Stack, Paper, Group, Button, Tooltip, Checkbox, Collapse } from "@mantine/core";
+import { FiEdit2, FiTrash2, FiArrowUp, FiArrowDown, FiFileText, FiChevronDown, FiChevronUp, FiBookOpen, FiExternalLink, FiZap, FiEdit3, FiCornerDownRight, FiPlus, FiClock, FiMapPin } from "react-icons/fi";
 import { OutlineNode } from "@/rest/outline";
 import { useRouter } from "next/navigation";
 
@@ -193,7 +164,7 @@ export default function OutlineAxis({
               </Badge>
             )}
             {childNode.location && (
-              <Badge variant="outline" color="teal" size="xs" leftSection={<FiMapPin size={10} />}>
+              <Badge variant="outline" color="cyan" size="xs" leftSection={<FiMapPin size={10} />}>
                 {childNode.location}
               </Badge>
             )}
@@ -203,7 +174,7 @@ export default function OutlineAxis({
             {childNode.chapterId && (
               <Button
                 variant="subtle"
-                color="teal"
+                color="cyan"
                 leftSection={<FiExternalLink size={13} />}
                 onClick={() => handleJumpToChapter(childNode.chapterId)}
               >
@@ -312,7 +283,7 @@ export default function OutlineAxis({
                 />
 
                 {nodeCategory === "chapter" && (
-                  <Badge variant="filled" color="teal" size="md" leftSection={<FiBookOpen size={12} />}>
+                  <Badge variant="filled" color="cyan" size="md" leftSection={<FiBookOpen size={12} />}>
                     分卷 / 章节大纲
                   </Badge>
                 )}
@@ -345,7 +316,7 @@ export default function OutlineAxis({
                   </Badge>
                 )}
                 {rootNode.location && (
-                  <Badge variant="outline" color="teal" size="xs" leftSection={<FiMapPin size={10} />}>
+                  <Badge variant="outline" color="cyan" size="xs" leftSection={<FiMapPin size={10} />}>
                     {rootNode.location}
                   </Badge>
                 )}

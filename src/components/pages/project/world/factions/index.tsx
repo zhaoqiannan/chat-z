@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Group, Paper, Table } from "@mantine/core";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Group, Paper, Table } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp } from "react-icons/fi";
 import { FactionItem, getFactionList, createFaction, updateFaction, deleteFaction, getCharacterList, CharacterItem, getLocationList, LocationRecord } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
@@ -183,7 +184,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
   };
 
   const getAlignmentBadge = (align?: string | null) => {
-    if (align === "positive") return <Badge size="xs" color="teal" variant="light">正派</Badge>;
+    if (align === "positive") return <Badge size="xs" color="cyan" variant="light">正派</Badge>;
     if (align === "negative") return <Badge size="xs" color="red" variant="light">反派</Badge>;
     return <Badge size="xs" color="gray" variant="light">中立</Badge>;
   };
@@ -216,7 +217,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
   return (
     <Box pos="relative" style={{ minHeight: 400 }}>
-      <LoadingOverlay visible={loading} />
+      <LoadingMask visible={loading} />
 
       <Flex justify="space-between" align="center" mb="md" gap="sm">
         <TextInput
@@ -268,9 +269,9 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
                   <Table.Tr key={item.id} style={{ transition: "background-color 0.15s ease" }}>
                     <Table.Td>
                       <Group gap={8} wrap="nowrap">
-                        <Box style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: "#e0f2fe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Flex w={24} h={24} bdrs={4} bg="#e0f2fe" align="center" justify="center" style={{ flexShrink: 0 }}>
                           <FiShield size={13} color="#0284c7" />
-                        </Box>
+                        </Flex>
                         <Box>
                           <Text fz={13.5} fw={700} c="#0f172a" style={{ wordBreak: "break-word" }}>
                             {item.name}
@@ -297,7 +298,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
                     <Table.Td>
                       {item.controlledLocations ? (
-                        <Badge size="sm" variant="outline" color="teal" leftSection={<FiMapPin size={10} />} styles={{ root: { maxWidth: 120 } }}>
+                        <Badge size="sm" variant="outline" color="cyan" leftSection={<FiMapPin size={10} />} styles={{ root: { maxWidth: 120 } }}>
                           {item.controlledLocations}
                         </Badge>
                       ) : (
@@ -307,7 +308,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
                     <Table.Td>
                       {item.trend ? (
-                        <Badge size="xs" variant="light" color={item.trend === "蒸蒸日上" ? "teal" : item.trend === "危机四伏" || item.trend === "日薄西山" ? "red" : "gray"} leftSection={<FiTrendingUp size={9} />}>
+                        <Badge size="xs" variant="light" color={item.trend === "蒸蒸日上" ? "cyan" : item.trend === "危机四伏" || item.trend === "日薄西山" ? "red" : "gray"} leftSection={<FiTrendingUp size={9} />}>
                           {item.trend}
                         </Badge>
                       ) : (

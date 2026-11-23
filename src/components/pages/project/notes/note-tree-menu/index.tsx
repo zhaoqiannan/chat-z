@@ -2,39 +2,8 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  Stack,
-  ActionIcon,
-  Tooltip,
-  Group,
-  TextInput,
-  ScrollArea,
-  Collapse,
-  UnstyledButton,
-} from "@mantine/core";
-import {
-  FiChevronRight,
-  FiChevronDown,
-  FiPlus,
-  FiSearch,
-  FiFileText,
-  FiBookmark,
-  FiFolder,
-  FiFolderMinus,
-  FiArchive,
-  FiZap,
-  FiBook,
-  FiUser,
-  FiGlobe,
-  FiSearch as FiResearch,
-  FiEdit3,
-  FiTrash2,
-} from "react-icons/fi";
+import { Box, Flex, Text, Button, Badge, Stack, ActionIcon, Tooltip, Group, TextInput, ScrollArea, Collapse, UnstyledButton } from "@mantine/core";
+import { FiChevronRight, FiChevronDown, FiPlus, FiSearch, FiFileText, FiBookmark, FiFolder, FiFolderMinus, FiArchive, FiZap, FiBook, FiUser, FiGlobe, FiSearch as FiResearch, FiEdit3, FiTrash2 } from "react-icons/fi";
 import { NoteData } from "@/rest/project-extensions";
 
 export interface NoteTreeMenuProps {

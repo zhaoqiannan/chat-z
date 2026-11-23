@@ -1,10 +1,5 @@
 import { notifications, NotificationsProps } from "@mantine/notifications";
-import {
-    AiOutlineInfoCircle,
-    AiOutlineCheckCircle,
-    AiOutlineExclamationCircle,
-    AiOutlineCloseCircle,
-} from "react-icons/ai";
+import { AiOutlineInfoCircle, AiOutlineCheckCircle, AiOutlineExclamationCircle, AiOutlineCloseCircle } from "react-icons/ai";
 
 // 图标映射
 const icon: any = {

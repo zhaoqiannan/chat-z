@@ -2,38 +2,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Drawer,
-  Badge,
-  ActionIcon,
-  Stack,
-  Paper,
-  Textarea,
-  TextInput,
-  NumberInput,
-  MultiSelect,
-  Group,
-  Text,
-  Button,
-  Flex,
-  Box,
-  Tooltip,
-} from "@mantine/core";
-import {
-  FiZap,
-  FiCheck,
-  FiUser,
-  FiFileText,
-  FiEdit2
-} from "react-icons/fi";
-import {
-  OutlineNode,
-  PlotDeductionPath,
-  PlotDeductionRecord,
-  deductPlot,
-  savePlotDeduction,
-  batchCreateOutlineNodes,
-} from "@/rest/outline";
+import { Drawer, Badge, ActionIcon, Stack, Paper, Textarea, TextInput, NumberInput, MultiSelect, Group, Text, Button, Flex, Box, Tooltip } from "@mantine/core";
+import { FiZap, FiCheck, FiUser, FiFileText, FiEdit2 } from "react-icons/fi";
+import { OutlineNode, PlotDeductionPath, PlotDeductionRecord, deductPlot, savePlotDeduction, batchCreateOutlineNodes } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
 import { NoteData, NoteListResult, getNoteList } from "@/rest/project-extensions";
 import { useAlert } from "@/hooks/useAlert";
@@ -420,7 +391,7 @@ export default function DrawerPlotDeduction({
                   <Button
                     size="xs"
                     variant="filled"
-                    color="teal"
+                    color="cyan"
                     leftSection={<FiCheck size={13} />}
                     loading={adopting}
                     onClick={() => handleAdoptPath(selectedPath)}

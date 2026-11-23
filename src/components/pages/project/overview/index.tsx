@@ -2,19 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import {
-  Box,
-  Flex,
-  Text,
-  Paper,
-  SimpleGrid,
-  Button,
-  LoadingOverlay,
-} from "@mantine/core";
-import {
-  FiEdit3,
-  FiCompass,
-} from "react-icons/fi";
+import { Box, Flex, Text, Paper, SimpleGrid, Button } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
+import { FiEdit3, FiCompass } from "react-icons/fi";
 import { getWorkDetail, WorkItem } from "@/rest/work";
 
 export default function ProjectOverviewPage() {
@@ -62,7 +52,7 @@ export default function ProjectOverviewPage() {
 
   return (
     <Box pos="relative">
-      <LoadingOverlay visible={loading && !work} />
+      <LoadingMask visible={loading && !work} />
 
       <Flex p={10} direction="column" gap={15}>
         {/* 项目头部基础信息 */}

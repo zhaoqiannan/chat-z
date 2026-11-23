@@ -3,52 +3,23 @@
 import React, { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
-import { Box, LoadingOverlay } from "@mantine/core";
+import { Box } from "@mantine/core";
+import Loading from "@/components/common/loading";
 
-const ProjectOverview = dynamic(
-  () => import("@/components/pages/project/overview"),
-  { loading: () => <LoadingOverlay visible /> }
-);
+const PageLoader = () => <Loading loading h="60vh">{null}</Loading>;
 
-const StoryOutline = dynamic(
-  () => import("@/components/pages/project/outline"),
-  { loading: () => <LoadingOverlay visible /> }
-);
+const ProjectOverview = dynamic(() => import("@/components/pages/project/overview"), { loading: PageLoader });
+const StoryOutline = dynamic(() => import("@/components/pages/project/outline"), { loading: PageLoader });
+const ProjectChapters = dynamic(() => import("@/components/pages/project/chapters"), { loading: PageLoader });
+const WorldLore = dynamic(() => import("@/components/pages/project/world"), { loading: PageLoader });
+const NotesPage = dynamic(() => import("@/components/pages/project/notes"), { loading: PageLoader });
+const MaterialsPage = dynamic(() => import("@/components/pages/project/materials"), { loading: PageLoader });
+const AiAnalysisPage = dynamic(() => import("@/components/pages/project/ai-analysis"), { loading: PageLoader });
+const TimelinePage = dynamic(() => import("@/components/pages/project/timeline"), { loading: PageLoader });
+const RelationGraphPage = dynamic(() => import("@/components/pages/project/relation-graph"), { loading: PageLoader });
+const ProjectSettingsPage = dynamic(() => import("@/components/pages/project/settings"), { loading: PageLoader });
 
-const ProjectChapters = dynamic(
-  () => import("@/components/pages/project/chapters"),
-  { loading: () => <LoadingOverlay visible /> }
-);
-
-const WorldLore = dynamic(
-  () => import("@/components/pages/project/world"),
-  { loading: () => <LoadingOverlay visible /> }
-);
-
-const NotesPage = dynamic(
-  () => import("@/components/pages/project/notes"),
-  { loading: () => <LoadingOverlay visible /> }
-);
-
-const MaterialsPage = dynamic(
-  () => import("@/components/pages/project/materials"),
-  { loading: () => <LoadingOverlay visible /> }
-);
-
-const TimelinePage = dynamic(
-  () => import("@/components/pages/project/timeline"),
-  { loading: () => <LoadingOverlay visible /> }
-);
-
-const RelationGraphPage = dynamic(
-  () => import("@/components/pages/project/relation-graph"),
-  { loading: () => <LoadingOverlay visible /> }
-);
-
-const ProjectSettingsPage = dynamic(
-  () => import("@/components/pages/project/settings"),
-  { loading: () => <LoadingOverlay visible /> }
-);
+const VALID_TABS = ["outline", "chapters", "world", "notes", "materials", "ai_analysis", "timeline", "relation_graph", "settings", "overview"];
 
 function ProjectDetailContent() {
   const searchParams = useSearchParams();
@@ -61,28 +32,19 @@ function ProjectDetailContent() {
       {tab === "world" && <WorldLore />}
       {tab === "notes" && <NotesPage />}
       {tab === "materials" && <MaterialsPage />}
+      {tab === "ai_analysis" && <AiAnalysisPage />}
       {tab === "timeline" && <TimelinePage />}
       {tab === "relation_graph" && <RelationGraphPage />}
       {tab === "settings" && <ProjectSettingsPage />}
       {tab === "overview" && <ProjectOverview />}
-      {![
-        "outline",
-        "chapters",
-        "world",
-        "notes",
-        "materials",
-        "timeline",
-        "relation_graph",
-        "settings",
-        "overview",
-      ].includes(tab) && <ProjectOverview />}
+      {!VALID_TABS.includes(tab) && <ProjectOverview />}
     </Box>
   );
 }
 
 export default function ProjectDetailPage() {
   return (
-    <Suspense fallback={<LoadingOverlay visible />}>
+    <Suspense fallback={<PageLoader />}>
       <ProjectDetailContent />
     </Suspense>
   );

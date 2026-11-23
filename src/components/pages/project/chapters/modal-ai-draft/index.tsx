@@ -1,18 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Modal,
-  TextInput,
-  Textarea,
-  Select,
-  NumberInput,
-  Button,
-  Stack,
-  Flex,
-  Text,
-  SimpleGrid,
-} from "@mantine/core";
+import { Modal, TextInput, Textarea, Select, NumberInput, Button, Stack, Flex, Text, SimpleGrid } from "@mantine/core";
 import { FiZap } from "react-icons/fi";
 import { requestChapterAiDraft } from "@/rest/chapter";
 

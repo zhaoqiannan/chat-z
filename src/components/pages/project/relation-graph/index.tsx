@@ -3,49 +3,12 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Modal,
-  TextInput,
-  Textarea,
-  Select,
-  Stack,
-  SimpleGrid,
-  LoadingOverlay,
-  Table,
-  Paper,
-  Tabs,
-  Avatar,
-  Group,
-  ScrollArea,
-  Tooltip,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiMinus,
-  FiEdit,
-  FiTrash2,
-  FiShare2,
-  FiUsers,
-  FiSearch,
-  FiRefreshCw,
-  FiEye,
-} from "react-icons/fi";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Table, Paper, Tabs, Avatar, Group, ScrollArea, Tooltip } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
+import { FiPlus, FiMinus, FiEdit, FiTrash2, FiShare2, FiUsers, FiSearch, FiRefreshCw, FiEye } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
-import {
-  CharacterRelationData,
-  RelationGraphCharNode,
-  getRelationGraphData,
-  createCharacterRelation,
-  updateCharacterRelation,
-  deleteCharacterRelation,
-} from "@/rest/project-extensions";
+import { CharacterRelationData, RelationGraphCharNode, getRelationGraphData, createCharacterRelation, updateCharacterRelation, deleteCharacterRelation } from "@/rest/project-extensions";
 
 export default function RelationGraphPage() {
   const params = useParams();
@@ -259,7 +222,7 @@ export default function RelationGraphPage() {
       case "neutral":
         return <Badge color="gray" variant="light" size="xs">⚖️ 利益中立</Badge>;
       default:
-        return <Badge color="teal" variant="light" size="xs">🤝 同盟友好</Badge>;
+        return <Badge color="cyan" variant="light" size="xs">🤝 同盟友好</Badge>;
     }
   };
 
@@ -387,7 +350,7 @@ export default function RelationGraphPage() {
           </Flex>
 
           <Box pos="relative" style={{ minHeight: 360 }}>
-            <LoadingOverlay visible={loading} />
+            <LoadingMask visible={loading} />
 
             {characters.length < 2 && !loading ? (
               <Paper p="xl" withBorder radius="sm" ta="center" c="#94a3b8" bg="#ffffff">
@@ -645,7 +608,7 @@ export default function RelationGraphPage() {
                                   src={c.avatarUrl}
                                   radius="xl"
                                   size="sm"
-                                  color={isMain ? "teal" : "cyan"}
+                                  color={isMain ? "cyan" : "cyan"}
                                 >
                                   {c.name.slice(0, 1)}
                                 </Avatar>

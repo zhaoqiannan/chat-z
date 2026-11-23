@@ -2,31 +2,8 @@
 "use client";
 
 import React from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Table,
-  TextInput,
-  ScrollArea,
-  Group,
-  Tooltip,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiSearch,
-  FiFileText,
-  FiImage,
-  FiBarChart2,
-  FiMusic,
-  FiVideo,
-  FiLink,
-  FiEdit,
-  FiTrash2,
-} from "react-icons/fi";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Table, TextInput, ScrollArea, Group, Tooltip } from "@mantine/core";
+import { FiPlus, FiSearch, FiFileText, FiImage, FiBarChart2, FiMusic, FiVideo, FiLink, FiEdit, FiTrash2 } from "react-icons/fi";
 import { BsPinAngle, BsPinFill } from "react-icons/bs";
 import dayjs from "dayjs";
 import { MaterialData } from "@/rest/project-extensions";

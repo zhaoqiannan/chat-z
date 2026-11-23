@@ -3,7 +3,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Box, LoadingOverlay, Modal, TextInput, Select, Button, Group, Stack, Text } from "@mantine/core";
+import { Box, Modal, TextInput, Select, Button, Group, Stack, Text } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { NoteData, NoteListResult, getNoteList, createNote, updateNote, deleteNote } from "@/rest/project-extensions";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
@@ -157,7 +158,7 @@ export default function NotesPage() {
         position: "relative",
       }}
     >
-      <LoadingOverlay visible={loading && notes.length === 0} />
+      <LoadingMask visible={loading && notes.length === 0} />
 
       {/* 1. 左侧树状菜单 */}
       {!sidebarCollapsed && (

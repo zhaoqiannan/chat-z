@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, ScrollArea, Modal, LoadingOverlay, Group } from "@mantine/core";
+import { Box, Flex, Text, Button, Drawer, Badge, ActionIcon, Stack, ScrollArea, Modal, Group } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiClock, FiRotateCcw, FiCopy, FiCheck, FiTrash2, FiFileText } from "react-icons/fi";
 import { ChapterVersionItem, getChapterVersionList, deleteChapterVersion } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
@@ -101,7 +102,7 @@ export default function DrawerVersionHistory({
         }}
       >
         <Box pos="relative" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-          <LoadingOverlay visible={loading} />
+          <LoadingMask visible={loading} />
 
           {versions.length === 0 && !loading ? (
             <Stack align="center" justify="center" p={40} c="#94a3b8" gap={6} style={{ flex: 1 }}>

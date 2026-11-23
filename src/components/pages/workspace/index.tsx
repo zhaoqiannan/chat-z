@@ -15,16 +15,7 @@ import ModalWork, { WorkFormData } from "./modal-work";
 import ModalDeleteConfirm from "./modal-delete-confirm";
 import Loading from "@/components/common/loading";
 import { getWorkList, createWork, updateWork, deleteWork } from "@/rest/work";
-import {
-  getRecentChapter,
-  getRecentActivities,
-  getCreationStats,
-  triggerAiDiagnosis,
-  RecentChapterResult,
-  ActivityResult,
-  CreationStatItem,
-  AiSuggestionItem,
-} from "@/rest/workspace";
+import { getRecentChapter, getRecentActivities, getCreationStats, triggerAiDiagnosis, RecentChapterResult, ActivityResult, CreationStatItem, AiSuggestionItem } from "@/rest/workspace";
 
 export default function WorkspacePage() {
   const router = useRouter();

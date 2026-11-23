@@ -1,38 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Drawer,
-  Modal,
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Tooltip,
-  Paper,
-  Stack,
-  LoadingOverlay,
-  ScrollArea,
-  Group,
-} from "@mantine/core";
-import {
-  FiClock,
-  FiFileText,
-  FiTrash2,
-  FiCheck,
-  FiCopy,
-  FiEye,
-  FiZap,
-  FiColumns,
-  FiCalendar,
-} from "react-icons/fi";
-import {
-  ChapterAiHistoryItem,
-  getChapterAiHistoryList,
-  deleteChapterAiHistory,
-} from "@/rest/chapter";
+import { Drawer, Modal, Box, Flex, Text, Button, Badge, ActionIcon, Tooltip, Paper, Stack, ScrollArea, Group } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
+import { FiClock, FiFileText, FiTrash2, FiCheck, FiCopy, FiEye, FiZap, FiColumns, FiCalendar } from "react-icons/fi";
+import { ChapterAiHistoryItem, getChapterAiHistoryList, deleteChapterAiHistory } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 
@@ -150,7 +122,7 @@ export default function DrawerAiHistory({
       case "draft":
         return <Badge color="violet" variant="light" size="xs">初稿生成</Badge>;
       case "optimize":
-        return <Badge color="teal" variant="light" size="xs">全文润色</Badge>;
+        return <Badge color="cyan" variant="light" size="xs">全文润色</Badge>;
       case "selection_ai":
         return <Badge variant="light" size="xs">局部改写</Badge>;
       default:
@@ -177,7 +149,7 @@ export default function DrawerAiHistory({
         padding="md"
       >
         <Box pos="relative" style={{ minHeight: 300 }}>
-          <LoadingOverlay visible={loading} />
+          <LoadingMask visible={loading} />
 
           {list.length === 0 && !loading ? (
             <Flex direction="column" align="center" justify="center" p={40} c="#94a3b8" gap={8}>

@@ -2,37 +2,10 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  Paper,
-  TextInput,
-  Textarea,
-  Select,
-  Stack,
-  SimpleGrid,
-  LoadingOverlay,
-  Divider,
-  Group,
-  RingProgress,
-} from "@mantine/core";
-import {
-  FiSettings,
-  FiSave,
-  FiDownload,
-  FiFileText,
-  FiCode,
-  FiTrash2,
-  FiAlertTriangle,
-  FiBookOpen,
-} from "react-icons/fi";
-import {
-  getProjectDetailSettings,
-  updateProjectSettings,
-} from "@/rest/project-extensions";
+import { Box, Flex, Text, Button, Badge, Paper, TextInput, Textarea, Select, Stack, SimpleGrid, Divider, Group, RingProgress } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
+import { FiSettings, FiSave, FiDownload, FiFileText, FiCode, FiTrash2, FiAlertTriangle, FiBookOpen } from "react-icons/fi";
+import { getProjectDetailSettings, updateProjectSettings } from "@/rest/project-extensions";
 import { deleteWork } from "@/rest/work";
 import { useAlert } from "@/hooks/useAlert";
 import { showPromptModal } from "@/hooks/useConfirm";
@@ -177,7 +150,7 @@ export default function ProjectSettingsPage() {
 
   return (
     <Box p="16px 20px 48px" style={{ maxWidth: 880, margin: "0 auto", minHeight: "calc(100vh - 64px)" }}>
-      <LoadingOverlay visible={loading} />
+      <LoadingMask visible={loading} />
 
       <Flex align="center" gap={8} mb={14}>
         <FiSettings size={18} color="#00c9ff" />
@@ -312,7 +285,7 @@ export default function ProjectSettingsPage() {
             <Button
               size="xs"
               variant="light"
-              color="teal"
+              color="cyan"
               leftSection={<FiFileText size={13} />}
               loading={exportingAction === "export_txt"}
               onClick={() => handleExport("export_txt")}

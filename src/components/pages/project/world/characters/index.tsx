@@ -1,21 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  TextInput,
-  Stack,
-  SimpleGrid,
-  LoadingOverlay,
-  Group,
-  Modal,
-  Badge,
-  Collapse,
-  Paper,
-} from "@mantine/core";
+import { Box, Flex, Text, Button, TextInput, Stack, SimpleGrid, Group, Modal, Badge, Collapse, Paper } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiChevronRight } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { CharacterItem, getCharacterList, deleteCharacter, togglePinCharacter } from "@/rest/world";
@@ -257,7 +244,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
 
   return (
     <Box pos="relative" style={{ minHeight: "100%", backgroundColor: "#ffffff" }}>
-      <LoadingOverlay visible={loading} />
+      <LoadingMask visible={loading} />
 
       {/* 顶部主工具栏：标题与角色数 + 搜索输入框 + 新建角色按钮 */}
       <Flex justify="space-between" align="center" gap="md" wrap="wrap" mb="xs">

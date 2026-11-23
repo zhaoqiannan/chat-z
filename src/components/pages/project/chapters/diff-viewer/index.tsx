@@ -1,18 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Box,
-  Text,
-  Button,
-  Paper,
-  SimpleGrid,
-  Badge,
-  Group,
-  Stack,
-  ScrollArea,
-  Textarea,
-} from "@mantine/core";
+import { Box, Text, Button, Paper, SimpleGrid, Badge, Group, Stack, ScrollArea, Textarea } from "@mantine/core";
 import { FiCheck, FiX } from "react-icons/fi";
 
 interface DiffViewerProps {
@@ -60,7 +49,7 @@ export default function DiffViewer({
               AI 润色与修改对比视图
             </Text>
             <Badge
-              color={diffCount >= 0 ? "teal" : "orange"}
+              color={diffCount >= 0 ? "cyan" : "orange"}
               variant="light"
               size="md"
             >
@@ -80,7 +69,7 @@ export default function DiffViewer({
             </Button>
 
             <Button
-              color="teal"
+              color="cyan"
               size="sm"
               leftSection={<FiCheck size={14} />}
               onClick={() => onAccept(currentOptimized)}

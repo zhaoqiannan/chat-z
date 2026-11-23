@@ -504,8 +504,8 @@ export default function PanelAiAssistant({
                     </Group>
 
                     {item.selectedText && (
-                      <Box p="6px 8px" mb={8} bg="#f1f5f9" style={{ borderRadius: 4, borderLeft: "3px solid #3b82f6", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
-                        <Text fz={11} c="#475569" lineClamp={2} style={{ flex: 1 }}>
+                      <Flex p="6px 8px" mb={8} bg="#f1f5f9" bdrs={4} justify="space-between" align="center" gap={4} style={{ borderLeft: "3px solid #3b82f6" }}>
+                        <Text fz={11} c="#475569" lineClamp={2} flex={1}>
                           📌 针对片段：“{item.selectedText}”
                         </Text>
                         {onLocateSnippet && (
@@ -520,7 +520,7 @@ export default function PanelAiAssistant({
                             🎯 定位
                           </Button>
                         )}
-                      </Box>
+                      </Flex>
                     )}
 
                     <Text fz={11.5} c="#64748b" style={{ fontStyle: "italic" }}>
@@ -541,19 +541,19 @@ export default function PanelAiAssistant({
                         ✨ 【{getActionLabel(item.actionType)}】推荐结果：
                       </Text>
                     </Group>
-                    {item.applied ? <Badge size="xs" color="teal" variant="light">已采纳</Badge> : null}
+                    {item.applied ? <Badge size="xs" color="cyan" variant="light">已采纳</Badge> : null}
                   </Group>
 
                   {item.selectedText && (
-                    <Box p="4px 8px" mb={6} bg="#ecfdf5" style={{ borderRadius: 4, borderLeft: "3px solid #10b981", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 4 }}>
-                      <Text fz={11} c="#047857" lineClamp={2} style={{ flex: 1 }}>
+                    <Flex p="4px 8px" mb={6} bg="#ecfdf5" bdrs={4} justify="space-between" align="center" gap={4} style={{ borderLeft: "3px solid #10b981" }}>
+                      <Text fz={11} c="#047857" lineClamp={2} flex={1}>
                         📌 对应片段：“{item.selectedText}”
                       </Text>
                       {onLocateSnippet && (
                         <Button
                           size="compact-xs"
                           variant="subtle"
-                          color="teal"
+                          color="cyan"
                           onClick={() => onLocateSnippet(item.selectedText || "")}
                           styles={{ root: { fontSize: 10, height: 18, padding: "0 3px" } }}
                           title="在正文中定位此片段"
@@ -561,7 +561,7 @@ export default function PanelAiAssistant({
                           🎯 定位
                         </Button>
                       )}
-                    </Box>
+                    </Flex>
                   )}
 
                   <Text fz={12.5} c="#14532d" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>
@@ -590,7 +590,7 @@ export default function PanelAiAssistant({
                       <Button
                         size="compact-xs"
                         variant="subtle"
-                        color={fragmentSavedIds[item.id] ? "teal" : "cyan"}
+                        color={fragmentSavedIds[item.id] ? "cyan" : "cyan"}
                         leftSection={<FiBookmark size={11} />}
                         onClick={() => handleSaveFragment(item)}
                         disabled={Boolean(fragmentSavedIds[item.id])}

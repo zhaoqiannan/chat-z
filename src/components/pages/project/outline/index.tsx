@@ -3,40 +3,10 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
-import {
-  Box,
-  Flex,
-  Button,
-  LoadingOverlay,
-  Group,
-  Tabs,
-  ScrollArea,
-  Checkbox,
-  Paper,
-  Text,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiZap,
-  FiBookOpen,
-  FiEdit3,
-  FiTrash2,
-  FiCpu,
-  FiClock,
-  FiChevronDown,
-  FiChevronUp,
-  FiMinimize2,
-  FiMaximize2,
-} from "react-icons/fi";
-import {
-  OutlineNode,
-  getOutlineList,
-  createOutlineNode,
-  updateOutlineNode,
-  deleteOutlineNode,
-  batchDeleteOutlineNodes,
-  PlotDeductionRecord,
-} from "@/rest/outline";
+import { Box, Button, Checkbox, Flex, Group, Paper, ScrollArea, Tabs, Text } from "@mantine/core";
+import { FiBookOpen, FiClock, FiCpu, FiEdit3, FiGitBranch, FiMaximize2, FiMinimize2, FiPlus, FiTrash2, FiZap } from "react-icons/fi";
+import { OutlineNode, PlotDeductionRecord, batchDeleteOutlineNodes, createOutlineNode, deleteOutlineNode, getOutlineList, updateOutlineNode } from "@/rest/outline";
+import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import OutlineAxis from "./outline-axis";
@@ -44,6 +14,7 @@ import ModalNodeEditor from "./modal-node-editor";
 import DrawerPlotDeduction from "./drawer-plot-deduction";
 import DrawerPlotDeductionHistory from "./drawer-plot-deduction/drawer-plot-deduction-history";
 import DrawerThoughtOrganizer from "./drawer-thought-organizer";
+import MasterOutlineWorkspace from "./master-outline";
 
 export default function StoryOutlinePage() {
   const params = useParams();
@@ -51,7 +22,7 @@ export default function StoryOutlinePage() {
 
   const [loading, setLoading] = useState(false);
   const [nodes, setNodes] = useState<OutlineNode[]>([]);
-  const [activeTab, setActiveTab] = useState<string | null>("chapter");
+  const [activeTab, setActiveTab] = useState<string | null>("master");
   const [selectedNodeIds, setSelectedNodeIds] = useState<(number | string)[]>([]);
 
   // 弹窗与抽屉状态
@@ -279,198 +250,130 @@ export default function StoryOutlinePage() {
   };
 
   return (
-    <Box
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "calc(100vh - 64px)",
-        backgroundColor: "#ffffff",
-        overflow: "hidden",
-      }}
-    >
-      <LoadingOverlay visible={loading && nodes.length === 0} />
+    <Flex direction="column" h="calc(100vh - 64px)" bg="#ffffff" pos="relative" style={{ overflow: "hidden" }}>
+      <LoadingMask visible={loading && nodes.length === 0 && activeTab !== "master"} />
 
-      {/* 第一行：三大 Tab 切换栏 */}
-      <Box style={{ borderBottom: "1px solid #f1f5f9" }} px="md" pt={6}>
-        <Tabs
-          value={activeTab}
-          onChange={(val) => {
-            setActiveTab(val);
-            setSelectedNodeIds([]);
-          }}
-        >
+      {/* 第一行：四大 Tab 切换栏 */}
+      <Box px="md" pt={6} style={{ borderBottom: "1px solid #f1f5f9" }}>
+        <Tabs value={activeTab} onChange={(val) => { setActiveTab(val); setSelectedNodeIds([]); }}>
           <Tabs.List>
-            <Tabs.Tab
-              value="chapter"
-              leftSection={<FiBookOpen size={15} color="#0d9488" />}
-            >
+            <Tabs.Tab value="master" leftSection={<FiGitBranch size={15} color="#00c9ff" />}>
+              项目总纲
+            </Tabs.Tab>
+            <Tabs.Tab value="chapter" leftSection={<FiBookOpen size={15} color="#00c9ff" />}>
               章节大纲 ({chapterNodes.length})
             </Tabs.Tab>
-            <Tabs.Tab
-              value="deduction"
-              leftSection={<FiZap size={15} color="#2563eb" />}
-            >
+            <Tabs.Tab value="deduction" leftSection={<FiZap size={15} color="#2563eb" />}>
               剧情推演 ({deductionNodes.length})
             </Tabs.Tab>
-            <Tabs.Tab
-              value="memo"
-              leftSection={<FiEdit3 size={15} color="#64748b" />}
-            >
+            <Tabs.Tab value="memo" leftSection={<FiEdit3 size={15} color="#64748b" />}>
               随手卡片 ({memoNodes.length})
             </Tabs.Tab>
           </Tabs.List>
         </Tabs>
       </Box>
 
-      {/* 第二行：专属工具操作条（左侧保留全选与展开收起，右侧放批量删除与Tab操作，默认按钮尺寸） */}
-      <Flex
-        justify="space-between"
-        align="center"
-        px="md"
-        py={10}
-        style={{ borderBottom: "1px solid #f1f5f9", backgroundColor: "#fafafa" }}
-      >
-        {/* 左侧：精美一体化控制胶囊 (全选当前 + 全部展开/收起) */}
-        <Paper
-          withBorder
-          radius="md"
-          px="sm"
-          py={5}
-          style={{
-            backgroundColor: "#ffffff",
-            borderColor: "#e2e8f0",
-            boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <Checkbox
-            size="sm"
-            label={
-              <Text fz={13} fw={600} c={isAllCurrentSelected ? "blue.7" : "#334155"}>
-                {isAllCurrentSelected ? "取消全选" : "全选当前"}
-              </Text>
-            }
-            checked={isAllCurrentSelected}
-            indeterminate={selectedNodeIds.length > 0 && !isAllCurrentSelected}
-            onChange={handleToggleSelectAll}
-            styles={{
-              input: { cursor: "pointer" },
-              label: { cursor: "pointer", userSelect: "none" },
-            }}
-          />
-
-          <Box style={{ width: 1, height: 16, backgroundColor: "#e2e8f0" }} />
-
-          <Button
-            variant="light"
-            color={isAllExpanded ? "blue" : "gray"}
-            radius="sm"
-            leftSection={
-              isAllExpanded ? (
-                <FiMinimize2 size={13} style={{ strokeWidth: 2.2 }} />
-              ) : (
-                <FiMaximize2 size={13} style={{ strokeWidth: 2.2 }} />
-              )
-            }
-            onClick={handleToggleExpandAll}
-            style={{
-              fontWeight: 600,
-              fontSize: 13,
-              height: 30,
-              paddingLeft: 10,
-              paddingRight: 10,
-            }}
-          >
-            {isAllExpanded ? "全部收起" : "全部展开"}
-          </Button>
-        </Paper>
-
-        {/* 右侧：批量删除按钮 + 当前 Tab 专属操作按钮 */}
-        <Group gap="sm" align="center">
-          <Button
-            variant={selectedNodeIds.length > 0 ? "filled" : "light"}
-            color="red"
-            leftSection={<FiTrash2 size={15} />}
-            onClick={handleBatchDelete}
-            loading={loading}
-          >
-            批量删除{selectedNodeIds.length > 0 ? ` (${selectedNodeIds.length})` : ""}
-          </Button>
-
-          {activeTab === "chapter" && (
-            <Button
-              variant="default"
-              leftSection={<FiPlus size={15} />}
-              onClick={handleOpenCreateNode}
-            >
-              新建章节大纲
-            </Button>
-          )}
-
-          {activeTab === "deduction" && (
-            <Group gap="xs">
-              <Button
-                variant="filled"
-                color="blue"
-                leftSection={<FiZap size={15} />}
-                onClick={() => setDeductionDrawerOpened(true)}
-              >
-                A➔B 剧情推演
-              </Button>
-              <Button
-                variant="default"
-                leftSection={<FiClock size={15} />}
-                onClick={() => setHistoryDrawerOpened(true)}
-              >
-                推演历史
-              </Button>
-            </Group>
-          )}
-
-          {activeTab === "memo" && (
-            <Group gap="xs">
-              <Button
-                variant="light"
-                color="blue"
-                leftSection={<FiCpu size={15} />}
-                onClick={() => setThoughtDrawerOpened(true)}
-              >
-                AI 思路整理
-              </Button>
-              <Button
-                variant="default"
-                leftSection={<FiPlus size={15} />}
-                onClick={handleOpenCreateNode}
-              >
-                新建随手卡片
-              </Button>
-            </Group>
-          )}
-        </Group>
-      </Flex>
-
-      {/* 故事大纲列表主体（树状结构呈现） */}
-      <ScrollArea style={{ flex: 1 }} px={24} py="md">
-        <Box mx="auto" pb={80}>
-          <OutlineAxis
-            workId={workId}
-            category={currentCategory}
-            nodes={currentList}
-            selectedNodeIds={selectedNodeIds}
-            onToggleSelectNode={handleToggleSelectNode}
-            onEditNode={handleOpenEditNode}
-            onDeleteNode={handleDeleteNode}
-            onMoveNode={handleMoveNode}
-            onAddChildNode={handleOpenAddChildNode}
-            onTriggerDeduction={() => setDeductionDrawerOpened(true)}
-            onTriggerCreate={handleOpenCreateNode}
-            collapsedParents={collapsedParents}
-            onToggleParentCollapse={handleToggleParentCollapse}
-          />
+      {activeTab === "master" ? (
+        <Box flex={1} mih={0} style={{ overflow: "hidden" }}>
+          <MasterOutlineWorkspace workId={workId} />
         </Box>
-      </ScrollArea>
+      ) : (
+        <>
+          {/* 第二行：专属工具操作条 */}
+          <Flex justify="space-between" align="center" px="md" py={10} bg="#fafafa" style={{ borderBottom: "1px solid #f1f5f9" }}>
+            <Paper withBorder radius="md" px="sm" py={5} bg="#ffffff" bd="1px solid #e2e8f0" style={{ boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)" }}>
+              <Flex align="center" gap={12}>
+                <Checkbox
+                  size="sm"
+                  label={
+                    <Text fz={13} fw={600} c={isAllCurrentSelected ? "#00c9ff" : "#334155"}>
+                      {isAllCurrentSelected ? "取消全选" : "全选当前"}
+                    </Text>
+                  }
+                  checked={isAllCurrentSelected}
+                  indeterminate={selectedNodeIds.length > 0 && !isAllCurrentSelected}
+                  onChange={handleToggleSelectAll}
+                  styles={{ input: { cursor: "pointer" }, label: { cursor: "pointer", userSelect: "none" } }}
+                />
+
+                <Box w={1} h={16} bg="#e2e8f0" />
+
+                <Button
+                  size="xs"
+                  variant="light"
+                  color={isAllExpanded ? undefined : "gray"}
+                  radius="sm"
+                  leftSection={isAllExpanded ? <FiMinimize2 size={13} /> : <FiMaximize2 size={13} />}
+                  onClick={handleToggleExpandAll}
+                >
+                  {isAllExpanded ? "全部收起" : "全部展开"}
+                </Button>
+              </Flex>
+            </Paper>
+
+            <Group gap="sm" align="center">
+              <Button
+                variant={selectedNodeIds.length > 0 ? "filled" : "light"}
+                color="red"
+                leftSection={<FiTrash2 size={15} />}
+                loading={loading}
+                onClick={handleBatchDelete}
+              >
+                批量删除{selectedNodeIds.length > 0 ? ` (${selectedNodeIds.length})` : ""}
+              </Button>
+
+              {activeTab === "chapter" && (
+                <Button variant="default" leftSection={<FiPlus size={15} />} onClick={handleOpenCreateNode}>
+                  新建章节大纲
+                </Button>
+              )}
+
+              {activeTab === "deduction" && (
+                <Group gap="xs">
+                  <Button variant="filled" leftSection={<FiZap size={15} />} onClick={() => setDeductionDrawerOpened(true)}>
+                    A➔B 剧情推演
+                  </Button>
+                  <Button variant="default" leftSection={<FiClock size={15} />} onClick={() => setHistoryDrawerOpened(true)}>
+                    推演历史
+                  </Button>
+                </Group>
+              )}
+
+              {activeTab === "memo" && (
+                <Group gap="xs">
+                  <Button variant="light" leftSection={<FiCpu size={15} />} onClick={() => setThoughtDrawerOpened(true)}>
+                    AI 思路整理
+                  </Button>
+                  <Button variant="default" leftSection={<FiPlus size={15} />} onClick={handleOpenCreateNode}>
+                    新建随手卡片
+                  </Button>
+                </Group>
+              )}
+            </Group>
+          </Flex>
+
+          {/* 故事大纲列表主体 */}
+          <ScrollArea flex={1} px={24} py="md">
+            <Box mx="auto" pb={80}>
+              <OutlineAxis
+                workId={workId}
+                category={currentCategory}
+                nodes={currentList}
+                selectedNodeIds={selectedNodeIds}
+                onToggleSelectNode={handleToggleSelectNode}
+                onEditNode={handleOpenEditNode}
+                onDeleteNode={handleDeleteNode}
+                onMoveNode={handleMoveNode}
+                onAddChildNode={handleOpenAddChildNode}
+                onTriggerDeduction={() => setDeductionDrawerOpened(true)}
+                onTriggerCreate={handleOpenCreateNode}
+                collapsedParents={collapsedParents}
+                onToggleParentCollapse={handleToggleParentCollapse}
+              />
+            </Box>
+          </ScrollArea>
+        </>
+      )}
 
       {/* 大纲卡片编辑/创建弹窗 (宽度 55vw) */}
       <ModalNodeEditor
@@ -526,6 +429,6 @@ export default function StoryOutlinePage() {
         workId={workId}
         onOutlineUpdated={fetchOutline}
       />
-    </Box>
+    </Flex>
   );
 }

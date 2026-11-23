@@ -2,40 +2,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Drawer,
-  Stack,
-  Text,
-  Button,
-  Group,
-  ActionIcon,
-  Textarea,
-  TextInput,
-  Paper,
-  Box,
-  Badge,
-  MultiSelect,
-  Flex,
-  Tooltip,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiTrash2,
-  FiArrowUp,
-  FiArrowDown,
-  FiCheck,
-  FiUser,
-  FiFileText,
-  FiCpu,
-  FiCornerDownRight,
-  FiEdit2,
-} from "react-icons/fi";
-import {
-  organizeOutlineThoughts,
-  batchCreateOutlineNodes,
-  updateOutlineNode,
-  OrganizedTreeNode,
-} from "@/rest/outline";
+import { Drawer, Stack, Text, Button, Group, ActionIcon, Textarea, TextInput, Paper, Box, Badge, MultiSelect, Flex, Tooltip } from "@mantine/core";
+import { FiPlus, FiTrash2, FiArrowUp, FiArrowDown, FiCheck, FiUser, FiFileText, FiCpu, FiCornerDownRight, FiEdit2 } from "react-icons/fi";
+import { organizeOutlineThoughts, batchCreateOutlineNodes, updateOutlineNode, OrganizedTreeNode } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
 import { NoteData, NoteListResult, getNoteList } from "@/rest/project-extensions";
 import { useAlert } from "@/hooks/useAlert";
@@ -424,7 +393,7 @@ export default function DrawerThoughtOrganizer({
 
                 <Button
                   variant="filled"
-                  color="teal"
+                  color="cyan"
                   leftSection={<FiCheck size={14} />}
                   loading={adopting}
                   onClick={handleAdoptTree}
@@ -491,7 +460,7 @@ export default function DrawerThoughtOrganizer({
                           </Badge>
                         )}
                         {organizedResult.location && (
-                          <Badge variant="outline" color="teal">
+                          <Badge variant="outline" color="cyan">
                             地点：{organizedResult.location}
                           </Badge>
                         )}

@@ -91,7 +91,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       const fullBackup = {
         meta: {
           exportTime: new Date().toISOString(),
-          version: "1.0.0",
+          version: "1.2.0",
         },
         work,
         outlines: outlineList,

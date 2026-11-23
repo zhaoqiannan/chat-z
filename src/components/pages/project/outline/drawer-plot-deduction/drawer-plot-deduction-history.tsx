@@ -2,37 +2,9 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Drawer,
-  Badge,
-  ActionIcon,
-  Stack,
-  Paper,
-  Group,
-  Text,
-  Button,
-  Flex,
-  Box,
-  Collapse,
-  Divider,
-} from "@mantine/core";
-import {
-  FiClock,
-  FiTrash2,
-  FiCheck,
-  FiChevronDown,
-  FiChevronUp,
-  FiZap,
-  FiArrowRight,
-  FiCornerDownRight,
-} from "react-icons/fi";
-import {
-  PlotDeductionRecord,
-  PlotDeductionPath,
-  getPlotDeductions,
-  deletePlotDeduction,
-  batchCreateOutlineNodes,
-} from "@/rest/outline";
+import { Drawer, Badge, ActionIcon, Stack, Paper, Group, Text, Button, Flex, Box, Collapse, Divider } from "@mantine/core";
+import { FiClock, FiTrash2, FiCheck, FiChevronDown, FiChevronUp, FiZap, FiArrowRight, FiCornerDownRight } from "react-icons/fi";
+import { PlotDeductionRecord, PlotDeductionPath, getPlotDeductions, deletePlotDeduction, batchCreateOutlineNodes } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 
@@ -215,7 +187,7 @@ export default function DrawerPlotDeductionHistory({
                       </Text>
                     </Group>
                     <Group gap="xs" align="center" mb={6}>
-                      <Badge variant="filled" color="teal" size="xs">
+                      <Badge variant="filled" color="cyan" size="xs">
                         终点 B
                       </Badge>
                       <Text fz={13} fw={700} c="#0f172a">
@@ -303,7 +275,7 @@ export default function DrawerPlotDeductionHistory({
                               <Button
                                 size="xs"
                                 variant="filled"
-                                color="teal"
+                                color="cyan"
                                 leftSection={<FiCheck size={12} />}
                                 loading={isAdopting}
                                 onClick={() => handleAdoptPath(rec, p)}

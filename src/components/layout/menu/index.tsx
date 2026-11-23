@@ -3,26 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname, useRouter, useParams, useSearchParams } from "next/navigation";
 import { Box, Menu, Tooltip } from "@mantine/core";
-import {
-  FiGrid,
-  FiChevronDown,
-  FiSettings,
-  FiBell,
-  FiMessageSquare,
-  FiCheck,
-  FiLogOut,
-  FiBook,
-  FiArrowLeft,
-  FiLayers,
-  FiFileText,
-  FiDatabase,
-  FiEdit3,
-  FiBox,
-  FiCpu,
-  FiClock,
-  FiShare2,
-  FiSidebar,
-} from "react-icons/fi";
+import { FiGrid, FiChevronDown, FiSettings, FiBell, FiMessageSquare, FiCheck, FiLogOut, FiBook, FiArrowLeft, FiLayers, FiFileText, FiDatabase, FiEdit3, FiBox, FiCpu, FiClock, FiShare2, FiSidebar } from "react-icons/fi";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { clearUser } from "@/store/userInfo";
@@ -137,7 +118,8 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
       key: "ai_analysis",
       label: "AI 分析",
       icon: <FiCpu size={16} />,
-      disabled: true,
+      active: currentTab === "ai_analysis",
+      disabled: false,
     },
     {
       key: "timeline",
@@ -172,6 +154,7 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
           >
             <div className={styles.logoBadge}>N</div>
             <span className={styles.brandText}>Novel Studio</span>
+            <span style={{ fontSize: 10, color: "#94a3b8", marginLeft: 4 }}>v1.2.0</span>
           </div>
 
           {isProject ? (

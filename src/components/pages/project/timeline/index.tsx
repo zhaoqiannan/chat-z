@@ -2,48 +2,12 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import {
-  Box,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  Modal,
-  TextInput,
-  Textarea,
-  Select,
-  Stack,
-  LoadingOverlay,
-  Paper,
-  Timeline,
-  ThemeIcon,
-  Group,
-  Card,
-  ScrollArea,
-} from "@mantine/core";
-import {
-  FiPlus,
-  FiEdit,
-  FiTrash2,
-  FiClock,
-  FiMapPin,
-  FiUsers,
-  FiCalendar,
-  FiStar,
-} from "react-icons/fi";
+import { Box, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, Paper, Timeline, ThemeIcon, Group, Card, ScrollArea } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
+import { FiPlus, FiEdit, FiTrash2, FiClock, FiMapPin, FiUsers, FiCalendar, FiStar } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
-import {
-  TimelineData,
-  TimelineEventData,
-  getTimelineFullData,
-  createTimeline,
-  createTimelineEvent,
-  updateTimeline,
-  updateTimelineEvent,
-  deleteTimeline,
-  deleteTimelineEvent,
-} from "@/rest/project-extensions";
+import { TimelineData, TimelineEventData, getTimelineFullData, createTimeline, createTimelineEvent, updateTimeline, updateTimelineEvent, deleteTimeline, deleteTimelineEvent } from "@/rest/project-extensions";
 
 export default function TimelinePage() {
   const params = useParams();
@@ -279,7 +243,7 @@ export default function TimelinePage() {
         </Group>
 
         <Box pos="relative" style={{ minHeight: 300 }}>
-          <LoadingOverlay visible={loading} />
+          <LoadingMask visible={loading} />
 
           {currentTimelineEvents.length === 0 && !loading ? (
             <Stack align="center" justify="center" p={60} c="dimmed" gap="xs">

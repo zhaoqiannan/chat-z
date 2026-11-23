@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Paper, Group, Table } from "@mantine/core";
+import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Paper, Group, Table } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield, FiPackage } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
@@ -169,7 +170,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
 
   return (
     <Box pos="relative" style={{ minHeight: 400 }}>
-      <LoadingOverlay visible={loading} />
+      <LoadingMask visible={loading} />
 
       <Flex justify="space-between" align="center" mb="md" gap="sm">
         <TextInput
@@ -227,9 +228,9 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
                   <Table.Tr key={item.id} style={{ transition: "background-color 0.15s ease" }}>
                     <Table.Td>
                       <Group gap={8} wrap="nowrap">
-                        <Box style={{ width: 24, height: 24, borderRadius: 4, backgroundColor: "#e0f2fe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Flex w={24} h={24} bdrs={4} bg="#e0f2fe" align="center" justify="center" style={{ flexShrink: 0 }}>
                           <FiPackage size={13} color="#0284c7" />
-                        </Box>
+                        </Flex>
                         <Text fz={13.5} fw={700} c="#0f172a" style={{ wordBreak: "break-word" }}>
                           {item.name}
                         </Text>

@@ -2,33 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Modal,
-  TextInput,
-  Textarea,
-  NumberInput,
-  Button,
-  Group,
-  Stack,
-  Text,
-  Badge,
-  MultiSelect,
-  Paper,
-  Box,
-  Flex,
-  ActionIcon,
-} from "@mantine/core";
-import {
-  FiSave,
-  FiUser,
-  FiFileText,
-  FiBookOpen,
-  FiZap,
-  FiEdit3,
-  FiPlus,
-  FiTrash2,
-  FiCornerDownRight,
-} from "react-icons/fi";
+import { Modal, TextInput, Textarea, NumberInput, Button, Group, Stack, Text, Badge, MultiSelect, Paper, Box, Flex, ActionIcon } from "@mantine/core";
+import { FiSave, FiUser, FiFileText, FiBookOpen, FiZap, FiEdit3, FiPlus, FiTrash2, FiCornerDownRight } from "react-icons/fi";
 import { OutlineNode, CreateOutlinePayload, UpdateOutlinePayload } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
 import { NoteData, NoteListResult, getNoteList } from "@/rest/project-extensions";

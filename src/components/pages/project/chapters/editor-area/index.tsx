@@ -937,7 +937,7 @@ export default function EditorArea({
             <Button
               size="xs"
               variant="subtle"
-              color="teal"
+              color="cyan"
               justify="flex-start"
               onClick={() => {
                 const txt = contextMenu.selectedText || content;

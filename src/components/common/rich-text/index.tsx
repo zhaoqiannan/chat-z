@@ -2,38 +2,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import {
-  Box,
-  Flex,
-  Text,
-  Button,
-  ActionIcon,
-  Paper,
-  Divider,
-  Group,
-  Tooltip,
-  Menu,
-  Modal,
-  TextInput,
-  NumberInput,
-} from "@mantine/core";
-import {
-  FiBold,
-  FiItalic,
-  FiUnderline,
-  FiList,
-  FiGrid,
-  FiImage,
-  FiLink,
-  FiAlignLeft,
-  FiAlignCenter,
-  FiAlignRight,
-  FiType,
-  FiMinus,
-  FiTrash2,
-  FiMaximize2,
-  FiExternalLink,
-} from "react-icons/fi";
+import { Box, Flex, Text, Button, ActionIcon, Paper, Divider, Group, Tooltip, Menu, Modal, TextInput, NumberInput } from "@mantine/core";
+import { FiBold, FiItalic, FiUnderline, FiList, FiGrid, FiImage, FiLink, FiAlignLeft, FiAlignCenter, FiAlignRight, FiType, FiMinus, FiTrash2, FiMaximize2, FiExternalLink } from "react-icons/fi";
 import { uploadImageFile } from "@/rest/world";
 import { useAlert } from "@/hooks/useAlert";
 
@@ -504,7 +474,7 @@ export function RichTextEditor({
               <Button
                 size="compact-xs"
                 variant="light"
-                color="teal"
+                color="cyan"
                 leftSection={<FiImage size={11} />}
                 loading={uploadingImage}
                 onClick={() => imageInputRef.current?.click()}

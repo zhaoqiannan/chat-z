@@ -3,7 +3,8 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { Box, LoadingOverlay } from "@mantine/core";
+import { Box } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { MaterialData, getMaterialList, updateMaterial, deleteMaterial } from "@/rest/project-extensions";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
@@ -86,7 +87,7 @@ export default function MaterialsPage() {
         overflow: "hidden",
       }}
     >
-      <LoadingOverlay visible={loading && list.length === 0} />
+      <LoadingMask visible={loading && list.length === 0} />
 
       {/* 表格区 */}
       <MaterialsTable

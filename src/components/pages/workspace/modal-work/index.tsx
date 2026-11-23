@@ -1,18 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import {
-  Modal,
-  TextInput,
-  Textarea,
-  NumberInput,
-  Switch,
-  Button,
-  Flex,
-  Stack,
-  Text,
-  SimpleGrid,
-} from "@mantine/core";
+import { Modal, TextInput, Textarea, NumberInput, Switch, Button, Flex, Stack, Text, SimpleGrid } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { FiBook, FiTag, FiFileText, FiLayers } from "react-icons/fi";
 

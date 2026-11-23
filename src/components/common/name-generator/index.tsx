@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Box, Flex, Text, Button, Modal, TextInput, NumberInput, SimpleGrid, LoadingOverlay, Stack, Group } from "@mantine/core";
+import { Box, Flex, Text, Button, Modal, TextInput, NumberInput, SimpleGrid, Stack, Group } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiRefreshCw, FiCheck, FiZap } from "react-icons/fi";
 import { post } from "@/utils/rest";
 
@@ -256,13 +257,13 @@ export default function NameGeneratorModal({
         </Flex>
 
         <Box pos="relative" p="10px" bg="#fafbfc" style={{ border: "1px solid #f1f5f9", borderRadius: 6, minHeight: 120 }}>
-          <LoadingOverlay visible={loading} />
+          <LoadingMask visible={loading} />
           <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs">
             {generatedList.map((name, idx) => (
               <Button
                 key={idx}
                 variant={copiedName === name ? "filled" : "outline"}
-                color={copiedName === name ? "teal" : "gray"}
+                color={copiedName === name ? "cyan" : "gray"}
                 size="sm"
                 justify="space-between"
                 rightSection={copiedName === name ? <FiCheck size={12} /> : null}

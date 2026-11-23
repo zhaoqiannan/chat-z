@@ -2,37 +2,8 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import {
-  Flex,
-  Text,
-  Button,
-  Modal,
-  TextInput,
-  Select,
-  Stack,
-  Group,
-  SimpleGrid,
-  Paper,
-  Box,
-  Textarea,
-  Badge,
-  Switch,
-  ActionIcon,
-  Tooltip,
-} from "@mantine/core";
-import {
-  FiUploadCloud,
-  FiFileText,
-  FiLink,
-  FiTag,
-  FiCheckCircle,
-  FiZap,
-  FiExternalLink,
-  FiCornerDownLeft,
-  FiImage,
-  FiChevronDown,
-  FiChevronUp,
-} from "react-icons/fi";
+import { Flex, Text, Button, Modal, TextInput, Select, Stack, Group, SimpleGrid, Paper, Box, Textarea, Badge, Switch, ActionIcon, Tooltip } from "@mantine/core";
+import { FiUploadCloud, FiFileText, FiLink, FiTag, FiCheckCircle, FiZap, FiExternalLink, FiCornerDownLeft, FiImage, FiChevronDown, FiChevronUp } from "react-icons/fi";
 import { BsPinAngle, BsPinFill } from "react-icons/bs";
 import { useAlert } from "@/hooks/useAlert";
 import { MaterialData, createMaterial, updateMaterial, extractMaterialAiSummary } from "@/rest/project-extensions";

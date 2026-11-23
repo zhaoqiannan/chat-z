@@ -2,33 +2,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import {
-  Modal,
-  Box,
-  Flex,
-  Text,
-  Button,
-  Badge,
-  ActionIcon,
-  TextInput,
-  Textarea,
-  Switch,
-  Stack,
-  Paper,
-  Group,
-  Tooltip,
-} from "@mantine/core";
-import {
-  FiZap,
-  FiRefreshCw,
-  FiSave,
-  FiTag,
-  FiSliders,
-  FiLink,
-  FiExternalLink,
-  FiCornerDownLeft,
-  FiCheckCircle,
-} from "react-icons/fi";
+import { Modal, Box, Flex, Text, Button, Badge, ActionIcon, TextInput, Textarea, Switch, Stack, Paper, Group, Tooltip } from "@mantine/core";
+import { FiZap, FiRefreshCw, FiSave, FiTag, FiSliders, FiLink, FiExternalLink, FiCornerDownLeft, FiCheckCircle } from "react-icons/fi";
 import { BsPinAngle, BsPinFill } from "react-icons/bs";
 import { useAlert } from "@/hooks/useAlert";
 import { MaterialData, updateMaterial, extractMaterialAiSummary } from "@/rest/project-extensions";
@@ -242,7 +217,7 @@ export default function ModalMaterialSummary({
               <Button
                 size="xs"
                 variant="light"
-                color="teal"
+                color="cyan"
                 leftSection={<FiExternalLink size={13} />}
                 onClick={() =>
                   window.open(material.fileUrl || material.sourceUrl || "", "_blank", "noopener,noreferrer")

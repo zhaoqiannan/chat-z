@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, LoadingOverlay, Tabs, Paper, Group, Card, Tooltip, Badge, Switch } from "@mantine/core";
+import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Tabs, Paper, Group, Card, Tooltip, Badge, Switch } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { FiPlus, FiMinus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2, FiRotateCcw } from "react-icons/fi";
 import { LocationRecord, getLocationList, createLocation, updateLocation, deleteLocation } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
@@ -376,7 +377,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
         </Flex>
 
         <Box pos="relative">
-          <LoadingOverlay visible={loading} />
+          <LoadingMask visible={loading} />
 
           <Tabs.Panel value="map">
             <Box>
@@ -386,7 +387,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                     💡 提示：按住地标卡片可<Text span fw={700} c="#0891b2">自由拖拽移动并自动保存坐标</Text>；在空白处单击可快速标记新地点。
                   </Text>
                   {savingPosId && (
-                    <Badge size="xs" color="teal" variant="light" leftSection={<FiCheck size={10} />}>
+                    <Badge size="xs" color="cyan" variant="light" leftSection={<FiCheck size={10} />}>
                       位置已保存
                     </Badge>
                   )}

@@ -3,7 +3,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Box, LoadingOverlay, Modal, Button, Group, Stack, Text } from "@mantine/core";
+import { Box, Modal, Button, Group, Stack, Text } from "@mantine/core";
+import LoadingMask from "@/components/common/loading-mask";
 import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
@@ -280,7 +281,7 @@ export default function ChaptersPage() {
         overflow: "hidden",
       }}
     >
-      <LoadingOverlay visible={loading && rawList.length === 0} />
+      <LoadingMask visible={loading && rawList.length === 0} />
 
       <TreePanel
         volumes={volumes}
