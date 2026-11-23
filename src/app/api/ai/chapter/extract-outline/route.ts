@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, chapters, works, characters, outlines } from "@/db";
 import { eq, and } from "drizzle-orm";
-import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
+import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -45,8 +45,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const chapterLabel = chapter.chapterNumber ? `第${chapter.chapterNumber}章` : "本章";
     const rawChapterTitle = title || chapter.title || "未命名章节";
 
-    const systemPrompt = `你是一位顶级小说主编与大纲架构师。
-你的任务是：通读作者提供的【单个章节正文】，精准浓缩出【唯一一张清晰、完整、高信息量】的本章故事大纲卡片。
+    const systemPrompt = `你是一位严谨的小说主编与剧情架构师。
+任务：严格依据提供的【单章正文原文】，提炼出【唯一一张准确、客观、不脑补】的本章故事大纲卡片。
 
 小说信息：
 - 书名：《${work.title}》
@@ -54,51 +54,45 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 - 章节原始标题：${rawChapterTitle}
 - 作品预设角色库：${charListStr || "暂无预设角色"}
 
-提炼规范（请用清晰自然的通俗大白话表述，严禁空话套话）：
-1. title: 章节提炼标题（格式如：“${chapterLabel} · 核心事件简称”，如：“${chapterLabel} · 药铺遇伏与假死脱身”）
-2. event: 📍 发生经过（清晰表述：在什么场景下，主要人物做了什么，发生了怎样的核心事件脉络，50-100字）
-3. twist: ⚡ 意外转折（清晰表述：发生了什么意料之外的阻碍、突发危险、反转或矛盾激化，30-60字；若本章平稳则写面临的核心阻碍）
-4. nextGoal: 🎯 下一步动机（清晰表述：本章结束时主角或关键人物下一步的具体行动目标与打算，20-40字）
-5. suspense: 🕳️ 留下伏笔（清晰表述：本章埋下的新线索、悬念或未解之谜，20-40字；若无明显伏笔写“暂无重大悬念”）
-6. detectedCharacterIds: 本章正文中实际出场的角色 ID 数组（从可选角色库匹配，纯数字数组）
+提炼铁律（必须全部基于正文事实，严禁编造正文未出现的情节）：
+1. title：格式为“${chapterLabel} · 核心事件简称”（不超过 20 字）。
+2. event：发生经过（明确人物、地点、起因与核心事件结果，50~120 字，直白具体）。
+3. twist：意外转折或核心阻碍（30~70 字；若本章平稳过渡无反转，直接如实写本章遇到的阻力或“本章以平稳过渡/铺垫为主”）。
+4. nextGoal：本章结尾处角色明确的下一步行动目标（20~50 字）。
+5. suspense：本章实际埋下的伏笔或未解悬念（20~50 字；若正文未埋伏笔则写“暂无明显悬念”）。
+6. detectedCharacterIds：正文中**实际出场或被明确提及**的角色 ID 纯数字数组（仅从上方角色库中匹配，不得凭空造 ID）。
 
-请严格输出为以下 JSON 格式：
+输出协议：
+仅输出以下单个合法 JSON 对象，严禁输出数组、Markdown 代码块或任何解释文字：
 {
   "title": "${chapterLabel} · 提炼标题",
-  "event": "清晰具体的发生经过说明",
-  "twist": "清晰具体的意外转折说明",
-  "nextGoal": "清晰具体的下一步动机说明",
-  "suspense": "清晰具体的留下伏笔说明",
+  "event": "发生经过",
+  "twist": "意外转折或核心阻碍",
+  "nextGoal": "下一步动机",
+  "suspense": "留下伏笔",
   "detectedCharacterIds": []
-}
-注意：只输出上述单个 JSON 对象，严禁输出多条卡片数组，严禁包含 Markdown 代码块标记。`;
+}`;
 
-    const excerpt = chapterText.slice(0, 4500);
+    // 若章节较长，保留前 4000 字 + 末尾 2000 字，防止结尾悬念与下一步动机被截断
+    const excerpt =
+      chapterText.length > 6000
+        ? `${chapterText.slice(0, 4000)}\n\n……（中段略）……\n\n${chapterText.slice(-2000)}`
+        : chapterText;
+
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       { role: "user", content: `以下是【${chapterLabel} · ${rawChapterTitle}】的正文内容：\n\n${excerpt}` },
     ];
 
     const rawResponse = await callCloudflareAi(env.AI, messages, {
-      temperature: 0.3,
-      maxTokens: 1200,
+      taskType: "structured",
+      temperature: 0.2,
+      maxTokens: 1500,
     });
 
-    const cleaned = cleanNovelStoryText(rawResponse);
-    let parsed: any = null;
+    let parsed: any = parseStructuredJson<any>(rawResponse, null);
 
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (_) {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch (__) {}
-      }
-    }
-
-    if (!parsed) {
+    if (!parsed || typeof parsed !== "object" || (!parsed.event && !parsed.title)) {
       parsed = {
         title: `${chapterLabel} · ${rawChapterTitle}`,
         event: `${rawChapterTitle}：剧情稳步推进，角色展开行动。`,

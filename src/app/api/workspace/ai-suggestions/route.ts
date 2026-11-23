@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, outlines, worldRules, factions } from "@/db";
 import { eq, desc } from "drizzle-orm";
-import { callCloudflareAi, ChatMessage } from "@/utils/ai";
+import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
 
 /**
  * AI 创意智囊与设定冲突诊断接口 (按需单次调用，极简 Token 消耗)
@@ -99,40 +99,42 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       const messages: ChatMessage[] = [
         {
           role: "system",
-          content: `你是一位资深小说责任编辑与世界观推演助手。
-请基于给出的简明小说设定，给出 1~2 条极度精炼的高价值建议（包括：设定潜在逻辑冲突预警、人物冲突看点、或大纲推进启发）。
-【输出要求】：严格输出 JSON 数组格式，禁止输出 markdown 格式代码块以外的多余文字。
-格式范例：
+          content: `你是一位资深小说责任编辑与世界观设定审查助手。
+请严格基于提供的真实作品设定，给出 1~2 条具体、可落地的诊断或灵感建议（潜在设定冲突、角色张力看点、或大纲推进切入点）。
+【核心要求】
+1. 必须直接点名引用上方提供的具体角色名、势力名、规则名或大纲节点名，严禁泛泛而谈的万能套话。
+2. 仅输出合法 JSON 数组，严禁输出 Markdown 代码块或任何多余文字。
+格式：
 [
-  { "type": "warning", "title": "逻辑冲突预警", "content": "角色XXX的性格与其所在势力的宗旨存在潜在矛盾，建议在剧情中补充其两难抉择。" },
-  { "type": "inspiration", "title": "高潮冲突启发", "content": "结合当前大纲节点，可让XXX势力介入制造第三派危机，增强故事张力。" }
+  { "type": "warning", "title": "简短标题（不超过12字）", "content": "50~100字具体诊断与可执行建议" },
+  { "type": "inspiration", "title": "简短标题（不超过12字）", "content": "50~100字具体灵感启发" }
 ]`,
         },
         {
           role: "user",
-          content: `以下是小说设定：\n${loreContext}\n请直接给出 1~2 条精炼诊断建议（严格 JSON 数组）：`,
+          content: `以下是小说设定：\n${loreContext}\n请直接输出 1~2 条精准诊断建议（严格 JSON 数组）：`,
         },
       ];
 
       try {
         const rawAi = await callCloudflareAi(env.AI, messages, {
-          temperature: 0.5,
-          maxTokens: 600,
+          taskType: "structured",
+          temperature: 0.4,
+          maxTokens: 700,
         });
 
-        const jsonMatch = rawAi.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            parsed.forEach((item, index) => {
+        const parsed = parseStructuredJson<any[]>(rawAi, []);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((item, index) => {
+            if (item && item.content) {
               fastSuggestions.push({
                 id: `ai-${Date.now()}-${index}`,
                 type: item.type || "warning",
                 title: item.title || "AI 创意建议",
                 content: item.content,
               });
-            });
-          }
+            }
+          });
         }
       } catch (aiErr) {
         console.warn("AI 诊断解析失败，返回本地建议:", aiErr);

@@ -46,7 +46,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .orderBy(asc(outlines.orderIndex), asc(outlines.createdAt));
 
     const existingOutlineSummary = existingNodes
-      .map((n) => `[${n.type || "scene"}] ${n.title} (目标: ${n.goal})`)
+      .map((n) => {
+        const parts = [`[${n.type || "scene"}] ${n.title}`];
+        if (n.goal) parts.push(`目标: ${n.goal}`);
+        if (n.event || n.eventDescription) parts.push(`经过: ${(n.event || n.eventDescription || "").slice(0, 80)}`);
+        if (n.conflict) parts.push(`冲突: ${n.conflict.slice(0, 60)}`);
+        if (n.twist) parts.push(`转折: ${n.twist.slice(0, 60)}`);
+        return parts.join(" | ");
+      })
       .join("\n");
 
     let resultPayload: any = null;
@@ -98,7 +105,7 @@ ${additionalPrompt ? `额外创作诉求：${additionalPrompt}` : ""}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7, maxTokens: 8192 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.65, maxTokens: 8192 });
         const tree = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(tree) || tree.length === 0) {
@@ -143,7 +150,7 @@ ${additionalPrompt ? `作者要求：${additionalPrompt}` : ""}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
         const chapters = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(chapters) || chapters.length === 0) {
@@ -195,7 +202,7 @@ ${additionalPrompt ? `作者扩写诉求：${additionalPrompt}` : ""}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
         const expanded = parseStructuredJson<any>(aiResponse, null);
 
         if (!expanded || typeof expanded !== "object" || Object.keys(expanded).length === 0) {
@@ -251,7 +258,7 @@ ${additionalPrompt ? `额外诉求：${additionalPrompt}` : ""}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.75 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.7 });
         const scenes = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(scenes) || scenes.length === 0) {
@@ -299,7 +306,7 @@ ${additionalPrompt ? `作者期望方向：${additionalPrompt}` : ""}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.85 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.8 });
         const alternatives = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(alternatives) || alternatives.length === 0) {
@@ -342,7 +349,7 @@ ${existingOutlineSummary || "暂无详细节点，仅有一句话简介"}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
         const diagnosis = parseStructuredJson<any>(aiResponse, null);
 
         if (!diagnosis || typeof diagnosis !== "object" || !diagnosis.score) {
@@ -384,7 +391,7 @@ ${existingOutlineSummary || "暂无节点"}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
         const diagnosis = parseStructuredJson<any>(aiResponse, null);
 
         if (!diagnosis || typeof diagnosis !== "object" || !diagnosis.score) {
@@ -426,7 +433,7 @@ ${existingOutlineSummary || "暂无节点"}
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { temperature: 0.7 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
         const diagnosis = parseStructuredJson<any>(aiResponse, null);
 
         if (!diagnosis || typeof diagnosis !== "object" || !diagnosis.score) {

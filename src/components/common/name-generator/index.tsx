@@ -155,26 +155,17 @@ export default function NameGeneratorModal({
 
     try {
       setLoading(true);
-      const res = await post("/api/ai/chapter/chat", {
-        prompt: `请为小说中的【${getTypeName()}】生成 10 个契合以下要求的名字：
-- 指定前缀字：${prefix || "无限制"}
-- 严格限制字数：${len} 个汉字
-- 风格/寓意/设定定位：${meaning.trim()}
-请直接返回以逗号分隔的 10 个中文名字，每个名字字数必须严格为 ${len} 个字，严禁附带序号、解释或任何多余文字。例如：名字1, 名字2, 名字3`,
-        systemPrompt: "你是一个专业的网文小说起名助手，严格按指定字数生成以逗号分隔的名字清单。",
+      const res = await post("/api/ai/name-generator", {
+        type,
+        prefix,
+        length: len,
+        meaning: meaning.trim(),
+        count: 10,
       });
 
-      if (res && res.success && res.result) {
-        const text = typeof res.result === "string" ? res.result : (res.result.content || res.result.text || "");
-        const rawNames = text
-          .split(/[,，\n、\s]+/)
-          .map((s: string) => s.replace(/[\d.、()（）"']/g, "").trim())
-          .filter((s: string) => s.length === len);
-
-        if (rawNames.length > 0) {
-          setGeneratedList(Array.from(new Set<string>(rawNames)).slice(0, 10));
-          return;
-        }
+      if (res && res.success && Array.isArray(res.result?.names) && res.result.names.length > 0) {
+        setGeneratedList(res.result.names.slice(0, 10));
+        return;
       }
       setGeneratedList(generateLocalNames(type, prefix, len, 10));
     } catch (_) {

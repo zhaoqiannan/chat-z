@@ -82,6 +82,10 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .where(eq(worldRules.workId, workId))
       .all();
 
+    // 构造符合 RFC 5987 规范的纯 ASCII Content-Disposition 头，避免中文字符触发 ByteString 500 异常
+    const buildDisposition = (fileName: string, ext: string) =>
+      `attachment; filename="export.${ext}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+
     // 1. JSON 全量备份导出
     if (action === "export_json") {
       const fullBackup = {
@@ -102,7 +106,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return new NextResponse(JSON.stringify(fullBackup, null, 2), {
         headers: {
           "Content-Type": "application/json; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(work.title)}_全量备份.json"`,
+          "Content-Disposition": buildDisposition(`${work.title}_全量备份.json`, "json"),
         },
       });
     }
@@ -131,7 +135,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return new NextResponse(md, {
         headers: {
           "Content-Type": "text/markdown; charset=utf-8",
-          "Content-Disposition": `attachment; filename="${encodeURIComponent(work.title)}_全书稿.md"`,
+          "Content-Disposition": buildDisposition(`${work.title}_全书稿.md`, "md"),
         },
       });
     }
@@ -156,7 +160,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return new NextResponse(txt, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(work.title)}_全书稿.txt"`,
+        "Content-Disposition": buildDisposition(`${work.title}_全书稿.txt`, "txt"),
       },
     });
   } catch (err: any) {

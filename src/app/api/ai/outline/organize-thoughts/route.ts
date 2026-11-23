@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, notes, worldRules } from "@/db";
 import { eq, and, inArray } from "drizzle-orm";
-import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
+import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -65,13 +65,19 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       }
     }
 
+    // 关联基础世界规则
+    const rulesList = await db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(4).all();
+    const ruleContext = rulesList.length > 0
+      ? rulesList.map((r) => `【${r.name}】: ${(r.mechanisms || r.description || "").slice(0, 100)}`).join("\n")
+      : "";
+
     const thoughtListStr = validThoughts
       .map((t: string, idx: number) => `[灵感碎片 ${idx + 1}]: ${t}`)
       .join("\n");
 
-    const systemPrompt = `你是一位顶级小说大纲总监与叙事逻辑架构师。
+    const systemPrompt = `你是一位严谨的小说大纲总监与叙事逻辑架构师。
 作者向你提供了一组零散、无序的【剧情点与灵感碎片】。
-你的核心任务是：深入分析这些灵感之间的内在联系，从【时间先后推进、空间/地点流转、人物动机因果承接】等维度，将它们重构成一个【逻辑严密、层级清晰的树状大纲体系】。
+你的核心任务是：完整保留并吸收每一条灵感碎片的核心含义，按【时间先后、空间流转、人物动机因果】将其重构为逻辑严密的二级树状大纲。
 
 作品信息：
 - 书名：《${work.title}》
@@ -79,39 +85,39 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
 参演人物库：
 ${charContext || "通用主角与配角"}
-
+${ruleContext ? `\n世界观法则：\n${ruleContext}\n` : ""}
 参考设定：
 ${noteContext || "暂无特定设定"}
 
 整理规则：
-1. 梳理出 2-4 个主要宏观阶段/母题（作为一级父节点，例如：起因篇章、发酵对峙、高潮转折、收尾余波）；
-2. 在每个一级节点下，归纳拆解出具体的 1-3 个子情节点（作为二级子节点），将作者的零散点子严密镶嵌进去，并补充合理的过渡动作；
-3. 输出的每个节点需包含具体清晰的叙述，避免空洞模版套话。
+1. 必须将作者提供的每一条灵感碎片都落实到具体的子节点中，严禁遗漏或篡改原意。
+2. 归纳出 2~4 个宏观阶段作为一级节点，每个一级节点下拆解 1~3 个具体二级子情节点，并补齐必要的因果过渡。
+3. 每个节点的 content 必须写出具体人物、场景与事件经过，严禁空洞套话。
 
-请严格输出为以下 JSON 格式：
+输出协议：
+仅输出以下合法 JSON 对象，严禁输出 Markdown 代码块或任何多余文字：
 {
-  "title": "本次思路整理总标题（简明有力，如：商会晚宴逆袭与专利反制）",
-  "summary": "一句话梳理总括（说明本次整理的核心脉络，如：从最初的误会起因，经多方周旋，最终在商会彻底反转）",
-  "timeframe": "全局时间跨度（如：三天内 / 跨越二十年）",
-  "location": "核心主场（如：展厅、商会大厦）",
+  "title": "本次思路整理总标题",
+  "summary": "一句话梳理核心脉络",
+  "timeframe": "全局时间跨度",
+  "location": "核心主场",
   "tree": [
     {
-      "title": "一级阶段标题（如：第一幕 · 风波骤起与线索浮现）",
-      "content": "该宏观阶段的核心局势与主要目标概述...",
-      "timeframe": "时间线阶段（如：前三天 / 当天上午）",
-      "location": "主要发生地点（如：展厅 / 茶楼）",
+      "title": "一级阶段标题",
+      "content": "该阶段核心局势与目标概述",
+      "timeframe": "时间线阶段",
+      "location": "主要地点",
       "children": [
         {
-          "title": "具体子情节点标题（如：展厅当众质询）",
-          "content": "具体的发生经过与人物行动叙述...",
+          "title": "具体子情节点标题",
+          "content": "具体的发生经过与人物行动",
           "timeframe": "具体时间",
           "location": "具体地点"
         }
       ]
     }
   ]
-}
-注意：只输出纯合法 JSON，严禁输出任何 Markdown 标记或多余文字。`;
+}`;
 
     const userMessage = `以下是作者输入的零散灵感点子列表，请重构整理为时空逻辑自洽的树级大纲：\n\n${thoughtListStr}`;
 
@@ -121,23 +127,12 @@ ${noteContext || "暂无特定设定"}
     ];
 
     const rawResponse = await callCloudflareAi(env.AI, messages, {
-      temperature: 0.7,
+      taskType: "structured",
+      temperature: 0.5,
       maxTokens: 3500,
     });
 
-    const cleaned = cleanNovelStoryText(rawResponse);
-    let parsed: any = null;
-
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (_) {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch (__) {}
-      }
-    }
+    let parsed: any = parseStructuredJson<any>(rawResponse, null);
 
     if (!parsed || !Array.isArray(parsed.tree) || parsed.tree.length === 0) {
       // 动态兜底根据输入的灵感碎片进行结构化组织

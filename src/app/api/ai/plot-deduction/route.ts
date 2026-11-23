@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, worldRules, notes } from "@/db";
 import { eq, and, inArray } from "drizzle-orm";
-import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
+import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -21,6 +21,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       selectedCharacterIds = [],
       selectedNoteIds = [],
       pacePreference = "standard",
+      pathPreference = "",
+      involvedCharacters = "",
     } = body;
 
     const workId = Number(rawWorkId);
@@ -152,14 +154,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 【参考世界观】：${ruleContext || "通用现实/设定背景"}
 【参考笔记】：${noteContext || "无"}
 【参演人物档案】：
-${charContext}
+${charContext}${involvedCharacters ? `\n补充提及人物：${involvedCharacters}` : ""}
 
 【起点剧情 A（现状）】：${startPoint.trim()}
 【目标终点 B（预期）】：${targetPoint.trim()}
 【篇幅预算】：约 ${estimatedWords} 字（建议规划 ${suggestedSteps} 个关键因果阶段，可根据实际因果需要灵活调整）
-【演进偏好与要求】：${pacePreference || "自然演进"}
+【节奏偏好】：${pacePreference || "自然演进"}${pathPreference ? `\n【作者补充演进期望】：${pathPreference}` : ""}
 
-请进行因果架桥分析，输出严密、符合逻辑的剧情演进路径 JSON：`;
+请严格围绕上述起点 A、终点 B 与人物/设定进行因果架桥分析，每一步都必须写出具体人名、具体行动与具体因果变化（严禁空洞套话），直接输出合法 JSON：`;
 
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
@@ -167,23 +169,12 @@ ${charContext}
     ];
 
     const rawResponse = await callCloudflareAi(env.AI, messages, {
-      temperature: 0.65,
+      taskType: "structured",
+      temperature: 0.55,
       maxTokens: 4096,
     });
 
-    const cleaned = cleanNovelStoryText(rawResponse);
-    let parsed: any = null;
-
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (_) {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch (__) {}
-      }
-    }
+    let parsed: any = parseStructuredJson<any>(rawResponse, null);
 
     if (!parsed || !Array.isArray(parsed.paths) || parsed.paths.length === 0) {
       const startBrief = startPoint.trim().slice(0, 30);

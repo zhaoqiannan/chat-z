@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
+import { callCloudflareAi, ChatMessage, parseStructuredJson, cleanAnalysisText } from "@/utils/ai";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -37,17 +37,18 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       });
     }
 
-    const systemPrompt = `你是一位专业的小说世界观与素材资料分析助手。
-作者正在为小说创作整理和提炼素材。作者提供了素材基础信息，并可能输入了特定的分析指令。
-请结合素材的基础信息、文本内容与作者的指令，进行针对性提炼，输出纯 JSON 格式：
+    const systemPrompt = `你是一位严谨的小说世界观与素材资料分析助手。
+请结合素材的真实文本与作者的自定义指令进行精准提炼，仅输出合法 JSON：
 {
-  "aiSummary": "100~200字精炼的摘要，说明该素材的核心内容与对小说的参考价值",
-  "extractedLore": "核心提取结果/回答（根据作者指令或素材核心提炼，使用分条●列出或连贯段落输出，方便作者直接采纳为创作笔记）",
+  "aiSummary": "80~180字精炼摘要，概括素材核心信息与创作参考价值",
+  "extractedLore": "针对作者指令的核心提取结果（使用分条 • 列出或清晰段落，便于直接采纳为笔记）",
   "suggestedTags": ["标签1", "标签2", "标签3"]
 }
-注意：
-1. 若作者提供了【自定义指令/需求】，请务必以作者指令为最高优先级，精准提取或生成作者关心的内容。
-2. 请严格只返回有效的 JSON 文本，不要附加任何 Markdown 代码块标签或其他无关寒暄。`;
+【核心准则】
+1. 若提供了【素材正文/解析文本】，所有专有名词、数值与设定必须严格忠于原文，严禁编造原文不存在的数据。
+2. 若仅有标题/图片名而无正文（纯文本模型无法读取图片像素），请如实基于标题与作者指令提供“创作描写参考/灵感构思”，切勿假装看到了图片中的具体画面细节。
+3. 作者的【自定义提炼指令】为最高优先级。
+4. 仅输出合法 JSON，严禁输出 Markdown 代码块或其他多余文字。`;
 
     let userMessage = `素材标题：${title || fileName || "未命名素材"}\n附件类型：${fileType}\n原始文件名：${fileName || "无"}\n来源链接：${sourceUrl || "无"}`;
 
@@ -58,7 +59,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (content) {
       userMessage += `\n\n【素材正文/解析文本】：\n${content}`;
     } else if (fileType === "image") {
-      userMessage += `\n\n【说明】：这是一张小说创作参考图片（${fileName || title}）。请结合标题与作者指令构思并提供适合小说的氛围、细节描写与情节启发。`;
+      userMessage += `\n\n【说明】：此素材为图片（${fileName || title}），当前为纯文本模型无法直接读取像素。请基于标题与作者指令，提供适配小说写作的氛围词句、描写参考与情节启发。`;
     }
 
     const messages: ChatMessage[] = [
@@ -67,25 +68,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     ];
 
     const rawResponse = await callCloudflareAi(env.AI, messages, {
+      taskType: "structured",
       temperature: 0.3,
       maxTokens: 2000,
     });
 
-    const cleaned = cleanNovelStoryText(rawResponse);
-    let parsed: any = null;
+    let parsed: any = parseStructuredJson<any>(rawResponse, null);
 
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch (_) {
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (match) {
-        try {
-          parsed = JSON.parse(match[0]);
-        } catch (__) {}
-      }
-    }
-
-    if (!parsed) {
+    if (!parsed || typeof parsed !== "object") {
+      const cleaned = cleanAnalysisText(rawResponse);
       parsed = {
         aiSummary: cleaned.slice(0, 200),
         extractedLore: cleaned,

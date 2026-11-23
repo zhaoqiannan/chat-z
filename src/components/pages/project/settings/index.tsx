@@ -44,6 +44,7 @@ export default function ProjectSettingsPage() {
 
   const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  const [exportingAction, setExportingAction] = useState<string | null>(null);
   const [workData, setWorkData] = useState<any>(null);
 
   // 表单
@@ -104,8 +105,49 @@ export default function ProjectSettingsPage() {
     }
   };
 
-  const handleExport = (action: "export_txt" | "export_md" | "export_json") => {
-    window.open(`/api/project/settings?workId=${workId}&action=${action}`, "_blank");
+  const handleExport = async (action: "export_txt" | "export_md" | "export_json") => {
+    if (!workId) return;
+    try {
+      setExportingAction(action);
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") || "" : "";
+      const res = await fetch(`/api/project/settings?workId=${encodeURIComponent(workId)}&action=${action}`, {
+        method: "GET",
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (!res.ok) {
+        let errMsg = `导出失败 (${res.status})`;
+        try {
+          const errData = await res.json();
+          if (errData?.message) errMsg = errData.message;
+        } catch {}
+        useAlert.error(errMsg);
+        return;
+      }
+
+      const blob = await res.blob();
+      const safeTitle = (title || workData?.title || "作品导出").replace(/[\\/:*?"<>|]/g, "_");
+      const fileNameMap: Record<typeof action, string> = {
+        export_txt: `${safeTitle}_全书稿.txt`,
+        export_md: `${safeTitle}_全书稿.md`,
+        export_json: `${safeTitle}_全量备份.json`,
+      };
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileNameMap[action];
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      useAlert.success(`已成功导出：${fileNameMap[action]}`);
+    } catch (err: any) {
+      useAlert.error("导出异常: " + (err?.message || "网络错误"));
+    } finally {
+      setExportingAction(null);
+    }
   };
 
   const handleDeleteProject = async () => {
@@ -272,6 +314,7 @@ export default function ProjectSettingsPage() {
               variant="light"
               color="teal"
               leftSection={<FiFileText size={13} />}
+              loading={exportingAction === "export_txt"}
               onClick={() => handleExport("export_txt")}
             >
               导出为 TXT 纯文本全书
@@ -282,6 +325,7 @@ export default function ProjectSettingsPage() {
               variant="light"
               color="indigo"
               leftSection={<FiBookOpen size={13} />}
+              loading={exportingAction === "export_md"}
               onClick={() => handleExport("export_md")}
             >
               导出为 Markdown 格式稿件
@@ -290,8 +334,8 @@ export default function ProjectSettingsPage() {
             <Button
               size="xs"
               variant="light"
-
               leftSection={<FiCode size={13} />}
+              loading={exportingAction === "export_json"}
               onClick={() => handleExport("export_json")}
             >
               导出全量 JSON 备份 (含世界观与大纲)

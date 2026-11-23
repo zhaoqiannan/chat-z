@@ -9,20 +9,89 @@ export interface ChatMessage {
 
 export interface AiCallOptions {
   model?: string;
+  taskType?: "creative" | "structured" | "fast";
   temperature?: number;
   maxTokens?: number;
 }
 
 /**
- * Cloudflare Workers AI 目前最新且长期支持的稳定文本生成模型候选序列（优先选择指令遵循与长文创作表现优异的模型）
+ * Cloudflare Workers AI 活跃文本生成模型候选序列（2026-11 更新）
+ * - 已移除 2026-11-20 下线的 deepseek-r1-distill-qwen-32b 与拼写不完整的 llama-3.3-70b-instruct
+ * - 优先选用 Free 计划 10,000 Neurons/天 额度内性价比高、中文与指令遵循强的活跃模型
  */
-const CANDIDATE_MODELS = [
-  "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
-  "@cf/meta/llama-3.3-70b-instruct",
+const CREATIVE_MODELS = [
+  "@cf/zai-org/glm-4.7-flash",
+  "@cf/qwen/qwen3.8-27b",
+  "@cf/google/gemma-4-26b-a4b-it",
+  "@cf/meta/llama-4-scout-17b-16e-instruct",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/qwen/qwen2.5-7b-instruct",
+];
+
+const STRUCTURED_MODELS = [
+  "@cf/google/gemma-4-26b-a4b-it",
+  "@cf/zai-org/glm-4.7-flash",
+  "@cf/qwen/qwen3.8-27b",
+  "@cf/meta/llama-4-scout-17b-16e-instruct",
+  "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+  "@cf/qwen/qwen2.5-7b-instruct",
+];
+
+const FAST_MODELS = [
+  "@cf/zai-org/glm-4.7-flash",
+  "@cf/google/gemma-4-26b-a4b-it",
   "@cf/qwen/qwen2.5-7b-instruct",
   "@cf/meta/llama-3.1-8b-instruct",
-  "@cf/meta/llama-3.1-70b-instruct",
 ];
+
+function getCandidateModels(options: AiCallOptions): string[] {
+  const baseList =
+    options.taskType === "structured"
+      ? STRUCTURED_MODELS
+      : options.taskType === "fast"
+        ? FAST_MODELS
+        : CREATIVE_MODELS;
+
+  const envModel = process.env.CF_AI_MODEL?.trim();
+  const preferred = options.model?.trim() || envModel;
+  if (preferred) {
+    return [preferred, ...baseList.filter((m) => m !== preferred)];
+  }
+  return baseList;
+}
+
+/**
+ * 统一提取 Workers AI 返回文本（兼容 OpenAI choices 格式与 Cloudflare 原生 response 格式）
+ */
+function extractAiText(result: any): string | null {
+  if (!result) return null;
+
+  // 1. OpenAI 兼容格式 choices[0].message (优先使用 content，兜底 reasoning)
+  if (Array.isArray(result.choices) && result.choices.length > 0) {
+    const msg = result.choices[0]?.message;
+    if (typeof msg?.content === "string" && msg.content.trim()) {
+      return msg.content.trim();
+    }
+    if (typeof msg?.reasoning_content === "string" && msg.reasoning_content.trim()) {
+      return msg.reasoning_content.trim();
+    }
+    if (typeof msg?.reasoning === "string" && msg.reasoning.trim()) {
+      return msg.reasoning.trim();
+    }
+  }
+
+  // 2. Cloudflare 原生 response 字段
+  if (typeof result.response === "string" && result.response.trim()) {
+    return result.response.trim();
+  }
+
+  // 3. 直接返回字符串
+  if (typeof result === "string" && result.trim()) {
+    return result.trim();
+  }
+
+  return null;
+}
 
 /**
  * 通过官方 REST API 直接调用 Cloudflare Workers AI（用于本地开发或未绑定原生环境时）
@@ -55,29 +124,9 @@ async function callCloudflareAiViaRest(
     throw new Error(`REST API 错误 (${response.status}): ${errorDetails}`);
   }
 
-  if (data.result) {
-    // 1. OpenAI 兼容格式 choices[0].message (优先使用 content)
-    if (Array.isArray(data.result.choices) && data.result.choices.length > 0) {
-      const msg = data.result.choices[0]?.message;
-      const msgContent = msg?.content;
-      if (typeof msgContent === "string" && msgContent.trim()) {
-        return msgContent.trim();
-      }
-      const msgReasoning = msg?.reasoning;
-      if (typeof msgReasoning === "string" && msgReasoning.trim()) {
-        return msgReasoning.trim();
-      }
-    }
-
-    // 2. Cloudflare 原生 response 字段
-    if (typeof data.result.response === "string" && data.result.response.trim()) {
-      return data.result.response.trim();
-    }
-
-    // 3. 直接返回字符串
-    if (typeof data.result === "string" && data.result.trim()) {
-      return data.result.trim();
-    }
+  const extracted = extractAiText(data.result);
+  if (extracted) {
+    return extracted;
   }
 
   throw new Error(`AI REST API 返回了未知结构: ${JSON.stringify(data.result || data)}`);
@@ -94,10 +143,7 @@ export async function callCloudflareAi(
   const accountId = process.env.CF_AI_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
   const apiToken = process.env.CF_AI_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
 
-  const modelsToTry = options.model
-    ? [options.model, ...CANDIDATE_MODELS.filter((m) => m !== options.model)]
-    : CANDIDATE_MODELS;
-
+  const modelsToTry = getCandidateModels(options);
   const errors: string[] = [];
 
   for (const model of modelsToTry) {
@@ -106,6 +152,7 @@ export async function callCloudflareAi(
       try {
         const restRes = await callCloudflareAiViaRest(accountId, apiToken, model, messages, options);
         if (restRes) {
+          console.log(`[Workers AI] 命中模型: ${model} (通道: REST, 任务: ${options.taskType || "creative"})`);
           return restRes;
         }
       } catch (restErr: any) {
@@ -124,11 +171,10 @@ export async function callCloudflareAi(
           max_tokens: options.maxTokens ?? 8192,
         });
 
-        if (res && typeof res.response === "string" && res.response.trim()) {
-          return res.response.trim();
-        }
-        if (res && typeof res === "string" && res.trim()) {
-          return res.trim();
+        const extracted = extractAiText(res);
+        if (extracted) {
+          console.log(`[Workers AI] 命中模型: ${model} (通道: env.AI, 任务: ${options.taskType || "creative"})`);
+          return extracted;
         }
       } catch (err: any) {
         const errMsg = err?.message || String(err);
@@ -256,23 +302,39 @@ export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
     return fallbackValue;
   }
 
-  const text = rawText.trim();
+  // 先剥离模型可能附带的思考链标签，避免思考过程中出现的花括号干扰 JSON 提取
+  const text = rawText
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .trim();
+
+  if (!text) {
+    return fallbackValue;
+  }
 
   // 准备候选解析文本序列
   const candidates: string[] = [text];
 
   const jsonBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)(?:```|$)/);
   if (jsonBlockMatch && jsonBlockMatch[1]) {
-    candidates.unshift(jsonBlockMatch[1]);
+    candidates.unshift(jsonBlockMatch[1].trim());
   }
 
   const firstBracket = text.indexOf("[");
+  const lastBracket = text.lastIndexOf("]");
   if (firstBracket !== -1) {
+    if (lastBracket > firstBracket) {
+      candidates.push(text.substring(firstBracket, lastBracket + 1));
+    }
     candidates.push(text.substring(firstBracket));
   }
 
   const firstBrace = text.indexOf("{");
+  const lastBrace = text.lastIndexOf("}");
   if (firstBrace !== -1) {
+    if (lastBrace > firstBrace) {
+      candidates.push(text.substring(firstBrace, lastBrace + 1));
+    }
     candidates.push(text.substring(firstBrace));
   }
 
@@ -282,16 +344,35 @@ export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
       const parsed = JSON.parse(raw);
       return normalizeResult(parsed, fallbackValue);
     } catch {
-      // 2. 自动修复截断后解析
+      // 2. 清理注释/尾随逗号后解析
       try {
-        const repaired = repairTruncatedJson(raw);
-        const parsed = JSON.parse(repaired);
+        const cleaned = cleanJsonString(raw);
+        const parsed = JSON.parse(cleaned);
         return normalizeResult(parsed, fallbackValue);
-      } catch {}
+      } catch {
+        // 3. 自动修复截断后解析
+        try {
+          const repaired = repairTruncatedJson(raw);
+          const parsed = JSON.parse(repaired);
+          return normalizeResult(parsed, fallbackValue);
+        } catch {}
+      }
     }
   }
 
   return fallbackValue;
+}
+
+/**
+ * 专用于分析/问答模式（critique / chat）的轻度清洗：
+ * 仅剥离 <think>/<thought> 思考链标签，完整保留 Markdown 标题、列表与总结内容
+ */
+export function cleanAnalysisText(rawText: string): string {
+  if (!rawText || !rawText.trim()) return "";
+  return rawText
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .trim();
 }
 
 /**

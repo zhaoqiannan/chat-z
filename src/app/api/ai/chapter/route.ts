@@ -52,33 +52,56 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    // 1. 生成初稿模式 (Draft) - 调用真实大模型创作
+    // 1. 生成初稿模式 (Draft) - 调用真实大模型创作（注入作品角色与世界观，防止盲写 OOC）
     if (mode === "draft") {
+      const [workChars, workRules] = await Promise.all([
+        db.select().from(dbCharacters).where(eq(dbCharacters.workId, workId)).limit(8).all(),
+        db.select().from(dbWorldRules).where(eq(dbWorldRules.workId, workId)).limit(6).all(),
+      ]);
+
+      let loreContext = "";
+      if (workChars.length > 0) {
+        loreContext +=
+          "【作品角色档案（严格贴合人设，严防 OOC）】：\n" +
+          workChars
+            .map((c) => `- ${c.name} (${c.identity || c.roleType || "角色"}): 性格[${c.personality || "未知"}], 能力[${c.abilities || "无"}], 特点[${(c.description || c.experiences || "无").slice(0, 80)}]`)
+            .join("\n") +
+          "\n\n";
+      }
+      if (workRules.length > 0) {
+        loreContext +=
+          "【世界观法则】：\n" +
+          workRules.map((r) => `- ${r.name}: ${(r.mechanisms || r.description || "无").slice(0, 100)}`).join("\n") +
+          "\n\n";
+      }
+
       const messages: ChatMessage[] = [
         {
           role: "system",
-          content: `你是一名专业的小说 AI 协同创作助手。
-你的任务是根据作者提供的大纲概括、事件规划、人物性格与文风要求，撰写出情节自然连贯、人物符合设定、节奏适宜的正文章节。
-【执行铁律】：
-1. 严格忠于作者给出的事件安排与文风基准，不擅自修改既定设定。
-2. 保持叙事视角与逻辑严密，严禁输出任何构思草稿、分析或引导语，直接从第一句正文输出到最后一句！`,
+          content: `你是一名专业小说执笔助手。请根据作者给出的本章大纲、核心事件、角色档案与文风要求撰写章节正文。
+【核心准则】
+1. 严格按作者指定的事件顺序与剧情走向展开，不擅自改写既定设定或凭空加入无关角色。
+2. 人物言行与心理必须符合角色档案，用具体动作、对话与环境细节推进情节，避免空洞概括和“总结式”写法。
+3. 严格控制篇幅尽量贴近目标字数，保持叙事视角统一。
+4. 【纯正文直出】：从正文第一句直接输出到最后一句，严禁输出章节标题以外的思考过程、大纲复述、字数说明或开场白。`,
         },
         {
           role: "user",
-          content: `作品书名：《${work.title}》
-题材标签：${work.tag || "网络小说"}
-本章大致内容：${overview || "推进核心主线"}
-核心事件安排：${events || "按大纲事件展开"}
-剧情走向与预期节点：${plotDirection || "自然推进至目标节点"}
-登场人物与性格：${characters || "登场核心人物"}
-文风选择：${writingStyle || "流畅通俗"}
-目标字数要求：约 ${targetWords || 2000} 字
+          content: `作品书名：《${work.title}》（题材：${work.tag || "小说"}）
+${loreContext}【本章创作需求】
+- 本章大致内容：${overview || "推进核心主线"}
+- 核心事件安排：${events || "按大纲事件展开"}
+- 剧情走向与预期节点：${plotDirection || "自然推进至目标节点"}
+- 本章登场人物与性格：${characters || "参考上述角色档案"}
+- 文风要求：${writingStyle || "流畅自然、画面感强"}
+- 目标字数：约 ${targetWords || 2000} 字
 
-请直接开始输出该章节正文故事：`,
+请直接开始输出本章纯正文：`,
         },
       ];
 
       const rawDraftText = await callCloudflareAi(env.AI, messages, {
+        taskType: "creative",
         temperature: 0.75,
         maxTokens: 8192,
       });
