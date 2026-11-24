@@ -303,13 +303,6 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
               onJumpToAiAnalysis={handleJumpToAiAnalysis}
             />
 
-            {/* 左上角极轻操作提示 */}
-            <Box className={styles.dockHint}>
-              <Text fz={11} c="#94a3b8">
-                点击卡片直接编辑名称 / 要点 / 标签 / 状态 · 滚轮缩放 · 右键更多
-              </Text>
-            </Box>
-
             {/* 方案 C：底部居中悬浮 Dock（无突兀大 Segmented，无右侧属性栏） */}
             <Box className={styles.floatingDock}>
               {renderViewSwitch()}
