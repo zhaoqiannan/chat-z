@@ -1,15 +1,18 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Badge, Box, Flex, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiCornerDownRight, FiEdit2, FiFileText, FiMaximize2, FiMinimize2, FiPlus, FiTrash2 } from "react-icons/fi";
-import { MasterOutlineNode } from "@/rest/master-outline";
-import { ChildInsertPosition, STATUS_CONFIG, SiblingInsertPosition, findNode, findSiblingMeta } from "./tree-utils";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ActionIcon, Box, Flex, Text, Tooltip } from "@mantine/core";
+import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiCpu, FiEdit2, FiFileText, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
+import { MasterOutlineNode, MasterOutlineSide, MasterOutlineStatus } from "@/rest/master-outline";
+import { ChildInsertPosition, STATUS_CONFIG, SiblingInsertPosition, TAG_PRESETS, findNode, findSiblingMeta } from "./tree-utils";
 import styles from "./style.module.scss";
+
+type LayoutSide = "center" | "left" | "right";
 
 interface LayoutNode {
   node: MasterOutlineNode;
   depth: number;
+  side: LayoutSide;
   x: number;
   y: number;
   width: number;
@@ -31,12 +34,30 @@ interface ContextMenuState {
   nodeId: string;
 }
 
-type EditingTarget = { id: string; field: "title" | "note" } | null;
+interface MetaPopoverState {
+  type: "tag" | "status";
+  nodeId: string;
+  x: number;
+  y: number;
+}
+
+type EditingTarget = { id: string; field: "title" | "note" | "chapterRange" } | null;
+
+export interface MindMapViewHandle {
+  enterFullscreen: () => void;
+  centerOnRoot: () => void;
+}
 
 const NODE_WIDTH = 256;
 const H_GAP = 84;
 const V_GAP = 30;
-const PADDING = 48;
+const PADDING = 64;
+
+const STATUS_DOT_COLOR: Record<MasterOutlineStatus, string> = {
+  planned: "#94a3b8",
+  in_progress: "#00c9ff",
+  completed: "#22c55e",
+};
 
 function estimateWrappedLines(text: string, charsPerLine: number): number {
   if (!text) return 1;
@@ -49,8 +70,7 @@ function estimateWrappedLines(text: string, charsPerLine: number): number {
 function estimateNodeHeight(node: MasterOutlineNode): number {
   const titleLines = estimateWrappedLines(node.title || "", 17);
   const noteLines = estimateWrappedLines(node.note?.trim() || "点击添加要点说明...", 20);
-  // 元数据行(20) + 标题行(19*n) + 分割与要点行(10 + 16.5*m) + 上下内边距(24)
-  return Math.max(78, Math.ceil(20 + titleLines * 19 + 10 + noteLines * 16.5 + 24));
+  return Math.max(82, Math.ceil(22 + titleLines * 19 + 10 + noteLines * 16.5 + 24));
 }
 
 function autoResizeTextarea(el: HTMLTextAreaElement | null) {
@@ -67,49 +87,143 @@ function computeMindMapLayout(
   edges: LayoutEdge[];
   canvasWidth: number;
   canvasHeight: number;
+  rootNode: LayoutNode;
 } {
-  const nodes: LayoutNode[] = [];
-  const edges: LayoutEdge[] = [];
-  let cursorY = PADDING;
+  const leftRoots = root.collapsed ? [] : root.children.filter((c) => c.side === "left");
+  const rightRoots = root.collapsed ? [] : root.children.filter((c) => c.side !== "left");
 
-  function place(node: MasterOutlineNode, depth: number, parentId: string | null): LayoutNode {
-    const x = PADDING + depth * (NODE_WIDTH + H_GAP);
-    const nodeHeight = measuredHeights[node.id] ?? estimateNodeHeight(node);
-    const visibleChildren = node.collapsed ? [] : node.children;
+  interface TempNode {
+    node: MasterOutlineNode;
+    depth: number;
+    side: "left" | "right";
+    y: number;
+    height: number;
+    parentId: string;
+    children: TempNode[];
+  }
 
-    if (visibleChildren.length === 0) {
-      const y = cursorY;
-      cursorY += nodeHeight + V_GAP;
-      const placed: LayoutNode = { node, depth, x, y, width: NODE_WIDTH, height: nodeHeight, parentId };
-      nodes.push(placed);
+  function layoutSubtreeList(
+    roots: MasterOutlineNode[],
+    side: "left" | "right"
+  ): { items: TempNode[]; flat: TempNode[]; totalHeight: number; maxDepth: number } {
+    let cursorY = 0;
+    let maxDepth = 0;
+    const flat: TempNode[] = [];
+
+    function place(node: MasterOutlineNode, depth: number, parentId: string): TempNode {
+      if (depth > maxDepth) maxDepth = depth;
+      const height = measuredHeights[node.id] ?? estimateNodeHeight(node);
+      const visibleChildren = node.collapsed ? [] : node.children;
+
+      if (visibleChildren.length === 0) {
+        const y = cursorY;
+        cursorY += height + V_GAP;
+        const placed: TempNode = { node, depth, side, y, height, parentId, children: [] };
+        flat.push(placed);
+        return placed;
+      }
+
+      const startY = cursorY;
+      const placedChildren = visibleChildren.map((child) => place(child, depth + 1, node.id));
+      const firstChild = placedChildren[0];
+      const lastChild = placedChildren[placedChildren.length - 1];
+      const childrenMidY = (firstChild.y + firstChild.height / 2 + lastChild.y + lastChild.height / 2) / 2;
+      const y = Math.max(startY, childrenMidY - height / 2);
+      cursorY = Math.max(cursorY, y + height + V_GAP);
+
+      const placed: TempNode = { node, depth, side, y, height, parentId, children: placedChildren };
+      flat.push(placed);
       return placed;
     }
 
-    const startY = cursorY;
-    const placedChildren = visibleChildren.map((child) => place(child, depth + 1, node.id));
-    const firstChild = placedChildren[0];
-    const lastChild = placedChildren[placedChildren.length - 1];
-    const childrenMidY = (firstChild.y + firstChild.height / 2 + lastChild.y + lastChild.height / 2) / 2;
-    const y = Math.max(startY, childrenMidY - nodeHeight / 2);
-    cursorY = Math.max(cursorY, y + nodeHeight + V_GAP);
-
-    const placed: LayoutNode = { node, depth, x, y, width: NODE_WIDTH, height: nodeHeight, parentId };
-    nodes.push(placed);
-
-    for (const child of placedChildren) {
-      edges.push({
-        key: `${node.id}->${child.node.id}`,
-        fromX: placed.x + placed.width,
-        fromY: placed.y + placed.height / 2,
-        toX: child.x,
-        toY: child.y + child.height / 2,
-      });
-    }
-
-    return placed;
+    const items = roots.map((child) => place(child, 1, root.id));
+    const totalHeight = items.length > 0 ? Math.max(0, cursorY - V_GAP) : 0;
+    return { items, flat, totalHeight, maxDepth };
   }
 
-  place(root, 0, null);
+  const leftLayout = layoutSubtreeList(leftRoots, "left");
+  const rightLayout = layoutSubtreeList(rightRoots, "right");
+  const rootHeight = measuredHeights[root.id] ?? estimateNodeHeight(root);
+  const contentHeight = Math.max(leftLayout.totalHeight, rightLayout.totalHeight, rootHeight);
+
+  const rootX =
+    leftLayout.maxDepth > 0
+      ? PADDING + leftLayout.maxDepth * (NODE_WIDTH + H_GAP)
+      : PADDING + 40;
+  const rootY = PADDING + (contentHeight - rootHeight) / 2;
+
+  const rootNode: LayoutNode = {
+    node: root,
+    depth: 0,
+    side: "center",
+    x: rootX,
+    y: rootY,
+    width: NODE_WIDTH,
+    height: rootHeight,
+    parentId: null,
+  };
+
+  const nodes: LayoutNode[] = [rootNode];
+  const edges: LayoutEdge[] = [];
+
+  const leftOffsetY = PADDING + (contentHeight - leftLayout.totalHeight) / 2;
+  const rightOffsetY = PADDING + (contentHeight - rightLayout.totalHeight) / 2;
+
+  const nodeMap = new Map<string, LayoutNode>();
+  nodeMap.set(root.id, rootNode);
+
+  for (const item of leftLayout.flat) {
+    const placed: LayoutNode = {
+      node: item.node,
+      depth: item.depth,
+      side: "left",
+      x: rootX - item.depth * (NODE_WIDTH + H_GAP),
+      y: item.y + leftOffsetY,
+      width: NODE_WIDTH,
+      height: item.height,
+      parentId: item.parentId,
+    };
+    nodes.push(placed);
+    nodeMap.set(placed.node.id, placed);
+  }
+
+  for (const item of rightLayout.flat) {
+    const placed: LayoutNode = {
+      node: item.node,
+      depth: item.depth,
+      side: "right",
+      x: rootX + item.depth * (NODE_WIDTH + H_GAP),
+      y: item.y + rightOffsetY,
+      width: NODE_WIDTH,
+      height: item.height,
+      parentId: item.parentId,
+    };
+    nodes.push(placed);
+    nodeMap.set(placed.node.id, placed);
+  }
+
+  for (const placed of nodes) {
+    if (!placed.parentId) continue;
+    const parent = nodeMap.get(placed.parentId);
+    if (!parent) continue;
+    if (placed.side === "left") {
+      edges.push({
+        key: `${parent.node.id}->${placed.node.id}`,
+        fromX: parent.x,
+        fromY: parent.y + parent.height / 2,
+        toX: placed.x + placed.width,
+        toY: placed.y + placed.height / 2,
+      });
+    } else {
+      edges.push({
+        key: `${parent.node.id}->${placed.node.id}`,
+        fromX: parent.x + parent.width,
+        fromY: parent.y + parent.height / 2,
+        toX: placed.x,
+        toY: placed.y + placed.height / 2,
+      });
+    }
+  }
 
   let maxX = 0;
   let maxY = 0;
@@ -123,6 +237,7 @@ function computeMindMapLayout(
     edges,
     canvasWidth: Math.max(960, maxX + PADDING * 2),
     canvasHeight: Math.max(540, maxY + PADDING * 2),
+    rootNode,
   };
 }
 
@@ -137,40 +252,51 @@ interface MindMapViewProps {
   onTransformChange: (nextZoom: number, nextOffset: { x: number; y: number }) => void;
   onSelect: (id: string) => void;
   onToggleCollapse: (id: string) => void;
-  onInlineUpdate: (id: string, patch: { title?: string; note?: string }) => void;
-  onAddChild: (parentId: string, position?: ChildInsertPosition) => void;
+  onInlineUpdate: (id: string, patch: Partial<Omit<MasterOutlineNode, "id" | "children">>) => void;
+  onAddChild: (parentId: string, position?: ChildInsertPosition, side?: MasterOutlineSide) => void;
   onAddSibling: (targetId: string, position: SiblingInsertPosition) => void;
   onMoveNode: (id: string, dir: "up" | "down") => void;
   onDeleteNode: (id: string) => void;
+  onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
 }
 
-export default function MindMapView({
-  tree,
-  selectedId,
-  autoEditNodeId,
-  onAutoEditHandled,
-  zoom,
-  offset,
-  onOffsetChange,
-  onTransformChange,
-  onSelect,
-  onToggleCollapse,
-  onInlineUpdate,
-  onAddChild,
-  onAddSibling,
-  onMoveNode,
-  onDeleteNode,
-}: MindMapViewProps) {
+const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function MindMapView(
+  {
+    tree,
+    selectedId,
+    autoEditNodeId,
+    onAutoEditHandled,
+    zoom,
+    offset,
+    onOffsetChange,
+    onTransformChange,
+    onSelect,
+    onToggleCollapse,
+    onInlineUpdate,
+    onAddChild,
+    onAddSibling,
+    onMoveNode,
+    onDeleteNode,
+    onJumpToAiAnalysis,
+  },
+  ref
+) {
   const [measuredHeights, setMeasuredHeights] = useState<Record<string, number>>({});
   const layout = useMemo(() => computeMindMapLayout(tree, measuredHeights), [tree, measuredHeights]);
   const [editing, setEditing] = useState<EditingTarget>(null);
   const [editingValue, setEditingValue] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [metaPopover, setMetaPopover] = useState<MetaPopoverState | null>(null);
+  const [customTagInput, setCustomTagInput] = useState("");
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [isFallbackFullscreen, setIsFallbackFullscreen] = useState(false);
+
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const nodeElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const observerRef = useRef<ResizeObserver | null>(null);
   const transformRef = useRef({ zoom, offset });
   const onTransformChangeRef = useRef(onTransformChange);
+  const layoutRootRef = useRef(layout.rootNode);
   const draggingRef = useRef<{ active: boolean; startX: number; startY: number; origX: number; origY: number }>({
     active: false,
     startX: 0,
@@ -179,7 +305,73 @@ export default function MindMapView({
     origY: 0,
   });
 
-  // 监听节点卡片实际高度变化，动态重排树布局防止折行与完整要点说明重叠
+  const isFullscreen = isNativeFullscreen || isFallbackFullscreen;
+
+  useEffect(() => {
+    transformRef.current = { zoom, offset };
+  }, [zoom, offset]);
+
+  useEffect(() => {
+    onTransformChangeRef.current = onTransformChange;
+  }, [onTransformChange]);
+
+  useEffect(() => {
+    layoutRootRef.current = layout.rootNode;
+  }, [layout.rootNode]);
+
+  // 监听原生全屏状态变化
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsNativeFullscreen(Boolean(document.fullscreenElement && document.fullscreenElement === viewportRef.current));
+    };
+    document.addEventListener("fullscreenchange", handleFsChange);
+    return () => document.removeEventListener("fullscreenchange", handleFsChange);
+  }, []);
+
+  // 降级全屏时支持 Esc 退出
+  useEffect(() => {
+    if (!isFallbackFullscreen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsFallbackFullscreen(false);
+    };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isFallbackFullscreen]);
+
+  const enterFullscreen = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    if (el.requestFullscreen) {
+      el.requestFullscreen().catch(() => setIsFallbackFullscreen(true));
+    } else {
+      setIsFallbackFullscreen(true);
+    }
+  }, []);
+
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setIsFallbackFullscreen(false);
+  }, []);
+
+  const centerOnRoot = useCallback(() => {
+    const el = viewportRef.current;
+    const rn = layoutRootRef.current;
+    if (!el || !rn) {
+      onTransformChangeRef.current(1, { x: 24, y: 24 });
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    const hasLeft = tree.children.some((c) => c.side === "left");
+    const targetX = hasLeft ? rect.width / 2 - (rn.x + rn.width / 2) : Math.max(48, rect.width * 0.14 - rn.x);
+    const targetY = rect.height / 2 - (rn.y + rn.height / 2) - 16;
+    onTransformChangeRef.current(1, { x: Math.round(targetX), y: Math.round(targetY) });
+  }, [tree.children]);
+
+  useImperativeHandle(ref, () => ({ enterFullscreen, centerOnRoot }), [enterFullscreen, centerOnRoot]);
+
+  // 监听节点卡片实际高度变化，动态重排树布局防止重叠
   useEffect(() => {
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver((entries) => {
@@ -222,14 +414,6 @@ export default function MindMapView({
     }
   }, []);
 
-  useEffect(() => {
-    transformRef.current = { zoom, offset };
-  }, [zoom, offset]);
-
-  useEffect(() => {
-    onTransformChangeRef.current = onTransformChange;
-  }, [onTransformChange]);
-
   // 鼠标滚轮以指针为中心平滑缩放画布
   useEffect(() => {
     const el = viewportRef.current;
@@ -237,6 +421,7 @@ export default function MindMapView({
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
       setContextMenu(null);
+      setMetaPopover(null);
       const rect = el.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
@@ -257,15 +442,20 @@ export default function MindMapView({
     return () => el.removeEventListener("wheel", handleWheel);
   }, []);
 
-  // 点击空白或按 Escape 关闭右键菜单
+  // 点击空白或按 Escape 关闭右键菜单与元数据浮层
   useEffect(() => {
-    if (!contextMenu) return;
+    if (!contextMenu && !metaPopover) return;
     const handleMouseDown = (e: MouseEvent) => {
-      if ((e.target as HTMLElement)?.closest("[data-mindmap-menu='true']")) return;
+      const target = e.target as HTMLElement;
+      if (target?.closest("[data-mindmap-menu='true']") || target?.closest("[data-mindmap-popover='true']")) return;
       setContextMenu(null);
+      setMetaPopover(null);
     };
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setContextMenu(null);
+      if (e.key === "Escape") {
+        setContextMenu(null);
+        setMetaPopover(null);
+      }
     };
     window.addEventListener("mousedown", handleMouseDown);
     window.addEventListener("keydown", handleKeyDown);
@@ -273,9 +463,13 @@ export default function MindMapView({
       window.removeEventListener("mousedown", handleMouseDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [contextMenu]);
+  }, [contextMenu, metaPopover]);
 
-  const activeEditing: EditingTarget = editing ?? (autoEditNodeId ? { id: autoEditNodeId, field: "title" } : null);
+  const activeEditing = useMemo<EditingTarget>(
+    () => editing ?? (autoEditNodeId ? { id: autoEditNodeId, field: "title" } : null),
+    [editing, autoEditNodeId]
+  );
+
   const activeEditingValue = useMemo(() => {
     if (editing) return editingValue;
     if (autoEditNodeId) return findNode(tree, autoEditNodeId)?.title ?? "";
@@ -283,8 +477,9 @@ export default function MindMapView({
   }, [editing, editingValue, autoEditNodeId, tree]);
 
   const startEditing = useCallback(
-    (id: string, field: "title" | "note", initialVal: string) => {
+    (id: string, field: "title" | "note" | "chapterRange", initialVal: string) => {
       setContextMenu(null);
+      setMetaPopover(null);
       onAutoEditHandled?.();
       setEditing({ id, field });
       setEditingValue(initialVal);
@@ -298,8 +493,10 @@ export default function MindMapView({
         if (activeEditingValue.trim()) {
           onInlineUpdate(activeEditing.id, { title: activeEditingValue.trim() });
         }
-      } else {
+      } else if (activeEditing.field === "note") {
         onInlineUpdate(activeEditing.id, { note: activeEditingValue });
+      } else {
+        onInlineUpdate(activeEditing.id, { chapterRange: activeEditingValue.trim() });
       }
     }
     setEditing(null);
@@ -313,9 +510,13 @@ export default function MindMapView({
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest("[data-mindmap-node='true']")) return;
-    if ((e.target as HTMLElement).closest("[data-mindmap-menu='true']")) return;
+    const target = e.target as HTMLElement;
+    if (target.closest("[data-mindmap-node='true']")) return;
+    if (target.closest("[data-mindmap-menu='true']")) return;
+    if (target.closest("[data-mindmap-popover='true']")) return;
+    if (target.closest("[data-mindmap-controls='true']")) return;
     setContextMenu(null);
+    setMetaPopover(null);
     draggingRef.current = {
       active: true,
       startX: e.clientX,
@@ -341,11 +542,25 @@ export default function MindMapView({
     () => (contextMenu && contextMenu.nodeId !== "root" ? findSiblingMeta(tree, contextMenu.nodeId) : null),
     [contextMenu, tree]
   );
+  const popoverNode = useMemo(() => (metaPopover ? findNode(tree, metaPopover.nodeId) : null), [metaPopover, tree]);
+
+  const openMetaPopover = (e: React.MouseEvent<HTMLElement>, type: "tag" | "status", node: MasterOutlineNode) => {
+    e.stopPropagation();
+    setContextMenu(null);
+    onSelect(node.id);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const popW = type === "tag" ? 216 : 132;
+    const popH = type === "tag" ? 152 : 112;
+    const x = Math.max(8, Math.min(rect.left, window.innerWidth - popW - 8));
+    const y = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - popH - 8));
+    if (type === "tag") setCustomTagInput(node.tag || "");
+    setMetaPopover({ type, nodeId: node.id, x, y });
+  };
 
   return (
     <Box
       ref={viewportRef}
-      className={styles.mindmapViewport}
+      className={`${styles.mindmapViewport} ${isFallbackFullscreen ? styles.mindmapViewportFullscreen : ""}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -371,11 +586,14 @@ export default function MindMapView({
 
         {layout.nodes.map((item) => {
           const isRoot = item.depth === 0;
+          const isLeftBranch = item.side === "left";
           const isSelected = item.node.id === selectedId;
-          const statusMeta = STATUS_CONFIG[item.node.status || "planned"];
+          const statusKey: MasterOutlineStatus = item.node.status || "planned";
+          const statusMeta = STATUS_CONFIG[statusKey];
           const hasChildren = item.node.children.length > 0;
           const isEditingTitle = activeEditing?.id === item.node.id && activeEditing.field === "title";
           const isEditingNote = activeEditing?.id === item.node.id && activeEditing.field === "note";
+          const isEditingChapter = activeEditing?.id === item.node.id && activeEditing.field === "chapterRange";
           const hasNote = Boolean(item.node.note?.trim());
 
           return (
@@ -389,6 +607,7 @@ export default function MindMapView({
               onClick={(e) => {
                 e.stopPropagation();
                 setContextMenu(null);
+                setMetaPopover(null);
                 onSelect(item.node.id);
               }}
               onDoubleClick={(e) => {
@@ -399,9 +618,10 @@ export default function MindMapView({
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                setMetaPopover(null);
                 onSelect(item.node.id);
-                const menuW = 200;
-                const menuH = 320;
+                const menuW = 204;
+                const menuH = 340;
                 const x = Math.max(8, Math.min(e.clientX, window.innerWidth - menuW - 8));
                 const y = Math.max(8, Math.min(e.clientY, window.innerHeight - menuH - 8));
                 setContextMenu({ x, y, nodeId: item.node.id });
@@ -409,7 +629,7 @@ export default function MindMapView({
             >
               {/* 上方插入同级节点锚点（非根节点） */}
               {!isRoot ? (
-                <Tooltip label="上方插入同级节点 (Shift+Enter)" position="top" openDelay={250}>
+                <Tooltip label="上方插入同级节点 (Shift+Enter)" position="top" openDelay={250} withinPortal={false}>
                   <button
                     type="button"
                     aria-label="上方插入同级节点"
@@ -418,6 +638,7 @@ export default function MindMapView({
                     onClick={(e) => {
                       e.stopPropagation();
                       setContextMenu(null);
+                      setMetaPopover(null);
                       onAddSibling(item.node.id, "before");
                     }}
                   >
@@ -428,7 +649,7 @@ export default function MindMapView({
 
               {/* 下方插入同级节点锚点（非根节点） */}
               {!isRoot ? (
-                <Tooltip label="下方插入同级节点 (Enter)" position="bottom" openDelay={250}>
+                <Tooltip label="下方插入同级节点 (Enter)" position="bottom" openDelay={250} withinPortal={false}>
                   <button
                     type="button"
                     aria-label="下方插入同级节点"
@@ -437,6 +658,7 @@ export default function MindMapView({
                     onClick={(e) => {
                       e.stopPropagation();
                       setContextMenu(null);
+                      setMetaPopover(null);
                       onAddSibling(item.node.id, "after");
                     }}
                   >
@@ -445,40 +667,143 @@ export default function MindMapView({
                 </Tooltip>
               ) : null}
 
-              {/* 右侧添加子节点锚点 */}
-              <Tooltip label="添加子节点 (Tab)" position="right" openDelay={250}>
-                <button
-                  type="button"
-                  aria-label="添加子节点"
-                  className={`${styles.quickAddBtn} ${hasChildren ? styles.quickAddRightOffset : styles.quickAddRight}`}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setContextMenu(null);
-                    onAddChild(item.node.id, "end");
-                  }}
-                >
-                  <FiPlus size={12} />
-                </button>
-              </Tooltip>
+              {/* 仅总纲节点（Root）左侧添加子节点锚点 */}
+              {isRoot ? (
+                <Tooltip label="左侧添加子节点" position="left" openDelay={250} withinPortal={false}>
+                  <button
+                    type="button"
+                    aria-label="左侧添加子节点"
+                    className={`${styles.quickAddBtn} ${styles.quickAddLeft}`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setContextMenu(null);
+                      setMetaPopover(null);
+                      onAddChild("root", "end", "left");
+                    }}
+                  >
+                    <FiPlus size={12} />
+                  </button>
+                </Tooltip>
+              ) : null}
 
+              {/* 子节点添加锚点：右侧分支与根节点在右侧，左侧分支镜像在左侧 */}
+              {isLeftBranch ? (
+                <Tooltip label="添加子节点 (Tab)" position="left" openDelay={250} withinPortal={false}>
+                  <button
+                    type="button"
+                    aria-label="添加子节点"
+                    className={`${styles.quickAddBtn} ${hasChildren ? styles.quickAddLeftOffset : styles.quickAddLeft}`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setContextMenu(null);
+                      setMetaPopover(null);
+                      onAddChild(item.node.id, "end");
+                    }}
+                  >
+                    <FiPlus size={12} />
+                  </button>
+                </Tooltip>
+              ) : (
+                <Tooltip label={isRoot ? "右侧添加子节点 (Tab)" : "添加子节点 (Tab)"} position="right" openDelay={250} withinPortal={false}>
+                  <button
+                    type="button"
+                    aria-label="添加子节点"
+                    className={`${styles.quickAddBtn} ${hasChildren ? styles.quickAddRightOffset : styles.quickAddRight}`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setContextMenu(null);
+                      setMetaPopover(null);
+                      onAddChild(item.node.id, "end", isRoot ? "right" : undefined);
+                    }}
+                  >
+                    <FiPlus size={12} />
+                  </button>
+                </Tooltip>
+              )}
+
+              {/* 卡片顶部元数据行：标签 / 章节 / AI诊断 / 状态 全部卡片内直接点击修改 */}
               <Flex align="center" justify="space-between" gap={4}>
-                <Flex align="center" gap={4} miw={0}>
-                  {item.node.tag ? (
-                    <Badge size="xs" variant="light" color={isRoot ? "cyan" : "gray"} radius="sm">
-                      {item.node.tag}
-                    </Badge>
+                <Flex align="center" gap={4} miw={0} wrap="wrap">
+                  <button
+                    type="button"
+                    title="点击切换或编辑标签"
+                    className={`${styles.metaPill} ${isRoot ? styles.metaPillRoot : ""} ${!item.node.tag ? styles.metaPillPlaceholder : ""}`}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => openMetaPopover(e, "tag", item.node)}
+                  >
+                    {item.node.tag || "+ 标签"}
+                  </button>
+
+                  {!isRoot ? (
+                    isEditingChapter ? (
+                      <input
+                        autoFocus
+                        value={activeEditingValue}
+                        placeholder="如 1-20"
+                        className={styles.metaChapterInput}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onClick={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onBlur={commitInlineEdit}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            commitInlineEdit();
+                          } else if (e.key === "Escape") {
+                            e.preventDefault();
+                            cancelInlineEdit();
+                          }
+                        }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        title="点击设置关联章节范围"
+                        className={`${styles.metaPill} ${!item.node.chapterRange ? styles.metaPillPlaceholder : ""}`}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelect(item.node.id);
+                          startEditing(item.node.id, "chapterRange", item.node.chapterRange || "");
+                        }}
+                      >
+                        {item.node.chapterRange ? `第${item.node.chapterRange}章` : "+ 章节"}
+                      </button>
+                    )
                   ) : null}
-                  {item.node.chapterRange ? (
-                    <Text fz={10} c="#64748b" truncate>
-                      第{item.node.chapterRange}章
-                    </Text>
+
+                  {!isRoot && item.node.chapterRange?.trim() ? (
+                    <button
+                      type="button"
+                      title={`AI 诊断此阶段 (第${item.node.chapterRange}章)`}
+                      className={styles.cardAiBtn}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onJumpToAiAnalysis(item.node.chapterRange || "", item.node.title);
+                      }}
+                    >
+                      <FiCpu size={11} />
+                    </button>
                   ) : null}
                 </Flex>
+
                 {!isRoot ? (
-                  <Badge size="xs" variant="dot" color={statusMeta.color}>
-                    {statusMeta.label}
-                  </Badge>
+                  <button
+                    type="button"
+                    title="点击切换推进状态"
+                    className={styles.statusPill}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => openMetaPopover(e, "status", item.node)}
+                  >
+                    <span className={styles.statusDot} style={{ backgroundColor: STATUS_DOT_COLOR[statusKey] }} />
+                    <span>{statusMeta.label}</span>
+                  </button>
                 ) : null}
               </Flex>
 
@@ -580,7 +905,7 @@ export default function MindMapView({
 
               {hasChildren ? (
                 <div
-                  className={styles.collapseDot}
+                  className={`${styles.collapseDot} ${isLeftBranch ? styles.collapseDotLeft : ""}`}
                   title={item.node.collapsed ? "展开分支" : "收起分支"}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
@@ -596,36 +921,142 @@ export default function MindMapView({
         })}
       </Box>
 
-      {/* 节点右键上下文菜单 */}
+      {/* 全屏纯画布模式下的极简半透明控制胶囊（不含保存与属性栏） */}
+      {isFullscreen ? (
+        <Box data-mindmap-controls="true" className={styles.fullscreenControls} onMouseDown={(e) => e.stopPropagation()}>
+          <ActionIcon variant="subtle" color="gray" size={26} radius="xl" title="缩小" onClick={() => onTransformChange(Math.max(0.4, Number((zoom - 0.1).toFixed(2))), offset)}>
+            <FiZoomOut size={13} />
+          </ActionIcon>
+          <Text fz={11} fw={600} c="#475569" w={38} ta="center">{Math.round(zoom * 100)}%</Text>
+          <ActionIcon variant="subtle" color="gray" size={26} radius="xl" title="放大" onClick={() => onTransformChange(Math.min(2, Number((zoom + 0.1).toFixed(2))), offset)}>
+            <FiZoomIn size={13} />
+          </ActionIcon>
+          <Box className={styles.dockDivider} />
+          <ActionIcon variant="subtle" color="gray" size={26} radius="xl" title="居中复位" onClick={centerOnRoot}>
+            <FiRefreshCw size={12} />
+          </ActionIcon>
+          <ActionIcon variant="light" size={26} radius="xl" title="退出全屏 (Esc)" onClick={exitFullscreen}>
+            <FiMinimize2 size={13} />
+          </ActionIcon>
+        </Box>
+      ) : null}
+
+      {/* 卡片元数据微浮层（标签 / 状态，渲染在画布视口内，全屏下同样可用） */}
+      {metaPopover && popoverNode ? (
+        <Box
+          data-mindmap-popover="true"
+          className={styles.metaPopover}
+          style={{ left: metaPopover.x, top: metaPopover.y, width: metaPopover.type === "status" ? 132 : 216 }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {metaPopover.type === "tag" ? (
+            <Flex direction="column" gap={8}>
+              <input
+                autoFocus
+                value={customTagInput}
+                placeholder="输入自定义标签后回车"
+                className={styles.metaPopoverInput}
+                onChange={(e) => {
+                  setCustomTagInput(e.target.value);
+                  onInlineUpdate(popoverNode.id, { tag: e.target.value });
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === "Enter" || e.key === "Escape") setMetaPopover(null);
+                }}
+              />
+              <Flex gap={4} wrap="wrap">
+                {TAG_PRESETS.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className={`${styles.metaPresetChip} ${popoverNode.tag === t ? styles.metaPresetChipActive : ""}`}
+                    onClick={() => {
+                      onInlineUpdate(popoverNode.id, { tag: t });
+                      setMetaPopover(null);
+                    }}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </Flex>
+            </Flex>
+          ) : (
+            <Flex direction="column" gap={2}>
+              {(["planned", "in_progress", "completed"] as MasterOutlineStatus[]).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  className={styles.contextMenuItem}
+                  onClick={() => {
+                    onInlineUpdate(popoverNode.id, { status: st });
+                    setMetaPopover(null);
+                  }}
+                >
+                  <Flex align="center" gap={6}>
+                    <span className={styles.statusDot} style={{ backgroundColor: STATUS_DOT_COLOR[st] }} />
+                    <span>{STATUS_CONFIG[st].label}</span>
+                  </Flex>
+                  {(popoverNode.status || "planned") === st ? <Text fz={11} fw={700} c="#00c9ff">✓</Text> : null}
+                </button>
+              ))}
+            </Flex>
+          )}
+        </Box>
+      ) : null}
+
+      {/* 节点右键上下文菜单（渲染在画布视口内，全屏下同样可用） */}
       {contextMenu && contextNode ? (
         <Box data-mindmap-menu="true" className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
-          <button
-            type="button"
-            className={styles.contextMenuItem}
-            onClick={() => {
-              onAddChild(contextNode.id, "end");
-              setContextMenu(null);
-            }}
-          >
-            <Flex align="center" gap={8}><FiCornerDownRight size={13} /><span>添加子节点</span></Flex>
-            <span className={styles.contextMenuShortcut}>Tab</span>
-          </button>
-
-          {contextNode.children.length > 0 ? (
-            <button
-              type="button"
-              className={styles.contextMenuItem}
-              onClick={() => {
-                onAddChild(contextNode.id, "start");
-                setContextMenu(null);
-              }}
-            >
-              <Flex align="center" gap={8}><FiPlus size={13} /><span>顶部添加子节点</span></Flex>
-            </button>
-          ) : null}
-
-          {contextNode.id !== "root" ? (
+          {contextNode.id === "root" ? (
             <>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  onAddChild("root", "end", "right");
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiCornerDownRight size={13} /><span>右侧添加子节点</span></Flex>
+                <span className={styles.contextMenuShortcut}>Tab</span>
+              </button>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  onAddChild("root", "end", "left");
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiCornerDownLeft size={13} /><span>左侧添加子节点</span></Flex>
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  onAddChild(contextNode.id, "end");
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiCornerDownRight size={13} /><span>添加子节点</span></Flex>
+                <span className={styles.contextMenuShortcut}>Tab</span>
+              </button>
+              {contextNode.children.length > 0 ? (
+                <button
+                  type="button"
+                  className={styles.contextMenuItem}
+                  onClick={() => {
+                    onAddChild(contextNode.id, "start");
+                    setContextMenu(null);
+                  }}
+                >
+                  <Flex align="center" gap={8}><FiPlus size={13} /><span>顶部添加子节点</span></Flex>
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={styles.contextMenuItem}
@@ -649,7 +1080,7 @@ export default function MindMapView({
                 <span className={styles.contextMenuShortcut}>↵</span>
               </button>
             </>
-          ) : null}
+          )}
 
           <div className={styles.contextMenuDivider} />
 
@@ -696,6 +1127,19 @@ export default function MindMapView({
             <Flex align="center" gap={8}><FiFileText size={13} /><span>编辑要点说明</span></Flex>
           </button>
 
+          {contextNode.id !== "root" && contextNode.chapterRange?.trim() ? (
+            <button
+              type="button"
+              className={styles.contextMenuItem}
+              onClick={() => {
+                onJumpToAiAnalysis(contextNode.chapterRange || "", contextNode.title);
+                setContextMenu(null);
+              }}
+            >
+              <Flex align="center" gap={8}><FiCpu size={13} /><span>AI 诊断此阶段</span></Flex>
+            </button>
+          ) : null}
+
           {contextNode.children.length > 0 ? (
             <button
               type="button"
@@ -731,4 +1175,6 @@ export default function MindMapView({
       ) : null}
     </Box>
   );
-}
+});
+
+export default MindMapView;

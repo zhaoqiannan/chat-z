@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ActionIcon, Badge, Box, Button, Divider, Flex, Group, Modal, SegmentedControl, Select, Stack, Text, TextInput, Textarea, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiCpu, FiGitBranch, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiSave, FiTable, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
-import { MasterOutlineNode, MasterOutlineStatus, generateMasterOutlineAi, getMasterOutline, saveMasterOutline } from "@/rest/master-outline";
+import { ActionIcon, Box, Button, Flex, Group, Modal, Select, Stack, Text, Textarea, Tooltip } from "@mantine/core";
+import { FiCpu, FiGitBranch, FiMaximize, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiSave, FiTable, FiZoomIn, FiZoomOut } from "react-icons/fi";
+import { MasterOutlineNode, MasterOutlineSide, generateMasterOutlineAi, getMasterOutline, saveMasterOutline } from "@/rest/master-outline";
 import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
-import MindMapView from "./mindmap-view";
+import MindMapView, { MindMapViewHandle } from "./mindmap-view";
 import TableView from "./table-view";
-import { ChildInsertPosition, SiblingInsertPosition, TAG_PRESETS, addChildNode, addSiblingNode, createNodeId, deleteNode, findNode, findSiblingMeta, moveNode, setAllCollapsed, updateNode } from "./tree-utils";
+import { ChildInsertPosition, SiblingInsertPosition, addChildNode, addSiblingNode, createNodeId, deleteNode, findNode, moveNode, setAllCollapsed, updateNode } from "./tree-utils";
 import styles from "./style.module.scss";
 
 interface MasterOutlineWorkspaceProps {
@@ -19,6 +19,7 @@ interface MasterOutlineWorkspaceProps {
 
 export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspaceProps) {
   const router = useRouter();
+  const mindmapRef = useRef<MindMapViewHandle | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -28,7 +29,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
   const [selectedId, setSelectedId] = useState<string>("root");
   const [autoEditNodeId, setAutoEditNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [offset, setOffset] = useState({ x: 24, y: 24 });
+  const [offset, setOffset] = useState({ x: 32, y: 32 });
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [aiModalOpened, setAiModalOpened] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -62,8 +63,8 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     setDirty(true);
   }, []);
 
-  const handleSave = async () => {
-    if (!tree || !workId) return;
+  const handleSave = useCallback(async () => {
+    if (!tree || !workId || saving) return;
     try {
       setSaving(true);
       const res = await saveMasterOutline({ workId, tree });
@@ -78,43 +79,49 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     } finally {
       setSaving(false);
     }
-  };
+  }, [tree, workId, saving]);
 
-  const handleAddChild = useCallback((parentId: string, position: ChildInsertPosition = "end", autoEdit = false) => {
-    const newId = createNodeId();
-    const newNode: MasterOutlineNode = {
-      id: newId,
-      title: "新剧情节点",
-      tag: "主线",
-      note: "",
-      chapterRange: "",
-      status: "planned",
-      children: [],
-    };
-    mutateTree((prev) => addChildNode(prev, parentId, newNode, position));
-    setSelectedId(newId);
-    if (autoEdit) setAutoEditNodeId(newId);
-  }, [mutateTree]);
+  const handleAddChild = useCallback(
+    (parentId: string, position: ChildInsertPosition = "end", autoEdit = false, side?: MasterOutlineSide) => {
+      const newId = createNodeId();
+      const newNode: MasterOutlineNode = {
+        id: newId,
+        title: "新剧情节点",
+        tag: side === "left" ? "设定" : "主线",
+        note: "",
+        chapterRange: "",
+        status: "planned",
+        children: [],
+      };
+      mutateTree((prev) => addChildNode(prev, parentId, newNode, position, side));
+      setSelectedId(newId);
+      if (autoEdit) setAutoEditNodeId(newId);
+    },
+    [mutateTree]
+  );
 
-  const handleAddSibling = useCallback((targetId: string, position: SiblingInsertPosition = "after", autoEdit = false) => {
-    if (targetId === "root") {
-      handleAddChild("root", position === "before" ? "start" : "end", autoEdit);
-      return;
-    }
-    const newId = createNodeId();
-    const newNode: MasterOutlineNode = {
-      id: newId,
-      title: "同级节点",
-      tag: "主线",
-      note: "",
-      chapterRange: "",
-      status: "planned",
-      children: [],
-    };
-    mutateTree((prev) => addSiblingNode(prev, targetId, newNode, position));
-    setSelectedId(newId);
-    if (autoEdit) setAutoEditNodeId(newId);
-  }, [handleAddChild, mutateTree]);
+  const handleAddSibling = useCallback(
+    (targetId: string, position: SiblingInsertPosition = "after", autoEdit = false) => {
+      if (targetId === "root") {
+        handleAddChild("root", position === "before" ? "start" : "end", autoEdit, "right");
+        return;
+      }
+      const newId = createNodeId();
+      const newNode: MasterOutlineNode = {
+        id: newId,
+        title: "同级节点",
+        tag: "主线",
+        note: "",
+        chapterRange: "",
+        status: "planned",
+        children: [],
+      };
+      mutateTree((prev) => addSiblingNode(prev, targetId, newNode, position));
+      setSelectedId(newId);
+      if (autoEdit) setAutoEditNodeId(newId);
+    },
+    [handleAddChild, mutateTree]
+  );
 
   const handleTransformChange = useCallback((nextZoom: number, nextOffset: { x: number; y: number }) => {
     setZoom(nextZoom);
@@ -125,18 +132,21 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     setAutoEditNodeId(null);
   }, []);
 
-  const handleDelete = useCallback(async (id: string) => {
-    if (id === "root") return;
-    const confirmed = await showConfirm({
-      title: "删除总纲节点",
-      message: "确定删除该节点及其下属所有子节点吗？",
-      confirmLabel: "删除",
-      confirmColor: "red",
-    });
-    if (!confirmed) return;
-    mutateTree((prev) => deleteNode(prev, id));
-    if (selectedId === id) setSelectedId("root");
-  }, [mutateTree, selectedId]);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (id === "root") return;
+      const confirmed = await showConfirm({
+        title: "删除总纲节点",
+        message: "确定删除该节点及其下属所有子节点吗？",
+        confirmLabel: "删除",
+        confirmColor: "red",
+      });
+      if (!confirmed) return;
+      mutateTree((prev) => deleteNode(prev, id));
+      if (selectedId === id) setSelectedId("root");
+    },
+    [mutateTree, selectedId]
+  );
 
   const handleToggleCollapse = useCallback((id: string) => {
     setTree((prev) => {
@@ -169,25 +179,33 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     }
   };
 
-  const handleJumpToAiAnalysis = (chapterRange: string, nodeTitle: string) => {
-    const query = new URLSearchParams({
-      tab: "ai_analysis",
-      mode: "range",
-      range: chapterRange,
-      goal: nodeTitle,
-    });
-    router.push(`/project/${workId}?${query.toString()}`);
-  };
+  const handleJumpToAiAnalysis = useCallback(
+    (chapterRange: string, nodeTitle: string) => {
+      const query = new URLSearchParams({
+        tab: "ai_analysis",
+        mode: "range",
+        range: chapterRange,
+        goal: nodeTitle,
+      });
+      router.push(`/project/${workId}?${query.toString()}`);
+    },
+    [router, workId]
+  );
 
-  // 导图模式快捷键：Tab 添加子节点，Enter 下方插入同级，Shift+Enter 上方插入同级
+  // 快捷键：Ctrl/Cmd+S 保存，导图模式下 Tab 加子节点，Shift+Enter/Enter 上/下方加同级
   useEffect(() => {
-    if (viewMode !== "mindmap") return;
     const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSave();
+        return;
+      }
+      if (viewMode !== "mindmap") return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "Tab" && selectedId) {
         e.preventDefault();
-        handleAddChild(selectedId, "end", true);
+        handleAddChild(selectedId, "end", true, selectedId === "root" ? "right" : undefined);
       } else if (e.key === "Enter" && selectedId) {
         e.preventDefault();
         handleAddSibling(selectedId, e.shiftKey ? "before" : "after", true);
@@ -195,108 +213,78 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [viewMode, selectedId, handleAddChild, handleAddSibling]);
+  }, [viewMode, selectedId, handleAddChild, handleAddSibling, handleSave]);
 
-  const selectedNode = useMemo(() => (tree ? findNode(tree, selectedId) : null), [tree, selectedId]);
-  const selectedSiblingMeta = useMemo(
-    () => (tree && selectedId !== "root" ? findSiblingMeta(tree, selectedId) : null),
-    [tree, selectedId]
+  const renderViewSwitch = () => (
+    <Box className={styles.dockSwitchGroup}>
+      <button
+        type="button"
+        className={`${styles.dockSwitchBtn} ${viewMode === "mindmap" ? styles.dockSwitchBtnActive : ""}`}
+        onClick={() => setViewMode("mindmap")}
+      >
+        <FiGitBranch size={13} />
+        <span>导图</span>
+      </button>
+      <button
+        type="button"
+        className={`${styles.dockSwitchBtn} ${viewMode === "table" ? styles.dockSwitchBtnActive : ""}`}
+        onClick={() => setViewMode("table")}
+      >
+        <FiTable size={13} />
+        <span>表格</span>
+      </button>
+    </Box>
   );
 
   return (
     <Box className={styles.container}>
       <LoadingMask visible={loading && !tree} label="正在加载项目总纲..." />
 
-      {/* 顶部极简工具栏 */}
-      <Flex align="center" justify="space-between" px="md" py={8} gap={12} wrap="wrap" className={styles.toolbar}>
-        <Group gap={10}>
-          <SegmentedControl
-            size="xs"
-            value={viewMode}
-            onChange={(val) => setViewMode(val as "mindmap" | "table")}
-            data={[
-              {
-                value: "mindmap",
-                label: (
-                  <Flex align="center" gap={6}>
-                    <FiGitBranch size={13} />
-                    <span>思维导图</span>
-                  </Flex>
-                ),
-              },
-              {
-                value: "table",
-                label: (
-                  <Flex align="center" gap={6}>
-                    <FiTable size={13} />
-                    <span>表格视图</span>
-                  </Flex>
-                ),
-              },
-            ]}
-          />
+      {/* 表格视图下的极简 42px 顶栏（导图模式采用方案 C：零顶栏、底部居中悬浮 Dock） */}
+      {viewMode === "table" ? (
+        <Flex align="center" justify="space-between" px="md" py={6} gap={12} wrap="wrap" className={styles.toolbar}>
+          <Group gap={10}>
+            {renderViewSwitch()}
+            <Select
+              size="xs"
+              w={110}
+              value={statusFilter}
+              onChange={(v) => setStatusFilter(v || "all")}
+              data={[
+                { value: "all", label: "全部状态" },
+                { value: "planned", label: "规划中" },
+                { value: "in_progress", label: "进行中" },
+                { value: "completed", label: "已完成" },
+              ]}
+            />
+            <Button size="xs" variant="default" leftSection={<FiMaximize2 size={12} />} onClick={() => tree && setTree(setAllCollapsed(tree, false))}>
+              全部展开
+            </Button>
+            <Button size="xs" variant="default" leftSection={<FiMinimize2 size={12} />} onClick={() => tree && setTree(setAllCollapsed(tree, true))}>
+              全部收起
+            </Button>
+          </Group>
 
-          {viewMode === "mindmap" ? (
-            <Group gap={4}>
-              <Tooltip label="缩小">
-                <ActionIcon variant="default" size={26} onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(2))))}>
-                  <FiZoomOut size={13} />
-                </ActionIcon>
-              </Tooltip>
-              <Text fz={12} c="#64748b" w={42} ta="center">{Math.round(zoom * 100)}%</Text>
-              <Tooltip label="放大">
-                <ActionIcon variant="default" size={26} onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))}>
-                  <FiZoomIn size={13} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="重置画布视图">
-                <ActionIcon variant="default" size={26} onClick={() => { setZoom(1); setOffset({ x: 24, y: 24 }); }}>
-                  <FiRefreshCw size={12} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          ) : (
-            <Group gap={6}>
-              <Select
-                size="xs"
-                w={110}
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v || "all")}
-                data={[
-                  { value: "all", label: "全部状态" },
-                  { value: "planned", label: "规划中" },
-                  { value: "in_progress", label: "进行中" },
-                  { value: "completed", label: "已完成" },
-                ]}
-              />
-              <Button size="xs" variant="default" leftSection={<FiMaximize2 size={12} />} onClick={() => tree && setTree(setAllCollapsed(tree, false))}>
-                全部展开
-              </Button>
-              <Button size="xs" variant="default" leftSection={<FiMinimize2 size={12} />} onClick={() => tree && setTree(setAllCollapsed(tree, true))}>
-                全部收起
-              </Button>
-            </Group>
-          )}
-        </Group>
-
-        <Group gap={8}>
-          <Button size="xs" variant="default" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedId || "root", "end", viewMode === "mindmap")}>
-            添加子节点
-          </Button>
-          <Button size="xs" variant="light" leftSection={<FiCpu size={13} />} onClick={() => setAiModalOpened(true)}>
-            AI 生成/反推总纲
-          </Button>
-          <Button size="xs" leftSection={<FiSave size={13} />} loading={saving} onClick={handleSave}>
-            {dirty ? "保存总纲 *" : "保存总纲"}
-          </Button>
-        </Group>
-      </Flex>
+          <Group gap={8}>
+            <Button size="xs" variant="default" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedId || "root", "end", false)}>
+              添加子节点
+            </Button>
+            <Button size="xs" variant="light" leftSection={<FiCpu size={13} />} onClick={() => setAiModalOpened(true)}>
+              AI 生成/反推总纲
+            </Button>
+            <Button size="xs" leftSection={<FiSave size={13} />} loading={saving} onClick={handleSave}>
+              {dirty ? "保存总纲 *" : "保存总纲"}
+            </Button>
+          </Group>
+        </Flex>
+      ) : null}
 
       {/* 主工作区 */}
       {tree ? (
         viewMode === "mindmap" ? (
-          <Flex flex={1} mih={0} style={{ overflow: "hidden" }}>
+          <Box flex={1} mih={0} pos="relative" style={{ overflow: "hidden" }}>
             <MindMapView
+              ref={mindmapRef}
               tree={tree}
               selectedId={selectedId}
               autoEditNodeId={autoEditNodeId}
@@ -308,158 +296,68 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
               onSelect={setSelectedId}
               onToggleCollapse={handleToggleCollapse}
               onInlineUpdate={(id, patch) => mutateTree((prev) => updateNode(prev, id, patch))}
-              onAddChild={(parentId, position) => handleAddChild(parentId, position, true)}
+              onAddChild={(parentId, position, side) => handleAddChild(parentId, position, true, side)}
               onAddSibling={(targetId, position) => handleAddSibling(targetId, position, true)}
               onMoveNode={(id, dir) => mutateTree((prev) => moveNode(prev, id, dir))}
               onDeleteNode={handleDelete}
+              onJumpToAiAnalysis={handleJumpToAiAnalysis}
             />
 
-            {/* 右侧极简节点属性面板 */}
-            <Box p={16} className={styles.inspector}>
-              {selectedNode ? (
-                <Stack gap={12}>
-                  <Flex align="center" justify="space-between">
-                    <Text fz={13} fw={700} c="#0f172a">节点属性</Text>
-                    <Badge size="xs" variant="light">{selectedNode.id === "root" ? "根节点" : "分支节点"}</Badge>
-                  </Flex>
-
-                  <TextInput
-                    size="xs"
-                    label="节点名称"
-                    value={selectedNode.title}
-                    onChange={(e) => mutateTree((prev) => updateNode(prev, selectedNode.id, { title: e.target.value }))}
-                  />
-
-                  <TextInput
-                    size="xs"
-                    label="标签分类"
-                    placeholder="如：卷 / 主线 / 支线 / 高潮 / 伏笔"
-                    value={selectedNode.tag || ""}
-                    onChange={(e) => mutateTree((prev) => updateNode(prev, selectedNode.id, { tag: e.target.value }))}
-                  />
-
-                  <Flex gap={4} wrap="wrap">
-                    {TAG_PRESETS.map((t) => (
-                      <Badge
-                        key={t}
-                        size="xs"
-                        variant={selectedNode.tag === t ? "filled" : "light"}
-                        style={{ cursor: "pointer" }}
-                        onClick={() => mutateTree((prev) => updateNode(prev, selectedNode.id, { tag: t }))}
-                      >
-                        {t}
-                      </Badge>
-                    ))}
-                  </Flex>
-
-                  <Textarea
-                    size="xs"
-                    label="要点说明"
-                    placeholder="核心冲突、推进目标、关键伏笔..."
-                    minRows={4}
-                    autosize
-                    value={selectedNode.note || ""}
-                    onChange={(e) => mutateTree((prev) => updateNode(prev, selectedNode.id, { note: e.target.value }))}
-                  />
-
-                  {selectedNode.id !== "root" ? (
-                    <>
-                      <TextInput
-                        size="xs"
-                        label="关联章节范围（选填）"
-                        placeholder="如：1-20"
-                        value={selectedNode.chapterRange || ""}
-                        onChange={(e) => mutateTree((prev) => updateNode(prev, selectedNode.id, { chapterRange: e.target.value }))}
-                      />
-
-                      <Select
-                        size="xs"
-                        label="推进状态"
-                        value={selectedNode.status || "planned"}
-                        data={[
-                          { value: "planned", label: "规划中" },
-                          { value: "in_progress", label: "进行中" },
-                          { value: "completed", label: "已完成" },
-                        ]}
-                        onChange={(val) =>
-                          mutateTree((prev) => updateNode(prev, selectedNode.id, { status: (val || "planned") as MasterOutlineStatus }))
-                        }
-                      />
-                    </>
-                  ) : null}
-
-                  <Divider color="#f1f5f9" />
-
-                  <Stack gap={6}>
-                    <Button size="xs" variant="light" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedNode.id, "end", true)}>
-                      添加子节点 (Tab)
-                    </Button>
-                    {selectedNode.id !== "root" ? (
-                      <>
-                        <Group grow gap={6}>
-                          <Button size="xs" variant="default" leftSection={<FiArrowUp size={12} />} onClick={() => handleAddSibling(selectedNode.id, "before", true)}>
-                            上方加同级
-                          </Button>
-                          <Button size="xs" variant="default" leftSection={<FiArrowDown size={12} />} onClick={() => handleAddSibling(selectedNode.id, "after", true)}>
-                            下方加同级
-                          </Button>
-                        </Group>
-                        {selectedSiblingMeta ? (
-                          <Group grow gap={6}>
-                            <Button
-                              size="xs"
-                              variant="subtle"
-                              color="gray"
-                              leftSection={<FiArrowUp size={12} />}
-                              disabled={selectedSiblingMeta.index === 0}
-                              onClick={() => mutateTree((prev) => moveNode(prev, selectedNode.id, "up"))}
-                            >
-                              上移
-                            </Button>
-                            <Button
-                              size="xs"
-                              variant="subtle"
-                              color="gray"
-                              leftSection={<FiArrowDown size={12} />}
-                              disabled={selectedSiblingMeta.index === selectedSiblingMeta.count - 1}
-                              onClick={() => mutateTree((prev) => moveNode(prev, selectedNode.id, "down"))}
-                            >
-                              下移
-                            </Button>
-                          </Group>
-                        ) : null}
-                      </>
-                    ) : null}
-                    {selectedNode.chapterRange?.trim() ? (
-                      <Button
-                        size="xs"
-                        variant="light"
-                        leftSection={<FiCpu size={13} />}
-                        onClick={() => handleJumpToAiAnalysis(selectedNode.chapterRange || "", selectedNode.title)}
-                      >
-                        AI 诊断此阶段 (第{selectedNode.chapterRange}章)
-                      </Button>
-                    ) : null}
-                    {selectedNode.id !== "root" ? (
-                      <Button size="xs" variant="subtle" color="red" leftSection={<FiTrash2 size={13} />} onClick={() => handleDelete(selectedNode.id)}>
-                        删除此节点
-                      </Button>
-                    ) : null}
-                  </Stack>
-
-                  <Text fz={11} c="#94a3b8" lh={1.5}>
-                    提示：滚轮缩放画布，拖动画布平移，点击卡片名称/要点即可直接编辑，悬浮/选中节点可点四周 + 号或右键菜单，Tab 加子节点，Shift+Enter / Enter 上/下方加同级。
-                  </Text>
-                </Stack>
-              ) : null}
+            {/* 左上角极轻操作提示 */}
+            <Box className={styles.dockHint}>
+              <Text fz={11} c="#94a3b8">
+                点击卡片直接编辑名称 / 要点 / 标签 / 状态 · 滚轮缩放 · 右键更多
+              </Text>
             </Box>
-          </Flex>
+
+            {/* 方案 C：底部居中悬浮 Dock（无突兀大 Segmented，无右侧属性栏） */}
+            <Box className={styles.floatingDock}>
+              {renderViewSwitch()}
+
+              <Box className={styles.dockDivider} />
+
+              <Group gap={2} wrap="nowrap">
+                <Tooltip label="缩小">
+                  <ActionIcon variant="subtle" color="gray" size={26} radius="xl" onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(2))))}>
+                    <FiZoomOut size={13} />
+                  </ActionIcon>
+                </Tooltip>
+                <Text fz={11} fw={600} c="#475569" w={38} ta="center">{Math.round(zoom * 100)}%</Text>
+                <Tooltip label="放大">
+                  <ActionIcon variant="subtle" color="gray" size={26} radius="xl" onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))}>
+                    <FiZoomIn size={13} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="居中复位">
+                  <ActionIcon variant="subtle" color="gray" size={26} radius="xl" onClick={() => mindmapRef.current?.centerOnRoot()}>
+                    <FiRefreshCw size={12} />
+                  </ActionIcon>
+                </Tooltip>
+                <Tooltip label="全屏编辑画布">
+                  <ActionIcon variant="subtle" color="gray" size={26} radius="xl" onClick={() => mindmapRef.current?.enterFullscreen()}>
+                    <FiMaximize size={13} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+
+              <Box className={styles.dockDivider} />
+
+              <Group gap={6} wrap="nowrap">
+                <Button size="xs" radius="xl" variant="light" leftSection={<FiCpu size={13} />} onClick={() => setAiModalOpened(true)}>
+                  AI 生成
+                </Button>
+                <Button size="xs" radius="xl" leftSection={<FiSave size={13} />} loading={saving} onClick={handleSave}>
+                  {dirty ? "保存总纲 *" : "保存总纲"}
+                </Button>
+              </Group>
+            </Box>
+          </Box>
         ) : (
           <TableView
             tree={tree}
             statusFilter={statusFilter}
             onUpdateNode={(id, patch) => mutateTree((prev) => updateNode(prev, id, patch))}
-            onAddChild={handleAddChild}
+            onAddChild={(parentId) => handleAddChild(parentId, "end", false)}
             onDeleteNode={handleDelete}
             onMoveNode={(id, dir) => mutateTree((prev) => moveNode(prev, id, dir))}
             onToggleCollapse={handleToggleCollapse}

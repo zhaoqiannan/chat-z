@@ -15,6 +15,8 @@
 .mindmapViewport {
   position: relative;
   flex: 1;
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   background-color: #fafbfc;
   background-image: radial-gradient(#e2e8f0 1px, transparent 1px);
@@ -25,6 +27,20 @@
   &:active {
     cursor: grabbing;
   }
+
+  &:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    background-color: #fafbfc;
+  }
+}
+
+.mindmapViewportFullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
 }
 
 .mindmapCanvas {
@@ -59,7 +75,7 @@
     z-index: 10;
 
     &::before {
-      inset: -18px -42px -18px -8px;
+      inset: -18px -42px -18px -42px;
       pointer-events: auto;
       z-index: -1;
     }
@@ -67,6 +83,10 @@
     .quickAddBtn {
       opacity: 1;
       pointer-events: auto;
+    }
+
+    .metaPillPlaceholder {
+      opacity: 1;
     }
   }
 }
@@ -167,6 +187,163 @@
     opacity: 1;
     pointer-events: auto;
   }
+
+  .metaPillPlaceholder {
+    opacity: 1;
+  }
+}
+
+.metaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: none;
+  background-color: #f1f5f9;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background-color: rgba(0, 201, 255, 0.14);
+    color: #00a8d6;
+  }
+}
+
+.metaPillRoot {
+  background-color: rgba(0, 201, 255, 0.14);
+  color: #0099c4;
+}
+
+.metaPillPlaceholder {
+  opacity: 0;
+  background-color: transparent;
+  color: #94a3b8;
+  border: 1px dashed #cbd5e1;
+
+  &:hover {
+    border-color: #00c9ff;
+    color: #00a8d6;
+    background-color: rgba(0, 201, 255, 0.06);
+  }
+}
+
+.metaChapterInput {
+  width: 62px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid #00c9ff;
+  border-radius: 4px;
+  background-color: #ffffff;
+  font-size: 10px;
+  color: #0f172a;
+  outline: none;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background-color: #ffffff;
+  font-size: 10px;
+  color: #475569;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+
+  &:hover {
+    border-color: #00c9ff;
+    background-color: #f0fcff;
+  }
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cardAiBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #00b2e3;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+
+  &:hover {
+    background-color: rgba(0, 201, 255, 0.14);
+  }
+}
+
+.metaPopover {
+  position: fixed;
+  z-index: 1010;
+  width: 210px;
+  padding: 8px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+}
+
+.metaPresetChip {
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+
+  &:hover {
+    border-color: #00c9ff;
+    color: #00a8d6;
+    background-color: #f0fcff;
+  }
+}
+
+.metaPresetChipActive {
+  border-color: #00c9ff;
+  background-color: #00c9ff;
+  color: #ffffff;
+
+  &:hover {
+    background-color: #00b5e6;
+    color: #ffffff;
+  }
+}
+
+.metaPopoverInput {
+  width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #0f172a;
+  outline: none;
+
+  &:focus {
+    border-color: #00c9ff;
+  }
 }
 
 .quickAddBtn {
@@ -227,6 +404,26 @@
 
 .quickAddRightOffset {
   right: -36px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  &:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+}
+
+.quickAddLeft {
+  left: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  &:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+}
+
+.quickAddLeftOffset {
+  left: -36px;
   top: 50%;
   transform: translateY(-50%);
 
@@ -317,12 +514,98 @@
   }
 }
 
-.inspector {
-  width: 300px;
-  border-left: 1px solid #f1f5f9;
+.collapseDotLeft {
+  right: auto;
+  left: -10px;
+}
+
+.fullscreenControls {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 1005;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.1);
+}
+
+.floatingDock {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(10px);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.1);
+}
+
+.dockSwitchGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background-color: #f1f5f9;
+}
+
+.dockSwitchBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s ease;
+
+  &:hover {
+    color: #0f172a;
+  }
+}
+
+.dockSwitchBtnActive {
   background-color: #ffffff;
+  color: #00a8d6;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.dockDivider {
+  width: 1px;
+  height: 18px;
+  background-color: #e2e8f0;
   flex-shrink: 0;
-  overflow-y: auto;
+}
+
+.dockHint {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  z-index: 20;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  pointer-events: none;
 }
 
 .tableRow {

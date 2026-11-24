@@ -1,4 +1,4 @@
-import { MasterOutlineNode, MasterOutlineStatus } from "@/rest/master-outline";
+import { MasterOutlineNode, MasterOutlineSide, MasterOutlineStatus } from "@/rest/master-outline";
 
 export const STATUS_CONFIG: Record<MasterOutlineStatus, { label: string; color: string }> = {
   planned: { label: "规划中", color: "gray" },
@@ -42,18 +42,21 @@ export function addChildNode(
   root: MasterOutlineNode,
   parentId: string,
   newNode: MasterOutlineNode,
-  position: ChildInsertPosition = "end"
+  position: ChildInsertPosition = "end",
+  side?: MasterOutlineSide
 ): MasterOutlineNode {
   if (root.id === parentId) {
+    const nodeToInsert: MasterOutlineNode =
+      root.id === "root" ? { ...newNode, side: side ?? newNode.side ?? "right" } : newNode;
     return {
       ...root,
       collapsed: false,
-      children: position === "start" ? [newNode, ...root.children] : [...root.children, newNode],
+      children: position === "start" ? [nodeToInsert, ...root.children] : [...root.children, nodeToInsert],
     };
   }
   return {
     ...root,
-    children: root.children.map((c) => addChildNode(c, parentId, newNode, position)),
+    children: root.children.map((c) => addChildNode(c, parentId, newNode, position, side)),
   };
 }
 
@@ -65,9 +68,12 @@ export function addSiblingNode(
 ): MasterOutlineNode {
   const idx = root.children.findIndex((c) => c.id === targetId);
   if (idx !== -1) {
+    const targetChild = root.children[idx];
+    const nodeToInsert: MasterOutlineNode =
+      root.id === "root" ? { ...newNode, side: targetChild.side ?? "right" } : newNode;
     const nextChildren = [...root.children];
     const insertIdx = position === "before" ? idx : idx + 1;
-    nextChildren.splice(insertIdx, 0, newNode);
+    nextChildren.splice(insertIdx, 0, nodeToInsert);
     return { ...root, children: nextChildren };
   }
   return {
@@ -82,6 +88,12 @@ export function findSiblingMeta(
 ): { index: number; count: number; parentId: string } | null {
   const idx = root.children.findIndex((c) => c.id === targetId);
   if (idx !== -1) {
+    if (root.id === "root") {
+      const targetSide: MasterOutlineSide = root.children[idx].side === "left" ? "left" : "right";
+      const sameSide = root.children.filter((c) => (c.side === "left" ? "left" : "right") === targetSide);
+      const sideIdx = sameSide.findIndex((c) => c.id === targetId);
+      return { index: sideIdx, count: sameSide.length, parentId: root.id };
+    }
     return { index: idx, count: root.children.length, parentId: root.id };
   }
   for (const child of root.children) {
@@ -108,6 +120,21 @@ export function moveNode(
 ): MasterOutlineNode {
   const idx = root.children.findIndex((c) => c.id === targetId);
   if (idx !== -1) {
+    if (root.id === "root") {
+      const targetSide: MasterOutlineSide = root.children[idx].side === "left" ? "left" : "right";
+      const sameSideIndices = root.children
+        .map((c, i) => ((c.side === "left" ? "left" : "right") === targetSide ? i : -1))
+        .filter((i) => i !== -1);
+      const posInSide = sameSideIndices.indexOf(idx);
+      const swapPos = direction === "up" ? posInSide - 1 : posInSide + 1;
+      if (swapPos < 0 || swapPos >= sameSideIndices.length) return root;
+      const swapIdx = sameSideIndices[swapPos];
+      const nextChildren = [...root.children];
+      const tmp = nextChildren[idx];
+      nextChildren[idx] = nextChildren[swapIdx];
+      nextChildren[swapIdx] = tmp;
+      return { ...root, children: nextChildren };
+    }
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     if (swapIdx < 0 || swapIdx >= root.children.length) return root;
     const nextChildren = [...root.children];

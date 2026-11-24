@@ -2,6 +2,7 @@
 import { get, post, put } from "@/utils/rest";
 
 export type MasterOutlineStatus = "planned" | "in_progress" | "completed";
+export type MasterOutlineSide = "left" | "right";
 
 export interface MasterOutlineNode {
   id: string;
@@ -10,6 +11,7 @@ export interface MasterOutlineNode {
   note?: string; // 要点说明
   chapterRange?: string; // 关联章节范围，如 "1-20" 或 "第1-20章"
   status?: MasterOutlineStatus;
+  side?: MasterOutlineSide; // 仅总纲直属一级子节点使用，默认 "right"
   collapsed?: boolean;
   children: MasterOutlineNode[];
 }
