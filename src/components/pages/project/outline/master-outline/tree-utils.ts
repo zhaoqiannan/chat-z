@@ -35,39 +35,60 @@ export function updateNode(
   };
 }
 
+export type SiblingInsertPosition = "before" | "after";
+export type ChildInsertPosition = "start" | "end";
+
 export function addChildNode(
   root: MasterOutlineNode,
   parentId: string,
-  newNode: MasterOutlineNode
+  newNode: MasterOutlineNode,
+  position: ChildInsertPosition = "end"
 ): MasterOutlineNode {
   if (root.id === parentId) {
     return {
       ...root,
       collapsed: false,
-      children: [...root.children, newNode],
+      children: position === "start" ? [newNode, ...root.children] : [...root.children, newNode],
     };
   }
   return {
     ...root,
-    children: root.children.map((c) => addChildNode(c, parentId, newNode)),
+    children: root.children.map((c) => addChildNode(c, parentId, newNode, position)),
   };
 }
 
 export function addSiblingNode(
   root: MasterOutlineNode,
   targetId: string,
-  newNode: MasterOutlineNode
+  newNode: MasterOutlineNode,
+  position: SiblingInsertPosition = "after"
 ): MasterOutlineNode {
   const idx = root.children.findIndex((c) => c.id === targetId);
   if (idx !== -1) {
     const nextChildren = [...root.children];
-    nextChildren.splice(idx + 1, 0, newNode);
+    const insertIdx = position === "before" ? idx : idx + 1;
+    nextChildren.splice(insertIdx, 0, newNode);
     return { ...root, children: nextChildren };
   }
   return {
     ...root,
-    children: root.children.map((c) => addSiblingNode(c, targetId, newNode)),
+    children: root.children.map((c) => addSiblingNode(c, targetId, newNode, position)),
   };
+}
+
+export function findSiblingMeta(
+  root: MasterOutlineNode,
+  targetId: string
+): { index: number; count: number; parentId: string } | null {
+  const idx = root.children.findIndex((c) => c.id === targetId);
+  if (idx !== -1) {
+    return { index: idx, count: root.children.length, parentId: root.id };
+  }
+  for (const child of root.children) {
+    const found = findSiblingMeta(child, targetId);
+    if (found) return found;
+  }
+  return null;
 }
 
 export function deleteNode(root: MasterOutlineNode, targetId: string): MasterOutlineNode {

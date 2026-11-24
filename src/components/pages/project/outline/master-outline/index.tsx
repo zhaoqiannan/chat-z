@@ -3,14 +3,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ActionIcon, Badge, Box, Button, Divider, Flex, Group, Modal, SegmentedControl, Select, Stack, Text, TextInput, Textarea, Tooltip } from "@mantine/core";
-import { FiCpu, FiGitBranch, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiSave, FiTable, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiCpu, FiGitBranch, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiSave, FiTable, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineStatus, generateMasterOutlineAi, getMasterOutline, saveMasterOutline } from "@/rest/master-outline";
 import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import MindMapView from "./mindmap-view";
 import TableView from "./table-view";
-import { TAG_PRESETS, addChildNode, addSiblingNode, createNodeId, deleteNode, findNode, moveNode, setAllCollapsed, updateNode } from "./tree-utils";
+import { ChildInsertPosition, SiblingInsertPosition, TAG_PRESETS, addChildNode, addSiblingNode, createNodeId, deleteNode, findNode, findSiblingMeta, moveNode, setAllCollapsed, updateNode } from "./tree-utils";
 import styles from "./style.module.scss";
 
 interface MasterOutlineWorkspaceProps {
@@ -26,6 +26,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
   const [viewMode, setViewMode] = useState<"mindmap" | "table">("mindmap");
   const [tree, setTree] = useState<MasterOutlineNode | null>(null);
   const [selectedId, setSelectedId] = useState<string>("root");
+  const [autoEditNodeId, setAutoEditNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 24, y: 24 });
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -79,7 +80,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     }
   };
 
-  const handleAddChild = useCallback((parentId: string) => {
+  const handleAddChild = useCallback((parentId: string, position: ChildInsertPosition = "end", autoEdit = false) => {
     const newId = createNodeId();
     const newNode: MasterOutlineNode = {
       id: newId,
@@ -90,13 +91,14 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
       status: "planned",
       children: [],
     };
-    mutateTree((prev) => addChildNode(prev, parentId, newNode));
+    mutateTree((prev) => addChildNode(prev, parentId, newNode, position));
     setSelectedId(newId);
+    if (autoEdit) setAutoEditNodeId(newId);
   }, [mutateTree]);
 
-  const handleAddSibling = useCallback((targetId: string) => {
+  const handleAddSibling = useCallback((targetId: string, position: SiblingInsertPosition = "after", autoEdit = false) => {
     if (targetId === "root") {
-      handleAddChild("root");
+      handleAddChild("root", position === "before" ? "start" : "end", autoEdit);
       return;
     }
     const newId = createNodeId();
@@ -109,9 +111,19 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
       status: "planned",
       children: [],
     };
-    mutateTree((prev) => addSiblingNode(prev, targetId, newNode));
+    mutateTree((prev) => addSiblingNode(prev, targetId, newNode, position));
     setSelectedId(newId);
+    if (autoEdit) setAutoEditNodeId(newId);
   }, [handleAddChild, mutateTree]);
+
+  const handleTransformChange = useCallback((nextZoom: number, nextOffset: { x: number; y: number }) => {
+    setZoom(nextZoom);
+    setOffset(nextOffset);
+  }, []);
+
+  const handleAutoEditHandled = useCallback(() => {
+    setAutoEditNodeId(null);
+  }, []);
 
   const handleDelete = useCallback(async (id: string) => {
     if (id === "root") return;
@@ -167,7 +179,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     router.push(`/project/${workId}?${query.toString()}`);
   };
 
-  // 导图模式快捷键：Tab 添加子节点，Enter 添加同级节点
+  // 导图模式快捷键：Tab 添加子节点，Enter 下方插入同级，Shift+Enter 上方插入同级
   useEffect(() => {
     if (viewMode !== "mindmap") return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -175,10 +187,10 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
       if (e.key === "Tab" && selectedId) {
         e.preventDefault();
-        handleAddChild(selectedId);
+        handleAddChild(selectedId, "end", true);
       } else if (e.key === "Enter" && selectedId) {
         e.preventDefault();
-        handleAddSibling(selectedId);
+        handleAddSibling(selectedId, e.shiftKey ? "before" : "after", true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -186,6 +198,10 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
   }, [viewMode, selectedId, handleAddChild, handleAddSibling]);
 
   const selectedNode = useMemo(() => (tree ? findNode(tree, selectedId) : null), [tree, selectedId]);
+  const selectedSiblingMeta = useMemo(
+    () => (tree && selectedId !== "root" ? findSiblingMeta(tree, selectedId) : null),
+    [tree, selectedId]
+  );
 
   return (
     <Box className={styles.container}>
@@ -223,13 +239,13 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
           {viewMode === "mindmap" ? (
             <Group gap={4}>
               <Tooltip label="缩小">
-                <ActionIcon variant="default" size={26} onClick={() => setZoom((z) => Math.max(0.5, Number((z - 0.1).toFixed(2))))}>
+                <ActionIcon variant="default" size={26} onClick={() => setZoom((z) => Math.max(0.4, Number((z - 0.1).toFixed(2))))}>
                   <FiZoomOut size={13} />
                 </ActionIcon>
               </Tooltip>
               <Text fz={12} c="#64748b" w={42} ta="center">{Math.round(zoom * 100)}%</Text>
               <Tooltip label="放大">
-                <ActionIcon variant="default" size={26} onClick={() => setZoom((z) => Math.min(1.6, Number((z + 0.1).toFixed(2))))}>
+                <ActionIcon variant="default" size={26} onClick={() => setZoom((z) => Math.min(2, Number((z + 0.1).toFixed(2))))}>
                   <FiZoomIn size={13} />
                 </ActionIcon>
               </Tooltip>
@@ -264,7 +280,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
         </Group>
 
         <Group gap={8}>
-          <Button size="xs" variant="default" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedId || "root")}>
+          <Button size="xs" variant="default" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedId || "root", "end", viewMode === "mindmap")}>
             添加子节点
           </Button>
           <Button size="xs" variant="light" leftSection={<FiCpu size={13} />} onClick={() => setAiModalOpened(true)}>
@@ -283,12 +299,19 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
             <MindMapView
               tree={tree}
               selectedId={selectedId}
+              autoEditNodeId={autoEditNodeId}
+              onAutoEditHandled={handleAutoEditHandled}
               zoom={zoom}
               offset={offset}
               onOffsetChange={setOffset}
+              onTransformChange={handleTransformChange}
               onSelect={setSelectedId}
               onToggleCollapse={handleToggleCollapse}
-              onInlineRename={(id, title) => mutateTree((prev) => updateNode(prev, id, { title }))}
+              onInlineUpdate={(id, patch) => mutateTree((prev) => updateNode(prev, id, patch))}
+              onAddChild={(parentId, position) => handleAddChild(parentId, position, true)}
+              onAddSibling={(targetId, position) => handleAddSibling(targetId, position, true)}
+              onMoveNode={(id, dir) => mutateTree((prev) => moveNode(prev, id, dir))}
+              onDeleteNode={handleDelete}
             />
 
             {/* 右侧极简节点属性面板 */}
@@ -368,13 +391,44 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
                   <Divider color="#f1f5f9" />
 
                   <Stack gap={6}>
-                    <Button size="xs" variant="light" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedNode.id)}>
+                    <Button size="xs" variant="light" leftSection={<FiPlus size={13} />} onClick={() => handleAddChild(selectedNode.id, "end", true)}>
                       添加子节点 (Tab)
                     </Button>
                     {selectedNode.id !== "root" ? (
-                      <Button size="xs" variant="default" leftSection={<FiPlus size={13} />} onClick={() => handleAddSibling(selectedNode.id)}>
-                        添加同级节点 (Enter)
-                      </Button>
+                      <>
+                        <Group grow gap={6}>
+                          <Button size="xs" variant="default" leftSection={<FiArrowUp size={12} />} onClick={() => handleAddSibling(selectedNode.id, "before", true)}>
+                            上方加同级
+                          </Button>
+                          <Button size="xs" variant="default" leftSection={<FiArrowDown size={12} />} onClick={() => handleAddSibling(selectedNode.id, "after", true)}>
+                            下方加同级
+                          </Button>
+                        </Group>
+                        {selectedSiblingMeta ? (
+                          <Group grow gap={6}>
+                            <Button
+                              size="xs"
+                              variant="subtle"
+                              color="gray"
+                              leftSection={<FiArrowUp size={12} />}
+                              disabled={selectedSiblingMeta.index === 0}
+                              onClick={() => mutateTree((prev) => moveNode(prev, selectedNode.id, "up"))}
+                            >
+                              上移
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="subtle"
+                              color="gray"
+                              leftSection={<FiArrowDown size={12} />}
+                              disabled={selectedSiblingMeta.index === selectedSiblingMeta.count - 1}
+                              onClick={() => mutateTree((prev) => moveNode(prev, selectedNode.id, "down"))}
+                            >
+                              下移
+                            </Button>
+                          </Group>
+                        ) : null}
+                      </>
                     ) : null}
                     {selectedNode.chapterRange?.trim() ? (
                       <Button
@@ -394,7 +448,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
                   </Stack>
 
                   <Text fz={11} c="#94a3b8" lh={1.5}>
-                    提示：拖动画布可平移，双击节点可直接改名，Tab 添加子节点，Enter 添加同级节点。
+                    提示：滚轮缩放画布，拖动画布平移，点击卡片名称/要点即可直接编辑，悬浮/选中节点可点四周 + 号或右键菜单，Tab 加子节点，Shift+Enter / Enter 上/下方加同级。
                   </Text>
                 </Stack>
               ) : null}

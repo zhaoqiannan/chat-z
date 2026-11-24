@@ -34,10 +34,12 @@
 
 .nodeCard {
   position: absolute;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 8px 12px;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
   border-radius: 8px;
   background-color: #ffffff;
   border: 1.5px solid #e2e8f0;
@@ -45,9 +47,109 @@
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
   &:hover {
     border-color: #94a3b8;
+    z-index: 10;
+
+    &::before {
+      inset: -18px -42px -18px -8px;
+      pointer-events: auto;
+      z-index: -1;
+    }
+
+    .quickAddBtn {
+      opacity: 1;
+      pointer-events: auto;
+    }
   }
+}
+
+.cardTitle {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #0f172a;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 4px;
+  padding: 1px 3px;
+  margin: 0 -3px;
+  transition: background-color 0.12s ease;
+
+  &:hover {
+    background-color: rgba(0, 201, 255, 0.08);
+  }
+}
+
+.cardTitleRoot {
+  font-weight: 700;
+}
+
+.cardTitleTextarea {
+  width: 100%;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid #00c9ff;
+  border-radius: 4px;
+  background-color: #ffffff;
+  padding: 2px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: #0f172a;
+  font-family: inherit;
+  outline: none;
+}
+
+.cardNote {
+  margin-top: 2px;
+  padding: 5px 4px 2px;
+  margin-left: -4px;
+  margin-right: -4px;
+  border-top: 1px solid #f1f5f9;
+  border-radius: 0 0 4px 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #475569;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  &:hover {
+    background-color: rgba(0, 201, 255, 0.06);
+  }
+}
+
+.cardNoteEmpty {
+  color: #cbd5e1;
+
+  &:hover {
+    color: #94a3b8;
+  }
+}
+
+.cardNoteTextarea {
+  width: 100%;
+  margin-top: 2px;
+  resize: none;
+  overflow: hidden;
+  border: 1px solid #00c9ff;
+  border-radius: 4px;
+  background-color: #ffffff;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #334155;
+  font-family: inherit;
+  outline: none;
 }
 
 .nodeRoot {
@@ -59,6 +161,136 @@
 .nodeSelected {
   border-color: #00c9ff;
   box-shadow: 0 0 0 3px rgba(0, 201, 255, 0.18);
+  z-index: 12;
+
+  .quickAddBtn {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.quickAddBtn {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  transition: opacity 0.14s ease, background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease, transform 0.14s ease;
+
+  &:hover {
+    background-color: #00c9ff;
+    border-color: #00c9ff;
+    color: #ffffff;
+  }
+}
+
+.quickAddTop {
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  &:hover {
+    transform: translateX(-50%) scale(1.1);
+  }
+}
+
+.quickAddBottom {
+  bottom: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  &:hover {
+    transform: translateX(-50%) scale(1.1);
+  }
+}
+
+.quickAddRight {
+  right: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  &:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+}
+
+.quickAddRightOffset {
+  right: -36px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  &:hover {
+    transform: translateY(-50%) scale(1.1);
+  }
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 184px;
+  padding: 4px;
+  border-radius: 8px;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.contextMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #1e293b;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.12s ease, color 0.12s ease;
+
+  &:hover:not(:disabled) {
+    background-color: #f0fcff;
+    color: #00a8d6;
+  }
+
+  &:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+  }
+}
+
+.contextMenuDanger {
+  color: #ef4444;
+
+  &:hover:not(:disabled) {
+    background-color: #fef2f2;
+    color: #dc2626;
+  }
+}
+
+.contextMenuDivider {
+  height: 1px;
+  margin: 4px 2px;
+  background-color: #f1f5f9;
+}
+
+.contextMenuShortcut {
+  font-size: 10px;
+  color: #94a3b8;
 }
 
 .collapseDot {
