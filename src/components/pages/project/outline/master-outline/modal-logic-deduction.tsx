@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import dayjs from "dayjs";
-import { Badge, Box, Button, Flex, Group, Modal, Paper, ScrollArea, Stack, Text } from "@mantine/core";
-import { FiAlertCircle, FiAlertTriangle, FiCheckCircle, FiCopy, FiGitMerge, FiList, FiRefreshCw, FiSliders, FiZap } from "react-icons/fi";
-import { MasterOutlineNode } from "@/rest/master-outline";
+import { Badge, Box, Button, Flex, Group, Modal, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { FiAlertCircle, FiAlertTriangle, FiArrowRight, FiBookOpen, FiCheck, FiCheckCircle, FiCopy, FiGitMerge, FiList, FiPlus, FiRefreshCw, FiSliders, FiZap } from "react-icons/fi";
+import { MasterOutlineNode, MasterOutlineRecommendedStep } from "@/rest/master-outline";
 import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
+import { findNode } from "./tree-utils";
 
 interface ModalLogicDeductionProps {
   opened: boolean;
@@ -14,18 +15,89 @@ interface ModalLogicDeductionProps {
   node: MasterOutlineNode | null;
   loading: boolean;
   onReDeduce: () => void;
+  onAdoptNodeChange: (targetNodeId: string, patch: { title: string; note: string }) => void;
+  onAdoptNewChild: (parentId: string, title: string, note: string) => void;
 }
 
-export default function ModalLogicDeduction({ opened, onClose, node, loading, onReDeduce }: ModalLogicDeductionProps) {
+function resolveMatchedNode(rootSubtree: MasterOutlineNode, step: MasterOutlineRecommendedStep, idx: number): MasterOutlineNode | null {
+  if (step.nodeId) {
+    const byId = findNode(rootSubtree, step.nodeId);
+    if (byId) return byId;
+  }
+  const origTitle = step.originalTitle?.trim();
+  if (origTitle) {
+    if (rootSubtree.title.trim() === origTitle) return rootSubtree;
+    const stack: MasterOutlineNode[] = [...rootSubtree.children];
+    while (stack.length > 0) {
+      const cur = stack.shift()!;
+      if (cur.title.trim() === origTitle) return cur;
+      if (cur.children.length > 0) stack.push(...cur.children);
+    }
+  }
+  // 兼容旧版未返回 nodeId 的推算缓存：仅在未显式声明新增且索引落在直属子节点范围内时兜底匹配
+  if (step.nodeId === undefined && !origTitle && idx < rootSubtree.children.length) {
+    return rootSubtree.children[idx];
+  }
+  return null;
+}
+
+export default function ModalLogicDeduction({
+  opened,
+  onClose,
+  node,
+  loading,
+  onReDeduce,
+  onAdoptNodeChange,
+  onAdoptNewChild,
+}: ModalLogicDeductionProps) {
   const deduction = node?.logicDeduction || null;
+
+  const resolvedSteps = useMemo(() => {
+    if (!node || !deduction?.recommendedLogicLine?.length) return [];
+    return deduction.recommendedLogicLine.map((step, idx) => {
+      const matched = resolveMatchedNode(node, step, idx);
+      const isAdopted = Boolean(
+        matched &&
+          matched.title.trim() === step.title.trim() &&
+          (matched.note || "").trim() === (step.note || "").trim()
+      );
+      return { step, idx, matched, isAdopted };
+    });
+  }, [node, deduction]);
 
   const handleCopyRecommendedLine = () => {
     if (!deduction?.recommendedLogicLine?.length) return;
-    const text = deduction.recommendedLogicLine.map((item, idx) => `${item.step || idx + 1}. ${item.title}\n   ${item.note}`).join("\n\n");
+    const text = deduction.recommendedLogicLine
+      .map((item, idx) => `${item.step || idx + 1}. ${item.title}\n   ${item.note}`)
+      .join("\n\n");
     navigator.clipboard
       ?.writeText(text)
       .then(() => useAlert.success("已复制建议最终修改逻辑线"))
       .catch(() => useAlert.error("复制失败，请手动选中复制"));
+  };
+
+  const handleAdoptAll = () => {
+    if (!node || resolvedSteps.length === 0) return;
+    let updatedCount = 0;
+    let addedCount = 0;
+    resolvedSteps.forEach(({ step, matched, isAdopted }) => {
+      if (isAdopted) return;
+      if (matched) {
+        onAdoptNodeChange(matched.id, { title: step.title, note: step.note });
+        updatedCount += 1;
+      } else {
+        onAdoptNewChild(node.id, step.title, step.note);
+        addedCount += 1;
+      }
+    });
+    if (updatedCount === 0 && addedCount === 0) {
+      useAlert.info("所有建议修改均已同步到对应卡片");
+      return;
+    }
+    const parts: string[] = [];
+    if (updatedCount > 0) parts.push(`同步修改 ${updatedCount} 个节点`);
+    if (addedCount > 0) parts.push(`新增 ${addedCount} 个子节点`);
+    useAlert.success(`已${parts.join("，")}，确认无误后请点击「保存总纲」`);
   };
 
   return (
@@ -33,7 +105,7 @@ export default function ModalLogicDeduction({ opened, onClose, node, loading, on
       opened={opened}
       onClose={onClose}
       centered
-      size="760px"
+      size="80vw"
       scrollAreaComponent={ScrollArea.Autosize}
       title={
         <Flex align="center" gap={8}>
@@ -43,7 +115,7 @@ export default function ModalLogicDeduction({ opened, onClose, node, loading, on
         </Flex>
       }
     >
-      <Box pos="relative" mih={240}>
+      <Box pos="relative" mih={260}>
         <LoadingMask visible={loading} label="AI 正在梳理当前节点与子节点的剧情发展及逻辑脉络..." />
 
         {node ? (
@@ -81,7 +153,22 @@ export default function ModalLogicDeduction({ opened, onClose, node, loading, on
                   </Text>
                 </Paper>
 
-                {/* 2. 是否有问题 */}
+                {/* 2. 建议章节与字数篇幅控制 */}
+                <Paper p={12} radius="md" bg="#f8fafc" bd="1px solid #e2e8f0">
+                  <Flex align="center" gap={6} mb={6}>
+                    <FiBookOpen size={14} color="#00a8d6" />
+                    <Text fz={13} fw={700} c="#0f172a">建议章节与篇幅控制</Text>
+                  </Flex>
+                  {deduction.suggestedChapterPacing ? (
+                    <Text fz={13} c="#334155" lh={1.65} style={{ whiteSpace: "pre-wrap" }}>
+                      {deduction.suggestedChapterPacing}
+                    </Text>
+                  ) : (
+                    <Text fz={12} c="#64748b">上次推算未包含建议章节与字数篇幅，点击上方「重新推算」即可生成。</Text>
+                  )}
+                </Paper>
+
+                {/* 3. 是否有问题 */}
                 <Paper p={12} radius="md" bg={deduction.hasIssues ? "#fffbeb" : "#f0fdf4"} bd={deduction.hasIssues ? "1px solid #fde68a" : "1px solid #bbf7d0"}>
                   <Flex align="center" justify="space-between" gap={8} mb={6}>
                     <Flex align="center" gap={6}>
@@ -97,47 +184,48 @@ export default function ModalLogicDeduction({ opened, onClose, node, loading, on
                   </Text>
                 </Paper>
 
-                {/* 3. 是否存在逻辑漏洞 */}
-                <Paper p={12} radius="md" bg="#ffffff" bd="1px solid #e2e8f0">
-                  <Flex align="center" gap={6} mb={8}>
-                    <FiAlertTriangle size={14} color="#ef4444" />
-                    <Text fz={13} fw={700} c="#0f172a">是否存在逻辑漏洞</Text>
-                  </Flex>
-                  {deduction.logicHoles.length > 0 ? (
-                    <Stack gap={6}>
-                      {deduction.logicHoles.map((hole, idx) => (
-                        <Flex key={idx} align="flex-start" gap={8}>
-                          <Badge size="xs" variant="light" color="red" mt={3}>{idx + 1}</Badge>
-                          <Text fz={13} c="#334155" lh={1.6} flex={1}>{hole}</Text>
-                        </Flex>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Text fz={12} c="#16a34a">未发现明显逻辑漏洞，当前子节点因果链条基本闭合。</Text>
-                  )}
-                </Paper>
+                {/* 4 & 5. 逻辑漏洞与可优化部分并排展示（宽屏更清爽） */}
+                <SimpleGrid cols={{ base: 1, md: 2 }} spacing={12}>
+                  <Paper p={12} radius="md" bg="#ffffff" bd="1px solid #e2e8f0">
+                    <Flex align="center" gap={6} mb={8}>
+                      <FiAlertTriangle size={14} color="#ef4444" />
+                      <Text fz={13} fw={700} c="#0f172a">是否存在逻辑漏洞</Text>
+                    </Flex>
+                    {deduction.logicHoles.length > 0 ? (
+                      <Stack gap={6}>
+                        {deduction.logicHoles.map((hole, idx) => (
+                          <Flex key={idx} align="flex-start" gap={8}>
+                            <Badge size="xs" variant="light" color="red" mt={3}>{idx + 1}</Badge>
+                            <Text fz={13} c="#334155" lh={1.6} flex={1}>{hole}</Text>
+                          </Flex>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Text fz={12} c="#16a34a">未发现明显逻辑漏洞，当前子节点因果链条基本闭合。</Text>
+                    )}
+                  </Paper>
 
-                {/* 4. 是否存在可优化部分 */}
-                <Paper p={12} radius="md" bg="#ffffff" bd="1px solid #e2e8f0">
-                  <Flex align="center" gap={6} mb={8}>
-                    <FiSliders size={14} color="#00a8d6" />
-                    <Text fz={13} fw={700} c="#0f172a">是否存在可优化部分</Text>
-                  </Flex>
-                  {deduction.optimizablePoints.length > 0 ? (
-                    <Stack gap={6}>
-                      {deduction.optimizablePoints.map((point, idx) => (
-                        <Flex key={idx} align="flex-start" gap={8}>
-                          <Badge size="xs" variant="light" color="cyan" mt={3}>{idx + 1}</Badge>
-                          <Text fz={13} c="#334155" lh={1.6} flex={1}>{point}</Text>
-                        </Flex>
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Text fz={12} c="#64748b">当前节点编排较为紧凑，暂无明显待优化部分。</Text>
-                  )}
-                </Paper>
+                  <Paper p={12} radius="md" bg="#ffffff" bd="1px solid #e2e8f0">
+                    <Flex align="center" gap={6} mb={8}>
+                      <FiSliders size={14} color="#00a8d6" />
+                      <Text fz={13} fw={700} c="#0f172a">是否存在可优化部分</Text>
+                    </Flex>
+                    {deduction.optimizablePoints.length > 0 ? (
+                      <Stack gap={6}>
+                        {deduction.optimizablePoints.map((point, idx) => (
+                          <Flex key={idx} align="flex-start" gap={8}>
+                            <Badge size="xs" variant="light" color="cyan" mt={3}>{idx + 1}</Badge>
+                            <Text fz={13} c="#334155" lh={1.6} flex={1}>{point}</Text>
+                          </Flex>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Text fz={12} c="#64748b">当前节点编排较为紧凑，暂无明显待优化部分。</Text>
+                    )}
+                  </Paper>
+                </SimpleGrid>
 
-                {/* 5. 有问题的地方的优化建议 */}
+                {/* 6. 有问题的地方的优化建议 */}
                 <Paper p={12} radius="md" bg="#ffffff" bd="1px solid #e2e8f0">
                   <Flex align="center" gap={6} mb={8}>
                     <FiZap size={14} color="#2563eb" />
@@ -166,30 +254,108 @@ export default function ModalLogicDeduction({ opened, onClose, node, loading, on
                   )}
                 </Paper>
 
-                {/* 6. 建议最终修改逻辑线 */}
+                {/* 7. 建议最终修改逻辑线（逐卡片对比 + 一键采纳同步） */}
                 <Paper p={12} radius="md" bg="#f0fcff" bd="1px solid rgba(0, 201, 255, 0.35)">
-                  <Flex align="center" justify="space-between" gap={8} mb={10}>
-                    <Flex align="center" gap={6}>
+                  <Flex align="center" justify="space-between" gap={8} mb={10} wrap="wrap">
+                    <Flex align="center" gap={8}>
                       <FiGitMerge size={14} color="#00a8d6" />
-                      <Text fz={13} fw={700} c="#0f172a">建议最终修改逻辑线</Text>
+                      <Text fz={13} fw={700} c="#0f172a">建议最终修改逻辑线（卡片改动对照）</Text>
+                      <Text fz={11} c="#64748b">点击「采纳」立即同步卡片标题与要点，最终请点击「保存总纲」落库</Text>
                     </Flex>
-                    {deduction.recommendedLogicLine.length > 0 ? (
-                      <Button size="compact-xs" variant="light" leftSection={<FiCopy size={12} />} onClick={handleCopyRecommendedLine}>
-                        复制逻辑线
-                      </Button>
+                    {resolvedSteps.length > 0 ? (
+                      <Group gap={6}>
+                        <Button size="compact-xs" variant="light" leftSection={<FiCopy size={12} />} onClick={handleCopyRecommendedLine}>
+                          复制逻辑线
+                        </Button>
+                        <Button size="compact-xs" leftSection={<FiCheck size={12} />} onClick={handleAdoptAll}>
+                          全部采纳
+                        </Button>
+                      </Group>
                     ) : null}
                   </Flex>
-                  {deduction.recommendedLogicLine.length > 0 ? (
-                    <Stack gap={8}>
-                      {deduction.recommendedLogicLine.map((step, idx) => (
-                        <Paper key={idx} p={10} radius="sm" bg="#ffffff" bd="1px solid rgba(0, 201, 255, 0.2)">
-                          <Flex align="center" gap={8} mb={4}>
-                            <Badge size="xs" variant="filled" color="cyan">步骤 {step.step || idx + 1}</Badge>
-                            <Text fz={13} fw={700} c="#0f172a">{step.title}</Text>
-                          </Flex>
-                          <Text fz={12} c="#475569" lh={1.6} style={{ whiteSpace: "pre-wrap" }}>{step.note}</Text>
-                        </Paper>
-                      ))}
+
+                  {resolvedSteps.length > 0 ? (
+                    <Stack gap={10}>
+                      {resolvedSteps.map(({ step, idx, matched, isAdopted }) => {
+                        const beforeTitle = matched ? matched.title : step.originalTitle || "";
+                        const beforeNote = matched ? matched.note || "" : step.originalNote || "";
+
+                        return (
+                          <Paper key={idx} p={12} radius="sm" bg="#ffffff" bd="1px solid rgba(0, 201, 255, 0.22)">
+                            <Flex align="center" justify="space-between" gap={8} mb={8} wrap="wrap">
+                              <Flex align="center" gap={8} wrap="wrap">
+                                <Badge size="xs" variant="filled" color="cyan">步骤 {step.step || idx + 1}</Badge>
+                                {matched ? (
+                                  <Badge size="xs" variant="light" color="blue">对应卡片：{matched.title}</Badge>
+                                ) : (
+                                  <Badge size="xs" variant="light" color="grape">建议新增子节点</Badge>
+                                )}
+                                {step.changeSummary ? (
+                                  <Text fz={12} c="#64748b">· {step.changeSummary}</Text>
+                                ) : null}
+                              </Flex>
+
+                              {matched ? (
+                                <Button
+                                  size="compact-xs"
+                                  variant={isAdopted ? "light" : "filled"}
+                                  color={isAdopted ? "green" : undefined}
+                                  leftSection={<FiCheck size={12} />}
+                                  disabled={isAdopted}
+                                  onClick={() => {
+                                    onAdoptNodeChange(matched.id, { title: step.title, note: step.note });
+                                    useAlert.success(`已采纳并同步卡片「${step.title}」，记得保存总纲`);
+                                  }}
+                                >
+                                  {isAdopted ? "已采纳" : "采纳"}
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="compact-xs"
+                                  variant="light"
+                                  leftSection={<FiPlus size={12} />}
+                                  onClick={() => {
+                                    onAdoptNewChild(node.id, step.title, step.note);
+                                    useAlert.success(`已新增子节点「${step.title}」，记得保存总纲`);
+                                  }}
+                                >
+                                  采纳并新增
+                                </Button>
+                              )}
+                            </Flex>
+
+                            <Flex align="stretch" gap={10} direction={{ base: "column", md: "row" }}>
+                              {/* 左侧：原卡片内容 */}
+                              <Box flex={1} p={10} bdrs={6} bg="#f8fafc" bd="1px solid #e2e8f0">
+                                <Text fz={11} fw={600} c="#64748b" mb={4}>
+                                  {matched ? "当前卡片原内容" : "原节点"}
+                                </Text>
+                                {beforeTitle || beforeNote ? (
+                                  <>
+                                    <Text fz={13} fw={600} c="#334155" mb={4}>{beforeTitle || "（无标题）"}</Text>
+                                    <Text fz={12} c="#64748b" lh={1.6} style={{ whiteSpace: "pre-wrap" }}>
+                                      {beforeNote || "（原节点暂未填写要点说明）"}
+                                    </Text>
+                                  </>
+                                ) : (
+                                  <Text fz={12} c="#94a3b8">（当前总纲中无此节点，建议新增衔接）</Text>
+                                )}
+                              </Box>
+
+                              <Flex align="center" justify="center" px={2}>
+                                <FiArrowRight size={16} color="#00a8d6" />
+                              </Flex>
+
+                              {/* 右侧：建议修改为 */}
+                              <Box flex={1} p={10} bdrs={6} bg="#f0fcff" bd="1px solid rgba(0, 201, 255, 0.35)">
+                                <Text fz={11} fw={600} c="#00a8d6" mb={4}>建议修改为</Text>
+                                <Text fz={13} fw={700} c="#0f172a" mb={4}>{step.title}</Text>
+                                <Text fz={12} c="#334155" lh={1.6} style={{ whiteSpace: "pre-wrap" }}>{step.note}</Text>
+                              </Box>
+                            </Flex>
+                          </Paper>
+                        );
+                      })}
                     </Stack>
                   ) : (
                     <Text fz={12} c="#64748b">当前原有逻辑线即可作为最终版本，无需大幅调整。</Text>

@@ -12,13 +12,18 @@ export interface MasterOutlineLogicSuggestion {
 
 export interface MasterOutlineRecommendedStep {
   step: number;
-  title: string;
-  note: string;
+  nodeId?: string; // 对应现有卡片节点的 ID（新增建议节点可为空）
+  originalTitle?: string; // 原节点标题
+  originalNote?: string; // 原节点要点说明
+  title: string; // 建议修改后的标题
+  note: string; // 建议修改后的要点说明
+  changeSummary?: string; // 修改原因简述
 }
 
 export interface MasterOutlineLogicDeduction {
   updatedAt: number;
   logicLine: string; // 1. 逻辑线梳理
+  suggestedChapterPacing?: string; // 建议章节与字数篇幅控制
   hasIssues: boolean; // 2. 是否有问题
   issueConclusion: string; // 2. 总体判断结论
   logicHoles: string[]; // 3. 是否存在逻辑漏洞

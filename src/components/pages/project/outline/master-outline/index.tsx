@@ -435,6 +435,20 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
         node={deductionTargetNode}
         loading={deductionLoading}
         onReDeduce={() => deductionNodeId && runLogicDeduction(deductionNodeId)}
+        onAdoptNodeChange={(targetId, patch) => mutateTree((prev) => updateNode(prev, targetId, patch))}
+        onAdoptNewChild={(parentId, title, note) => {
+          const newId = createNodeId();
+          const newNode: MasterOutlineNode = {
+            id: newId,
+            title,
+            tag: "主线",
+            note,
+            chapterRange: "",
+            status: "planned",
+            children: [],
+          };
+          mutateTree((prev) => addChildNode(prev, parentId, newNode, "end", parentId === "root" ? "right" : undefined));
+        }}
       />
 
       {/* AI 生成/反推总纲弹窗 */}

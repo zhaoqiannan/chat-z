@@ -1128,6 +1128,85 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
       {/* 节点右键上下文菜单（渲染在画布视口内，全屏下同样可用） */}
       {contextMenu && contextNode ? (
         <Box data-mindmap-menu="true" className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
+          {/* 1. 最常用：两个 AI 诊断/推算相关按钮置顶 */}
+          {contextNode.children.length > 0 ? (
+            <button
+              type="button"
+              className={styles.contextMenuItem}
+              onClick={() => {
+                onOpenLogicDeduction(contextNode.id);
+                setContextMenu(null);
+              }}
+            >
+              <Flex align="center" gap={8}><FiGitMerge size={13} color="#00a8d6" /><span>AI 逻辑推算</span></Flex>
+              {contextNode.logicDeduction ? <span className={styles.contextMenuShortcut}>已推算</span> : null}
+            </button>
+          ) : null}
+
+          {contextNode.id !== "root" && contextNode.chapterRange?.trim() ? (
+            <button
+              type="button"
+              className={styles.contextMenuItem}
+              onClick={() => {
+                onJumpToAiAnalysis(contextNode.chapterRange || "", contextNode.title);
+                setContextMenu(null);
+              }}
+            >
+              <Flex align="center" gap={8}><FiCpu size={13} color="#00a8d6" /><span>AI 诊断此阶段</span></Flex>
+            </button>
+          ) : null}
+
+          {(contextNode.children.length > 0 || (contextNode.id !== "root" && contextNode.chapterRange?.trim())) ? (
+            <div className={styles.contextMenuDivider} />
+          ) : null}
+
+          {/* 2. 删除此节点 */}
+          {contextNode.id !== "root" ? (
+            <>
+              <button
+                type="button"
+                className={`${styles.contextMenuItem} ${styles.contextMenuDanger}`}
+                onClick={() => {
+                  onDeleteNode(contextNode.id);
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiTrash2 size={13} /><span>删除此节点</span></Flex>
+              </button>
+              <div className={styles.contextMenuDivider} />
+            </>
+          ) : null}
+
+          {/* 3. 上移 / 下移节点 */}
+          {contextNode.id !== "root" && contextSiblingMeta ? (
+            <>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                disabled={contextSiblingMeta.index === 0}
+                onClick={() => {
+                  onMoveNode(contextNode.id, "up");
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiArrowUp size={13} /><span>上移节点</span></Flex>
+              </button>
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                disabled={contextSiblingMeta.index === contextSiblingMeta.count - 1}
+                onClick={() => {
+                  onMoveNode(contextNode.id, "down");
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiArrowDown size={13} /><span>下移节点</span></Flex>
+              </button>
+              <div className={styles.contextMenuDivider} />
+            </>
+          ) : null}
+
+          {/* 4. 添加子节点 / 插入同级节点 */}
           {contextNode.id === "root" ? (
             <>
               <button
@@ -1204,33 +1283,7 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
 
           <div className={styles.contextMenuDivider} />
 
-          {contextNode.id !== "root" && contextSiblingMeta ? (
-            <>
-              <button
-                type="button"
-                className={styles.contextMenuItem}
-                disabled={contextSiblingMeta.index === 0}
-                onClick={() => {
-                  onMoveNode(contextNode.id, "up");
-                  setContextMenu(null);
-                }}
-              >
-                <Flex align="center" gap={8}><FiArrowUp size={13} /><span>上移节点</span></Flex>
-              </button>
-              <button
-                type="button"
-                className={styles.contextMenuItem}
-                disabled={contextSiblingMeta.index === contextSiblingMeta.count - 1}
-                onClick={() => {
-                  onMoveNode(contextNode.id, "down");
-                  setContextMenu(null);
-                }}
-              >
-                <Flex align="center" gap={8}><FiArrowDown size={13} /><span>下移节点</span></Flex>
-              </button>
-            </>
-          ) : null}
-
+          {/* 5. 编辑与折叠操作 */}
           <button
             type="button"
             className={styles.contextMenuItem}
@@ -1252,33 +1305,6 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
               type="button"
               className={styles.contextMenuItem}
               onClick={() => {
-                onOpenLogicDeduction(contextNode.id);
-                setContextMenu(null);
-              }}
-            >
-              <Flex align="center" gap={8}><FiGitMerge size={13} color="#00a8d6" /><span>AI 逻辑推算</span></Flex>
-              {contextNode.logicDeduction ? <span className={styles.contextMenuShortcut}>已推算</span> : null}
-            </button>
-          ) : null}
-
-          {contextNode.id !== "root" && contextNode.chapterRange?.trim() ? (
-            <button
-              type="button"
-              className={styles.contextMenuItem}
-              onClick={() => {
-                onJumpToAiAnalysis(contextNode.chapterRange || "", contextNode.title);
-                setContextMenu(null);
-              }}
-            >
-              <Flex align="center" gap={8}><FiCpu size={13} /><span>AI 诊断此阶段</span></Flex>
-            </button>
-          ) : null}
-
-          {contextNode.children.length > 0 ? (
-            <button
-              type="button"
-              className={styles.contextMenuItem}
-              onClick={() => {
                 onToggleCollapse(contextNode.id);
                 setContextMenu(null);
               }}
@@ -1288,22 +1314,6 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
                 <span>{contextNode.collapsed ? "展开分支" : "收起分支"}</span>
               </Flex>
             </button>
-          ) : null}
-
-          {contextNode.id !== "root" ? (
-            <>
-              <div className={styles.contextMenuDivider} />
-              <button
-                type="button"
-                className={`${styles.contextMenuItem} ${styles.contextMenuDanger}`}
-                onClick={() => {
-                  onDeleteNode(contextNode.id);
-                  setContextMenu(null);
-                }}
-              >
-                <Flex align="center" gap={8}><FiTrash2 size={13} /><span>删除此节点</span></Flex>
-              </button>
-            </>
           ) : null}
         </Box>
       ) : null}
