@@ -1,7 +1,7 @@
 // 工具：用户认证、PBKDF2 密码哈希（兼容旧版平滑升级）与 HS256 JWT 签发/校验
 const FALLBACK_DEV_SECRET = "novel-studio-secret-key-2026";
 const PBKDF2_PREFIX = "pbkdf2";
-const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_ITERATIONS = 15000;
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET?.trim();

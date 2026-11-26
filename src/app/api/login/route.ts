@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
       maxAge,
       sameSite: "lax",
     });
+    response.cookies.delete("auth_token");
 
     return response;
   } catch (error: any) {

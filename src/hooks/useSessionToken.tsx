@@ -1,55 +1,58 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAppDispatch } from "@/store";
-import { setUser, clearUser } from "@/store/userInfo";
-import { getUser } from "@/rest/user";
+import { setUser } from "@/store/userInfo";
+import { getUser, logoutUser } from "@/rest/user";
+import { clearSession } from "@/utils/rest";
 
 const useSessionToken = () => {
-    const dispatch = useAppDispatch();
-    const router = useRouter();
+  const dispatch = useAppDispatch();
+  const router = useRouter();
 
-    useEffect(() => {
-        const fetchProfile = async (userId: string, userName: string) => {
-            try {
-                const res = await getUser(userId);
-                console.log('getUser-->', res);
+  useEffect(() => {
+    const forceBackToLogin = async () => {
+      try {
+        await logoutUser();
+      } catch {}
+      clearSession();
+      router.replace("/login/");
+    };
 
-                if (res.success && res.result) {
-                    dispatch(setUser({
-                        id: userId,
-                        name: res.result.userName || userName || 'User',
-                        ...res.result
-                    }));
-                } else {
-                    throw new Error(res.message || "Failed to fetch profile");
-                }
-            } catch (err) {
-                console.error("Failed to restore profile:", err);
-                localStorage.removeItem("user_info");
-                dispatch(clearUser());
-                document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-                router.replace('/login');
-            }
-        };
-
-        const userInfoStr = localStorage.getItem('user_info');
-        if (userInfoStr) {
-            try {
-                const session = JSON.parse(userInfoStr);
-                if (session && session.user && session.user.id) {
-                    fetchProfile(session.user.id, session.user.name);
-                    return;
-                }
-            } catch (e) {
-                console.error("Error parsing user_info", e);
-            }
+    const fetchProfile = async (userId: string, userName: string) => {
+      try {
+        const res = await getUser(userId);
+        if (res.success && res.result) {
+          dispatch(
+            setUser({
+              id: userId,
+              name: res.result.userName || userName || "User",
+              ...res.result,
+            })
+          );
+        } else {
+          throw new Error(res.message || "Failed to fetch profile");
         }
+      } catch (err) {
+        console.error("Failed to restore profile:", err);
+        await forceBackToLogin();
+      }
+    };
 
-        localStorage.removeItem("user_info");
-        dispatch(clearUser());
-        document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        router.replace('/login');
-    }, [dispatch, router]);
+    const userInfoStr = localStorage.getItem("user_info");
+    if (userInfoStr) {
+      try {
+        const session = JSON.parse(userInfoStr);
+        if (session && session.user && session.user.id) {
+          fetchProfile(session.user.id, session.user.name);
+          return;
+        }
+      } catch (e) {
+        console.error("Error parsing user_info", e);
+      }
+    }
+
+    forceBackToLogin();
+  }, [dispatch, router]);
 };
 
 export default useSessionToken;

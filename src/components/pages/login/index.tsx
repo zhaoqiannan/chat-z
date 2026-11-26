@@ -18,20 +18,11 @@ export default function LoginPage() {
     const router = useRouter();
 
     useEffect(() => {
-        const hasAuthCookie = document.cookie.split(';').some((item) => {
-            const [k, v] = item.trim().split('=');
-            return k === 'auth_token' && (v === 'true' || !!v);
-        });
-
-        if (!hasAuthCookie) {
-            localStorage.removeItem('user_info');
-            localStorage.removeItem('access_token');
-        } else {
-            const userInfoStr = localStorage.getItem('user_info');
-            if (userInfoStr) {
-                window.location.href = '/workspace/';
-            }
-        }
+        // 已认证用户由服务端 middleware 直接重定向至 /workspace/；
+        // 进入登录页即表示当前无有效 HttpOnly 会话，清理残留的旧版状态与 Cookie 避免回跳死循环
+        localStorage.removeItem('user_info');
+        localStorage.removeItem('access_token');
+        document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     }, []);
 
     const handleLogin = async () => {
