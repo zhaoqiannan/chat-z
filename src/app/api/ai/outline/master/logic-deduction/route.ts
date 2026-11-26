@@ -138,10 +138,21 @@ ${subtreeText}
     const raw = await callCloudflareAi(env.AI, messages, {
       taskType: "structured",
       temperature: 0.4,
-      maxTokens: 4096,
+      maxTokens: 6144,
     });
 
-    const parsed = parseStructuredJson<any>(raw, null);
+    let parsed = parseStructuredJson<any>(raw, null);
+    if (!parsed || typeof parsed !== "object") {
+      try {
+        const retryRaw = await callCloudflareAi(env.AI, messages, {
+          taskType: "fast",
+          temperature: 0.35,
+          maxTokens: 5120,
+        });
+        parsed = parseStructuredJson<any>(retryRaw, null);
+      } catch {}
+    }
+
     if (!parsed || typeof parsed !== "object") {
       return NextResponse.json({ success: false, message: "AI 逻辑推算结果解析失败，请重试" }, { status: 500 });
     }

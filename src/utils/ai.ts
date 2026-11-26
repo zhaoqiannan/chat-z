@@ -61,33 +61,54 @@ function getCandidateModels(options: AiCallOptions): string[] {
 }
 
 /**
- * 统一提取 Workers AI 返回文本（兼容 OpenAI choices 格式与 Cloudflare 原生 response 格式）
+ * 剥离思考模型附带的 <think>/<thought> 标签（兼容已闭合与因截断未闭合的情况）
  */
-function extractAiText(result: any): string | null {
+function stripThinkTags(rawText: string): string {
+  return rawText
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
+    .replace(/<(?:think|thought)>[\s\S]*$/gi, "")
+    .trim();
+}
+
+/**
+ * 统一提取 Workers AI 返回文本（兼容 OpenAI choices 格式与 Cloudflare 原生 response 格式）
+ * 严禁把思考独白（reasoning_content/reasoning）当成小说正文直接返回；仅在 structured 模式下尝试抢救完整 JSON 块
+ */
+function extractAiText(result: any, taskType?: AiCallOptions["taskType"]): string | null {
   if (!result) return null;
 
-  // 1. OpenAI 兼容格式 choices[0].message (优先使用 content，兜底 reasoning)
+  // 1. OpenAI 兼容格式 choices[0].message（优先且默认仅信任 content）
   if (Array.isArray(result.choices) && result.choices.length > 0) {
     const msg = result.choices[0]?.message;
     if (typeof msg?.content === "string" && msg.content.trim()) {
-      return msg.content.trim();
+      const cleaned = stripThinkTags(msg.content);
+      if (cleaned) return cleaned;
     }
-    if (typeof msg?.reasoning_content === "string" && msg.reasoning_content.trim()) {
-      return msg.reasoning_content.trim();
+    // 仅当结构化任务且 content 为空时，检查 reasoning 中是否已包含完整 JSON，否则返回 null 触发切换备选模型
+    if (taskType === "structured") {
+      const reasoning =
+        (typeof msg?.reasoning_content === "string" && msg.reasoning_content.trim()) ||
+        (typeof msg?.reasoning === "string" && msg.reasoning.trim()) ||
+        "";
+      const jsonBlock = reasoning.match(/```json\s*([\s\S]*?)```/i);
+      if (jsonBlock && jsonBlock[1]?.trim()) {
+        return jsonBlock[1].trim();
+      }
     }
-    if (typeof msg?.reasoning === "string" && msg.reasoning.trim()) {
-      return msg.reasoning.trim();
-    }
+    return null;
   }
 
   // 2. Cloudflare 原生 response 字段
   if (typeof result.response === "string" && result.response.trim()) {
-    return result.response.trim();
+    const cleaned = stripThinkTags(result.response);
+    return cleaned || null;
   }
 
   // 3. 直接返回字符串
   if (typeof result === "string" && result.trim()) {
-    return result.trim();
+    const cleaned = stripThinkTags(result);
+    return cleaned || null;
   }
 
   return null;
@@ -124,7 +145,7 @@ async function callCloudflareAiViaRest(
     throw new Error(`REST API 错误 (${response.status}): ${errorDetails}`);
   }
 
-  const extracted = extractAiText(data.result);
+  const extracted = extractAiText(data.result, options.taskType);
   if (extracted) {
     return extracted;
   }
@@ -171,7 +192,7 @@ export async function callCloudflareAi(
           max_tokens: options.maxTokens ?? 8192,
         });
 
-        const extracted = extractAiText(res);
+        const extracted = extractAiText(res, options.taskType);
         if (extracted) {
           console.log(`[Workers AI] 命中模型: ${model} (通道: env.AI, 任务: ${options.taskType || "creative"})`);
           return extracted;
@@ -262,15 +283,12 @@ function repairTruncatedJson(jsonStr: string): string {
 }
 
 /**
- * 针对数组或对象结果进行规范化包装提取
+ * 针对数组或对象结果进行规范化包装提取（仅保留原有字段，不为扁平数组强行注入 children）
  */
 function normalizeResult<T>(parsed: any, fallbackValue: T): T {
   if (Array.isArray(fallbackValue)) {
     if (Array.isArray(parsed)) {
-      return parsed.map((item) => ({
-        ...item,
-        children: Array.isArray(item.children) ? item.children : [],
-      })) as unknown as T;
+      return parsed as unknown as T;
     }
     if (parsed && typeof parsed === "object") {
       const arr =
@@ -281,12 +299,10 @@ function normalizeResult<T>(parsed: any, fallbackValue: T): T {
         parsed.list ||
         parsed.result ||
         parsed.chapters ||
-        parsed.scenes;
+        parsed.scenes ||
+        parsed.suggestions;
       if (Array.isArray(arr)) {
-        return arr.map((item) => ({
-          ...item,
-          children: Array.isArray(item.children) ? item.children : [],
-        })) as unknown as T;
+        return arr as unknown as T;
       }
       return [parsed] as unknown as T;
     }
@@ -303,10 +319,7 @@ export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
   }
 
   // 先剥离模型可能附带的思考链标签，避免思考过程中出现的花括号干扰 JSON 提取
-  const text = rawText
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
-    .trim();
+  const text = stripThinkTags(rawText);
 
   if (!text) {
     return fallbackValue;
@@ -369,21 +382,59 @@ export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
  */
 export function cleanAnalysisText(rawText: string): string {
   if (!rawText || !rawText.trim()) return "";
-  return rawText
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/<thought>[\s\S]*?<\/thought>/gi, "")
-    .trim();
+  return stripThinkTags(rawText);
 }
 
 /**
- * 清理 JSON 字符串中常见的尾随逗号、单行注释等非法语法
+ * 清理 JSON 字符串中常见的尾随逗号及字符串外部的单行/多行注释（严格保护字符串内的 https:// 等 URL）
  */
 function cleanJsonString(str: string): string {
-  return str
-    .replace(/\/\/.*$/gm, "") // 移除单行注释
-    .replace(/\/\*[\s\S]*?\*\//g, "") // 移除多行注释
-    .replace(/,\s*([\]}])/g, "$1") // 移除尾随逗号 (trailing comma)
-    .trim();
+  let out = "";
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    const next = str[i + 1];
+
+    if (inString) {
+      out += ch;
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+
+    // 仅在双引号外跳过 // 单行注释
+    if (ch === "/" && next === "/") {
+      i += 2;
+      while (i < str.length && str[i] !== "\n") i++;
+      if (i < str.length) out += "\n";
+      continue;
+    }
+
+    // 仅在双引号外跳过 /* */ 多行注释
+    if (ch === "/" && next === "*") {
+      i += 2;
+      while (i + 1 < str.length && !(str[i] === "*" && str[i + 1] === "/")) i++;
+      i++;
+      continue;
+    }
+
+    out += ch;
+  }
+
+  return out.replace(/,\s*([\]}])/g, "$1").trim();
 }
 
 /**
@@ -391,19 +442,15 @@ function cleanJsonString(str: string): string {
  */
 export function cleanNovelStoryText(rawText: string): string {
   if (!rawText || !rawText.trim()) return "";
-  let text = rawText.trim();
+  let text = stripThinkTags(rawText);
 
-  // 1. 彻底剥离可能存在的 <think>...</think> 或 <thought>...</thought> 思考链标签
-  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  text = text.replace(/<thought>[\s\S]*?<\/thought>/gi, "").trim();
-
-  // 2. 剥离外层包裹的 Markdown 代码块标签
+  // 1. 剥离外层包裹的 Markdown 代码块标签
   const codeBlockMatch = text.match(/^```(?:markdown|text)?\s*([\s\S]*?)\s*```$/i);
   if (codeBlockMatch && codeBlockMatch[1]) {
     text = codeBlockMatch[1].trim();
   }
 
-  // 3. 如果包含明确的正文起止锚点，直接提取正文部分
+  // 2. 如果包含明确的正文起止锚点，直接提取正文部分
   const splitKeywords = [
     /【(?:润色版正文|润色版|润色正文|润色替换稿|润色稿|修改后正文|修改后|扩写正文|续写正文|正文开始|正文)】/i,
     /(?:正文如下|正式正文|最终正文|最终定稿|润色稿|润色版)[：:]/i,
@@ -420,7 +467,7 @@ export function cleanNovelStoryText(rawText: string): string {
     }
   }
 
-  // 4. 剥离模型开头可能遗留的任务分析与思考构思段落（如“任务：智能润色... 需要考虑：... 让我们构思润色稿：...”）
+  // 3. 剥离模型开头可能遗留的任务分析与思考构思段落
   const metaBlockPattern = /^(?:任务[：:][\s\S]*?)(?=(?:\n\n[“"‘'第]|(?:\n\n[\u4e00-\u9fa5]{2,}[，。、“"”]))|$)/i;
   if (metaBlockPattern.test(text)) {
     const afterMeta = text.replace(metaBlockPattern, "").trim();
@@ -429,27 +476,14 @@ export function cleanNovelStoryText(rawText: string): string {
     }
   }
 
-  // 5. 逐行剥离常见的思考与引导前缀
+  // 4. 逐行剥离明确的 AI 元话术前缀（不误删以“好的，”或破折号开头的真实小说对白）
   const lines = text.split("\n");
   let startIndex = 0;
-  for (let i = 0; i < Math.min(lines.length, 20); i++) {
+  for (let i = 0; i < Math.min(lines.length, 15); i++) {
     const line = lines[i].trim();
     if (
-      line.startsWith("任务：") ||
-      line.startsWith("任务:") ||
-      line.startsWith("需要考虑：") ||
-      line.startsWith("需要考虑:") ||
-      line.startsWith("思考过程") ||
-      line.startsWith("思考：") ||
-      line.startsWith("构思：") ||
-      line.startsWith("让我们构思") ||
-      line.startsWith("我们需要") ||
-      line.startsWith("用户要求") ||
-      line.startsWith("字数估算") ||
-      line.startsWith("好的，") ||
-      line.startsWith("以下是") ||
-      line.startsWith("- ") ||
-      line.startsWith("* ") ||
+      /^(?:任务|需要考虑|思考过程|思考|构思|字数估算|字数统计)[：:]/.test(line) ||
+      /^(?:让我们构思|好的，以下是|好的，为您|以下是(?:润色|修改|扩写|续写|精简|改写|本章))/.test(line) ||
       line.startsWith("```")
     ) {
       startIndex = i + 1;
@@ -462,10 +496,10 @@ export function cleanNovelStoryText(rawText: string): string {
     text = lines.slice(startIndex).join("\n").trim();
   }
 
-  // 6. 移除开头的引导短语如 "可写："、"正文："、"剧情："、"润色后正文："
+  // 5. 移除开头的引导短语如 "正文："、"润色后正文："
   text = text.replace(/^(?:可写[：:]|正文[：:]|剧情[：:]|故事[：:]|润色(?:后|版)?[：:]|修改后[：:])\s*/i, "");
 
-  // 7. 剥离文末的分析总结、优化重点与字数说明
+  // 6. 剥离文末的分析总结、优化重点与字数说明
   const endPattern = /\n+(?:【(?:主要优化点|优化重点|修改说明|创作思路|字数统计)】|(?:主要优化点|优化重点|修改说明|字数估算|字数统计|总结|以上是|注)[：:])[\s\S]*$/i;
   text = text.replace(endPattern, "").trim();
 

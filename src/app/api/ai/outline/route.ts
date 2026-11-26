@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, outlines, outlineAiHistory } from "@/db";
+import { getDb, works, outlines, outlineAiHistory, characters, worldRules } from "@/db";
 import { eq, and, asc } from "drizzle-orm";
 import { callCloudflareAi, parseStructuredJson, ChatMessage } from "@/utils/ai";
 
@@ -35,15 +35,53 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const workTitle = work.title;
-    const workTag = work.tag || "玄幻修真";
+    const workTag = work.tag || "通用小说";
     const workDesc = work.description || "暂无简介";
 
-    // 查出现存所有大纲节点作为上下文
-    const existingNodes = await db
-      .select()
-      .from(outlines)
-      .where(eq(outlines.workId, workId))
-      .orderBy(asc(outlines.orderIndex), asc(outlines.createdAt));
+    // 查出现存大纲节点、角色、世界规则及项目总纲作为上下文（杜绝盲写）
+    const [existingNodes, charList, ruleList, masterRow] = await Promise.all([
+      db.select().from(outlines).where(eq(outlines.workId, workId)).orderBy(asc(outlines.orderIndex), asc(outlines.createdAt)).all(),
+      db.select({ name: characters.name, identity: characters.identity, personality: characters.personality }).from(characters).where(eq(characters.workId, workId)).limit(8).all(),
+      db.select({ name: worldRules.name, mechanisms: worldRules.mechanisms }).from(worldRules).where(eq(worldRules.workId, workId)).limit(4).all(),
+      env.DB.prepare("SELECT tree_json FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1")
+        .bind(workId, user.userId)
+        .first()
+        .catch(() => null),
+    ]);
+
+    const loreSnippet = [
+      charList.length > 0 ? `【主要角色】：${charList.map((c) => `${c.name}(${c.identity || ""}${c.personality ? `/${c.personality}` : ""})`).join("；")}` : "",
+      ruleList.length > 0 ? `【世界规则】：${ruleList.map((r) => `${r.name}(${(r.mechanisms || "").slice(0, 50)})`).join("；")}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    let masterDigest = "";
+    if (masterRow && (masterRow as any).tree_json) {
+      try {
+        const tree = JSON.parse((masterRow as any).tree_json);
+        const topNodes = Array.isArray(tree?.children) ? tree.children : [];
+        if (topNodes.length > 0) {
+          masterDigest = topNodes
+            .map((n: any) => `- ${n.title || "阶段"}${n.chapterRange ? `(第${n.chapterRange}章)` : ""}：${String(n.note || "").slice(0, 70)}`)
+            .join("\n");
+        }
+      } catch {}
+    }
+
+    const getNeighborContext = (nodeId?: number | string) => {
+      if (!nodeId) return "";
+      const idx = existingNodes.findIndex((n) => String(n.id) === String(nodeId));
+      if (idx === -1) return "";
+      const prev = idx > 0 ? existingNodes[idx - 1] : null;
+      const next = idx + 1 < existingNodes.length ? existingNodes[idx + 1] : null;
+      const lines: string[] = [];
+      if (prev) lines.push(`上一节点：${prev.title}（${(prev.event || prev.goal || "").slice(0, 80)}）`);
+      if (next) lines.push(`下一节点：${next.title}（${(next.event || next.goal || "").slice(0, 80)}）`);
+      return lines.join("\n");
+    };
+
+    const DIAGNOSIS_RUBRIC = `【客观评分标尺】：90+极佳无硬伤；75-89良好有局部优化空间；60-74存在明显短板需修改；60以下存在严重断层或逻辑硬伤。严禁打和稀泥高分。`;
 
     const existingOutlineSummary = existingNodes
       .map((n) => {
@@ -173,36 +211,37 @@ ${additionalPrompt ? `作者要求：${additionalPrompt}` : ""}
         const node = targetNode || existingNodes.find((n) => n.id === targetNodeId);
         const nodeTitle = node?.title || "未命名情节点";
         const nodeGoal = node?.goal || "推进剧情";
+        const neighborText = getNeighborContext(node?.id ?? targetNodeId);
 
         const messages: ChatMessage[] = [
           {
             role: "system",
-            content: `你是一位顶级网文编剧。请根据当前情节点的基本信息，进行全方位的情节扩写与细节丰富。
-必须输出标准 JSON 对象，格式如下：
+            content: `你是一位顶级网文编剧。请严格结合作品角色档案、世界规则与前后节点衔接，对当前情节点进行全方位扩写与细节丰富（严禁凭空捏造违背设定的角色或撞车剧情）。
+仅输出标准 JSON 对象，严禁 Markdown 代码块或多余文字：
 {
-  "title": "润色后的精炼标题",
-  "goal": "深化的叙事目标",
-  "conflict": "升级的矛盾与人物对抗",
-  "eventDescription": "详细的事件发生过程（发生什么、如何推进、关键动作）",
-  "expectedOutcome": "事件结束后局势与角色状态的质变",
-  "characters": "出场角色列表",
-  "locations": "场景地点",
-  "foreshadowing": "新增埋下的伏笔或回收的线索",
-  "remarks": "作者创作提示"
+  "title": "<润色后的精炼标题>",
+  "goal": "<深化的叙事目标>",
+  "conflict": "<升级的矛盾与人物对抗>",
+  "eventDescription": "<详细的事件发生过程（发生什么、如何推进、关键动作）>",
+  "expectedOutcome": "<事件结束后局势与角色状态的质变>",
+  "characters": "<出场角色列表>",
+  "locations": "<场景地点>",
+  "foreshadowing": "<新增埋下的伏笔或回收的线索>",
+  "remarks": "<作者创作提示>"
 }`,
           },
           {
             role: "user",
-            content: `小说：《${workTitle}》(${workTag})
-原情节点：${nodeTitle}
+            content: `小说：《${workTitle}》（题材：${workTag}）
+${loreSnippet ? `${loreSnippet}\n` : ""}${neighborText ? `【前后衔接节点】：\n${neighborText}\n` : ""}原情节点：${nodeTitle}
 原故事目标：${nodeGoal}
 ${node?.conflict ? `已有冲突：${node.conflict}` : ""}
 ${additionalPrompt ? `作者扩写诉求：${additionalPrompt}` : ""}
-请展开扩写。`,
+请展开扩写并直接输出合法 JSON：`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.55, maxTokens: 4096 });
         const expanded = parseStructuredJson<any>(aiResponse, null);
 
         if (!expanded || typeof expanded !== "object" || Object.keys(expanded).length === 0) {
@@ -225,40 +264,42 @@ ${additionalPrompt ? `作者扩写诉求：${additionalPrompt}` : ""}
         const node = targetNode || existingNodes.find((n) => n.id === targetNodeId);
         const nodeTitle = node?.title || "当前节点";
         const nodeGoal = node?.goal || "剧情推进";
+        const neighborText = getNeighborContext(node?.id ?? targetNodeId);
 
         const messages: ChatMessage[] = [
           {
             role: "system",
-            content: `你是一位网文结构大师。请将作者给出的单个大纲节点，按“起、承、转、合”的叙事节拍拆解为 4 个紧凑连贯的情节点。
-必须输出标准 JSON 数组，格式如下：
+            content: `你是一位网文结构大师。请结合作品角色、规则与前后节点衔接，将单个大纲节点按“起、承、转、合”拆解为 4 个紧凑连贯的情节点。
+pointType 字段仅允许取以下值之一："conflict" | "twist" | "foreshadow" | "climax" | "transition" | "reveal"。
+仅输出标准 JSON 数组，严禁输出注释、Markdown 代码块或多余文字：
 [
   {
-    "title": "情节点标题",
+    "title": "<情节点标题>",
     "type": "scene",
-    "pointType": "conflict", // conflict | twist | foreshadow | climax | transition | reveal
-    "goal": "解决什么问题/达成什么目标",
-    "conflict": "主要矛盾",
-    "eventDescription": "具体事件过程",
-    "expectedOutcome": "结果与状态变化",
-    "characters": "人物",
-    "locations": "地点",
-    "foreshadowing": "伏笔",
+    "pointType": "conflict",
+    "goal": "<解决什么问题/达成什么目标>",
+    "conflict": "<主要矛盾>",
+    "eventDescription": "<具体事件过程>",
+    "expectedOutcome": "<结果与状态变化>",
+    "characters": "<出场人物>",
+    "locations": "<场景地点>",
+    "foreshadowing": "<伏笔>",
     "linkedChapters": [1, 2]
   }
 ]`,
           },
           {
             role: "user",
-            content: `小说：《${workTitle}》(${workTag})
-待拆解节点：${nodeTitle}
+            content: `小说：《${workTitle}》（题材：${workTag}）
+${loreSnippet ? `${loreSnippet}\n` : ""}${neighborText ? `【前后衔接节点】：\n${neighborText}\n` : ""}待拆解节点：${nodeTitle}
 节点目标：${nodeGoal}
 ${node?.eventDescription ? `事件简述：${node.eventDescription}` : ""}
 ${additionalPrompt ? `额外诉求：${additionalPrompt}` : ""}
-请拆解为 4 个情节点。`,
+请拆解为 4 个情节点并直接输出合法 JSON 数组：`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.7 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6, maxTokens: 5120 });
         const scenes = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(scenes) || scenes.length === 0) {
@@ -280,33 +321,34 @@ ${additionalPrompt ? `额外诉求：${additionalPrompt}` : ""}
       case "alternative_plots": {
         const node = targetNode || existingNodes.find((n) => n.id === targetNodeId);
         const nodeTitle = node?.title || "当前剧情";
+        const neighborText = getNeighborContext(node?.id ?? targetNodeId);
 
         const messages: ChatMessage[] = [
           {
             role: "system",
-            content: `你是一位网文脑洞与戏剧策划专家。请针对作者当前的剧情节点，构思 3 种戏剧冲突完全不同的替代发展方案。
-必须输出标准 JSON 数组，格式如下：
+            content: `你是一位网文脑洞与戏剧策划专家。请结合作品既有人物档案、世界规则与前后剧情衔接，针对当前节点构思 3 种戏剧冲突完全不同的替代发展方案（不得破坏既定设定）。
+仅输出标准 JSON 数组，严禁 Markdown 代码块或多余文字：
 [
   {
-    "badge": "方案类型标签",
-    "name": "方案名称",
-    "description": "核心剧情走向简述",
-    "pros": "方案优势/爽点所在",
-    "cons": "可能带来的长线隐患"
+    "badge": "<方案类型标签>",
+    "name": "<方案名称>",
+    "description": "<核心剧情走向简述>",
+    "pros": "<方案优势/爽点所在>",
+    "cons": "<可能带来的长线隐患>"
   }
 ]`,
           },
           {
             role: "user",
-            content: `小说：《${workTitle}》(${workTag})
-当前情节点：${nodeTitle}
+            content: `小说：《${workTitle}》（题材：${workTag}）
+${loreSnippet ? `${loreSnippet}\n` : ""}${neighborText ? `【前后衔接节点】：\n${neighborText}\n` : ""}当前情节点：${nodeTitle}
 当前设定：${node?.goal || workDesc}
 ${additionalPrompt ? `作者期望方向：${additionalPrompt}` : ""}
-请发散 3 个不同走向的剧情方案。`,
+请发散 3 个不同走向的剧情方案并直接输出合法 JSON 数组：`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.8 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.75, maxTokens: 4096 });
         const alternatives = parseStructuredJson<any[]>(aiResponse, []);
 
         if (!Array.isArray(alternatives) || alternatives.length === 0) {
@@ -329,35 +371,37 @@ ${additionalPrompt ? `作者期望方向：${additionalPrompt}` : ""}
         const messages: ChatMessage[] = [
           {
             role: "system",
-            content: `你是一位资深小说责任主编。请深度审阅作者的小说大纲节点，评估主线完整度、主线动机、逻辑连贯性与故事闭环。
-必须输出标准 JSON 对象，格式如下：
+            content: `你是一位资深小说责任主编。请深度审阅作者的项目总纲与大纲节点，客观评估主线完整度、主线动机、逻辑连贯性与故事闭环。
+${DIAGNOSIS_RUBRIC}
+仅输出标准 JSON 对象，严禁 Markdown 代码块或多余文字：
 {
-  "score": 88,
-  "summary": "一句话核心评价",
-  "strengths": ["亮点一", "亮点二"],
-  "weaknesses": ["不足一", "不足二"],
-  "suggestions": ["修改建议一", "修改建议二"]
+  "score": "<0-100整数>",
+  "summary": "<一句话核心评价>",
+  "strengths": ["<亮点>"],
+  "weaknesses": ["<不足>"],
+  "suggestions": ["<具体可执行修改建议>"]
 }`,
           },
           {
             role: "user",
-            content: `书名：《${workTitle}》(${workTag})
+            content: `书名：《${workTitle}》（题材：${workTag}）
 小说简介：${workDesc}
-当前全部大纲节点：
+${loreSnippet ? `${loreSnippet}\n` : ""}${masterDigest ? `【项目总纲阶段】：\n${masterDigest}\n` : ""}【当前大纲节点】：
 ${existingOutlineSummary || "暂无详细节点，仅有一句话简介"}
-请进行主线完整度深度体检诊断。`,
+请进行主线完整度深度体检诊断，直接输出合法 JSON：`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.35, maxTokens: 3072 });
         const diagnosis = parseStructuredJson<any>(aiResponse, null);
 
-        if (!diagnosis || typeof diagnosis !== "object" || !diagnosis.score) {
+        if (!diagnosis || typeof diagnosis !== "object" || typeof Number(diagnosis.score) !== "number" || isNaN(Number(diagnosis.score))) {
           return NextResponse.json(
             { success: false, message: "AI 主线完整度诊断失败，请重试" },
             { status: 500 }
           );
         }
+        diagnosis.score = Math.max(0, Math.min(100, Number(diagnosis.score)));
 
         resultPayload = {
           mode: "diagnosis",
@@ -372,34 +416,36 @@ ${existingOutlineSummary || "暂无详细节点，仅有一句话简介"}
         const messages: ChatMessage[] = [
           {
             role: "system",
-            content: `你是一位网文冲突与危机节奏专家。请评估作者大纲中的冲突密度、危机强度与升级合理性。
-必须输出标准 JSON 对象，格式如下：
+            content: `你是一位网文冲突与危机节奏专家。请客观评估作者大纲中的冲突密度、危机强度与升级合理性。
+${DIAGNOSIS_RUBRIC}
+仅输出标准 JSON 对象，严禁 Markdown 代码块或多余文字：
 {
-  "score": 82,
-  "summary": "冲突评价",
-  "strengths": ["优势一", "优势二"],
-  "weaknesses": ["问题一", "问题二"],
-  "suggestions": ["建议一", "建议二"]
+  "score": "<0-100整数>",
+  "summary": "<冲突评价>",
+  "strengths": ["<优势>"],
+  "weaknesses": ["<问题>"],
+  "suggestions": ["<具体建议>"]
 }`,
           },
           {
             role: "user",
-            content: `书名：《${workTitle}》(${workTag})
-当前大纲节点：
+            content: `书名：《${workTitle}》（题材：${workTag}）
+${masterDigest ? `【项目总纲阶段】：\n${masterDigest}\n` : ""}【当前大纲节点】：
 ${existingOutlineSummary || "暂无节点"}
-请诊断冲突密度。`,
+请诊断冲突密度，直接输出合法 JSON：`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.35, maxTokens: 3072 });
         const diagnosis = parseStructuredJson<any>(aiResponse, null);
 
-        if (!diagnosis || typeof diagnosis !== "object" || !diagnosis.score) {
+        if (!diagnosis || typeof diagnosis !== "object" || typeof Number(diagnosis.score) !== "number" || isNaN(Number(diagnosis.score))) {
           return NextResponse.json(
             { success: false, message: "AI 冲突密度评估失败，请重试" },
             { status: 500 }
           );
         }
+        diagnosis.score = Math.max(0, Math.min(100, Number(diagnosis.score)));
 
         resultPayload = {
           mode: "diagnosis",
@@ -414,34 +460,36 @@ ${existingOutlineSummary || "暂无节点"}
         const messages: ChatMessage[] = [
           {
             role: "system",
-            content: `你是一位网文节奏与爽点策划专家。请评估作者大纲的情绪起伏、节奏松紧与爽点释放频率。
-必须输出标准 JSON 对象，格式如下：
+            content: `你是一位网文节奏与爽点策划专家。请客观评估作者大纲的情绪起伏、节奏松紧与爽点释放频率。
+${DIAGNOSIS_RUBRIC}
+仅输出标准 JSON 对象，严禁 Markdown 代码块或多余文字：
 {
-  "score": 86,
-  "summary": "节奏评价",
-  "strengths": ["节奏优点一", "节奏优点二"],
-  "weaknesses": ["节奏短板一", "节奏短板二"],
-  "suggestions": ["优化建议一", "优化建议二"]
+  "score": "<0-100整数>",
+  "summary": "<节奏评价>",
+  "strengths": ["<节奏优点>"],
+  "weaknesses": ["<节奏短板>"],
+  "suggestions": ["<具体优化建议>"]
 }`,
           },
           {
             role: "user",
-            content: `书名：《${workTitle}》(${workTag})
-当前大纲节点：
+            content: `书名：《${workTitle}》（题材：${workTag}）
+${masterDigest ? `【项目总纲阶段】：\n${masterDigest}\n` : ""}【当前大纲节点】：
 ${existingOutlineSummary || "暂无节点"}
-请评估节奏与情绪曲线。`,
+请评估节奏与情绪曲线，直接输出合法 JSON：`,
           },
         ];
 
-        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.6 });
+        const aiResponse = await callCloudflareAi(env.AI, messages, { taskType: "structured", temperature: 0.35, maxTokens: 3072 });
         const diagnosis = parseStructuredJson<any>(aiResponse, null);
 
-        if (!diagnosis || typeof diagnosis !== "object" || !diagnosis.score) {
+        if (!diagnosis || typeof diagnosis !== "object" || typeof Number(diagnosis.score) !== "number" || isNaN(Number(diagnosis.score))) {
           return NextResponse.json(
             { success: false, message: "AI 故事节奏评估失败，请重试" },
             { status: 500 }
           );
         }
+        diagnosis.score = Math.max(0, Math.min(100, Number(diagnosis.score)));
 
         resultPayload = {
           mode: "diagnosis",

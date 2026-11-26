@@ -194,9 +194,9 @@ ${plotText}
     let prose = cleanNovelStoryText(firstRaw);
     let wordCount = countChineseWords(prose);
 
-    // 若首次生成不足 3000 字，智能补足（严禁越界到下一章或重复已写内容）
-    if (prose && wordCount < MIN_TARGET_WORDS) {
-      const remainNeeded = Math.max(1200, 3400 - wordCount);
+    // 若首次生成不足 3000 字，最多进行 2 轮精准补足（携带精简人设与法则防 OOC，严禁越界到下一章）
+    for (let attempt = 0; attempt < 2 && prose && wordCount < MIN_TARGET_WORDS; attempt++) {
+      const remainNeeded = Math.max(900, 3400 - wordCount);
       const continueMessages: ChatMessage[] = [
         {
           role: "system",
@@ -204,11 +204,11 @@ ${plotText}
 请紧接已写正文的最后一句无缝往下写：
 1. 若【本章剧情走向蓝本】中仍有尚未展开的情节，请把剩余场景与对话交锋写足写透；
 2. 若核心事件刚刚落幕，请重点深化事件落幕后的即时余波、关键人物私下反应与章末暗流悬念，**严禁越界提前写到下一章的新主线事件**；
-3. 严禁重复前文已写过的动作或台词，保持人称视角与文风完全一致，禁止 AI 套话与总结式升华，直接从下一句输出纯正文。`,
+3. 严格贴合角色档案与世界规则，严禁重复前文已写过的动作或台词，保持人称视角与文风完全一致，禁止 AI 套话与总结式升华，直接从下一句输出纯正文。`,
         },
         {
           role: "user",
-          content: `【本章剧情走向蓝本】：\n${plotText}\n${siblingContext ? `\n【下一章边界（严禁越界提前写出）】：\n${siblingContext}\n` : ""}\n【已写正文的末尾段落（请紧接最后一句无缝续写至少 ${remainNeeded} 字）】：\n${prose.slice(-1500)}\n\n请直接输出无缝续写的纯正文：`,
+          content: `${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}【本章剧情走向蓝本】：\n${plotText}\n${siblingContext ? `\n【下一章边界（严禁越界提前写出）】：\n${siblingContext}\n` : ""}\n【已写正文的末尾段落（请紧接最后一句无缝续写至少 ${remainNeeded} 字）】：\n${prose.slice(-1500)}\n\n请直接输出无缝续写的纯正文：`,
         },
       ];
 
@@ -222,9 +222,12 @@ ${plotText}
         if (contClean && contClean.length > 100) {
           prose = `${prose.trim()}\n\n${contClean.trim()}`;
           wordCount = countChineseWords(prose);
+        } else {
+          break;
         }
       } catch (contErr) {
-        console.warn("[generate-prose] 自动补足续写失败，返回首次生成正文:", contErr);
+        console.warn(`[generate-prose] 第 ${attempt + 1} 轮补足续写失败:`, contErr);
+        break;
       }
     }
 

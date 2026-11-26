@@ -17,6 +17,7 @@ function isBoilerplateEvent(text: string): boolean {
   if (clean.length < 15) return true;
   if (clean.includes("剧情稳步推进，角色展开行动")) return true;
   if (/^第\s*\d+\s*章[：:]?\s*(剧情|故事)?(稳步|继续|自然)推进/.test(clean)) return true;
+  if (clean.length < 35 && /^(?:本章主要讲述了|故事继续发展|主角经历了)/.test(clean)) return true;
   return false;
 }
 
@@ -57,7 +58,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const allChars = await db.select().from(characters).where(eq(characters.workId, effectiveWorkId)).all();
-    const charListStr = allChars.map((c) => `${c.name}(ID:${c.id})`).join(", ");
+    // 角色库较庞大时优先挑选本章正文实际提及的角色 + 核心角色，避免冗余占 Token
+    const promptChars =
+      allChars.length > 20
+        ? [
+            ...allChars.filter((c) => c.name && chapterText.includes(c.name)),
+            ...allChars.filter((c) => !c.name || !chapterText.includes(c.name)).slice(0, 10),
+          ].slice(0, 25)
+        : allChars;
+    const charListStr = promptChars.map((c) => `${c.name}(ID:${c.id})`).join(", ");
 
     const chapterLabel = chapter.chapterNumber ? `第${chapter.chapterNumber}章` : "本章";
     const rawChapterTitle = (title || chapter.title || "未命名章节").trim();

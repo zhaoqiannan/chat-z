@@ -147,9 +147,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       }).join("\n") + "\n\n";
     }
 
-    // 读取当前章节最近 6 条历史对话，恢复多轮上下文记忆（不修改表结构，完全兼容线上数据）
+    // 读取当前章节最近 6 条历史对话，对纯改写类长文压缩截断避免挤占多轮问答上下文
     const recentHistory = await db
-      .select({ role: chapterAiChats.role, content: chapterAiChats.content })
+      .select({ role: chapterAiChats.role, content: chapterAiChats.content, actionType: chapterAiChats.actionType })
       .from(chapterAiChats)
       .where(and(eq(chapterAiChats.chapterId, chapterId), eq(chapterAiChats.userId, user.userId)))
       .orderBy(desc(chapterAiChats.createdAt))
@@ -159,10 +159,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const historyMessages: ChatMessage[] = recentHistory
       .reverse()
       .filter((h) => h.role === "user" || h.role === "assistant")
-      .map((h) => ({
-        role: h.role as "user" | "assistant",
-        content: String(h.content || "").slice(0, 1200),
-      }));
+      .map((h) => {
+        const isDialogueAction = !h.actionType || h.actionType === "chat" || h.actionType === "critique" || h.actionType === "custom";
+        const limit = h.role === "assistant" && !isDialogueAction ? 260 : 1000;
+        const raw = String(h.content || "");
+        return {
+          role: h.role as "user" | "assistant",
+          content: raw.length > limit ? `${raw.slice(0, limit)}…（前文已折叠）` : raw,
+        };
+      });
 
     // 1. SYSTEM 层：确立中性协同助手身份、指令优先级与核心防脑补/人物一致性铁律
     const SYSTEM_PROMPT = `你是一名专业的小说 AI 协同创作助手，协助作者进行正文润色、扩写、精简、续写、对白调整、局部改写、剧情审查与创作问答。
@@ -209,11 +214,15 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       }
       contextMessage += `【作者选中的目标文本片段（本次任务聚焦于此）】：\n"""\n${snippet}\n"""\n\n`;
     } else if (isFullChapterAction) {
-      const contentForPrompt =
-        actionType === "continue"
-          ? trimmedContent.slice(-3000)
-          : trimmedContent.slice(0, 5000);
-      contextMessage += `【当前章节正文内容】：\n"""\n${contentForPrompt}\n"""\n\n`;
+      let contentForPrompt = "";
+      if (actionType === "continue") {
+        contentForPrompt = trimmedContent.slice(-3000);
+      } else if (actionType === "critique" && trimmedContent.length > 5000) {
+        contentForPrompt = `${trimmedContent.slice(0, 3200)}\n\n……（中段略）……\n\n${trimmedContent.slice(-1800)}`;
+      } else {
+        contentForPrompt = trimmedContent.slice(0, 5000);
+      }
+      contextMessage += `【当前章节正文内容${trimmedContent.length > 5000 && actionType !== "continue" ? "（长章已按窗口节选）" : ""}】：\n"""\n${contentForPrompt}\n"""\n\n`;
     }
 
     // 3. ACTION 层：各任务详细准则与模式隔离
@@ -231,7 +240,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 删减重复信息、无效修饰词与拖沓铺垫，保留所有关键事实、人物关系变化与伏笔，加快节奏。只删不增，只输出精简后的纯正文。`,
 
       continue: `【任务：情节续写】
-紧接正文最后一个有效叙事节点自然续写（约 500~900 字）。严格延续当前叙事视角、时态、人物状态与场景节奏；若处于日常/铺垫阶段则稳步推进，禁止强行空降冲突或机械降神。只输出续写部分的纯正文，不要重复前文。`,
+紧接正文最后一个有效叙事节点自然续写（约 500~900 字）。严格延续当前叙事视角、时态、人物状态与场景节奏；用实时动作、对话与感官细节推进，严禁“很快”“转眼间”式快进概括，禁止滥用“嘴角勾起弧度”“空气仿佛凝固”“不禁/不由得”等 AI 套话与段尾说教总结；若处于日常/铺垫阶段则稳步推进，禁止强行空降冲突或机械降神。只输出续写部分的纯正文，不要重复前文。`,
 
       tone: `【任务：语气与对白改写】
 依据角色档案与当下情境压力，打磨对话台词与神态细节，增强人物辨识度与潜台词，严防 OOC，不改变原剧情意图。只输出改写后的纯正文。`,

@@ -50,12 +50,22 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .orderBy(asc(chapters.chapterNumber))
         .limit(40)
         .all(),
-      db.select({ title: outlines.title, event: outlines.event, twist: outlines.twist, category: outlines.category }).from(outlines).where(eq(outlines.workId, workId)).limit(25).all(),
+      db
+        .select({ title: outlines.title, event: outlines.event, twist: outlines.twist, category: outlines.category, chapterNumber: outlines.chapterNumber })
+        .from(outlines)
+        .where(eq(outlines.workId, workId))
+        .orderBy(asc(outlines.chapterNumber), asc(outlines.orderIndex))
+        .limit(30)
+        .all(),
       db.select({ name: characters.name, identity: characters.identity, personality: characters.personality }).from(characters).where(eq(characters.workId, workId)).limit(8).all(),
       db.select({ name: worldRules.name, mechanisms: worldRules.mechanisms }).from(worldRules).where(eq(worldRules.workId, workId)).limit(5).all(),
     ]);
 
-    let context = `书名：《${work.title}》\n题材：${work.tag || "小说"}\n目标字数：${work.expectedWords || 500000} 字\n预计章节：${work.expectedChapters || 100} 章\n简介：${work.description || "暂无简介"}\n`;
+    const normalChapters = chapterList.filter((c) => !c.isVolume);
+    const maxWrittenChapter = normalChapters.reduce((max, c) => Math.max(max, Number(c.chapterNumber) || 0), 0);
+    const expectedChapters = work.expectedChapters || 100;
+
+    let context = `书名：《${work.title}》\n题材：${work.tag || "通用小说"}\n目标字数：${work.expectedWords || 500000} 字\n预计章节：${expectedChapters} 章（当前已有至第 ${maxWrittenChapter} 章）\n简介：${work.description || "暂无简介"}\n`;
 
     if (charList.length > 0) {
       context += `\n【主要角色】：${charList.map((c) => `${c.name}(${c.identity || ""}/${c.personality || ""})`).join("；")}\n`;
@@ -63,16 +73,19 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (ruleList.length > 0) {
       context += `\n【世界规则】：${ruleList.map((r) => `${r.name}(${(r.mechanisms || "").slice(0, 60)})`).join("；")}\n`;
     }
-    if (chapterList.length > 0) {
-      const chText = chapterList
-        .filter((c) => !c.isVolume)
+    if (normalChapters.length > 0) {
+      const chText = normalChapters
         .slice(0, 25)
         .map((c) => `第${c.chapterNumber}章 ${c.title}${c.summary ? `：${c.summary.slice(0, 60)}` : ""}`)
         .join("\n");
       if (chText) context += `\n【已有章节列表】：\n${chText}\n`;
     }
     if (outlineList.length > 0) {
-      const olText = outlineList
+      const sortedOutlines = [
+        ...outlineList.filter((o) => o.category === "chapter"),
+        ...outlineList.filter((o) => o.category !== "chapter"),
+      ];
+      const olText = sortedOutlines
         .slice(0, 15)
         .map((o) => `- ${o.title}${o.event ? `：${o.event.slice(0, 60)}` : ""}`)
         .join("\n");
@@ -82,32 +95,32 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const systemPrompt = `你是一位资深小说总编剧。请根据作品信息（以及已有章节/角色/世界观），构建一棵清晰、简洁、可直接用于思维导图与表格视图的【项目总纲树】。
 结构规范：
 - 根节点为整部作品（id 固定为 "root"）
-- 一级子节点为 3~5 个核心宏观阶段/分卷/故事线
-- 每个一级节点下拆解 2~4 个关键剧情节点或伏笔节点
-- 已有章节对应阶段 status 标为 "in_progress" 或 "completed"，未写阶段标为 "planned"
+- 一级子节点为 3~5 个核心宏观阶段/分卷/故事线，各分卷的 chapterRange 必须首尾衔接并合理覆盖全书预计章节（1-${expectedChapters}）
+- 每个一级节点下拆解 2~4 个关键剧情节点或伏笔节点，其 chapterRange 落在所属分卷范围内
+- 已有章节覆盖到的阶段（第 1~${maxWrittenChapter} 章）status 标为 "completed" 或 "in_progress"，未写阶段标为 "planned"
 - 仅输出合法 JSON 对象，严禁输出 Markdown 代码块或任何多余说明：
 {
   "id": "root",
-  "title": "作品书名",
+  "title": "<作品书名>",
   "tag": "总纲",
-  "note": "一句话核心主旨与终极目标",
+  "note": "<一句话核心主旨与终极目标>",
   "status": "in_progress",
   "children": [
     {
       "id": "v1",
-      "title": "第一卷 · 卷名",
+      "title": "<第一卷 · 卷名>",
       "tag": "主线",
-      "note": "本阶段核心矛盾与收束目标",
-      "chapterRange": "1-25",
+      "note": "<本阶段核心矛盾与收束目标>",
+      "chapterRange": "<如起止章号，按全书预计章数动态分配>",
       "status": "in_progress",
       "children": [
         {
           "id": "v1-1",
-          "title": "关键情节点名称",
-          "tag": "高潮",
-          "note": "具体推进要点与人物变化",
-          "chapterRange": "1-8",
-          "status": "completed",
+          "title": "<关键情节点名称>",
+          "tag": "高潮 | 铺垫 | 转折 | 伏笔",
+          "note": "<具体推进要点与人物变化>",
+          "chapterRange": "<落在所属分卷内的起止章号>",
+          "status": "planned",
           "children": []
         }
       ]
@@ -122,14 +135,28 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       { role: "user", content: userPrompt },
     ];
 
+    const isValidTree = (obj: any) => Boolean(obj && typeof obj === "object" && Array.isArray(obj.children) && obj.children.length > 0);
+
     const raw = await callCloudflareAi(env.AI, messages, {
       taskType: "structured",
-      temperature: 0.55,
-      maxTokens: 4096,
+      temperature: 0.5,
+      maxTokens: 6144,
     });
 
-    const parsed = parseStructuredJson<any>(raw, null);
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.children) || parsed.children.length === 0) {
+    let parsed = parseStructuredJson<any>(raw, null);
+    if (!isValidTree(parsed)) {
+      try {
+        const retryRaw = await callCloudflareAi(env.AI, messages, {
+          taskType: "fast",
+          temperature: 0.45,
+          maxTokens: 5120,
+        });
+        const retryParsed = parseStructuredJson<any>(retryRaw, null);
+        if (isValidTree(retryParsed)) parsed = retryParsed;
+      } catch {}
+    }
+
+    if (!isValidTree(parsed)) {
       return NextResponse.json({ success: false, message: "AI 生成项目总纲失败，请重试" }, { status: 500 });
     }
 

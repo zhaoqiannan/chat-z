@@ -106,40 +106,40 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 6. 【转折与伏笔均为可选】：twist（突发变故）和 suspense（伏笔线索）仅在自然合理时提供，绝非每步必填。
 7. 【方案数量灵活】：若 A➔B 存在唯一自然路径，提供 1~2 套方案；若存在不同发展取向，最多提供 3 套。
 
-【字段输出要求】：
-- title: 阶段标题（如：“核对旧档案中的时间差”）
-- purpose: 本阶段解决的核心缺口（如：“解决主角对账本真实性的怀疑”）
-- cause: 为什么发生此阶段（因）
-- action: 核心角色具体做了什么（行）
-- result: 产生的结果与局势变化（果）
-- characterDecision: 角色为什么做出该决策与应对
-- stateChange: 状态变化数组（如：["信息：未知 ➔ 产生怀疑"]）
-- event: 完整的剧情发生与互动经过（结合 cause、action 与 result，80-160字）
-- nextCondition: 下一步继续推进需满足的前提条件
+【字段输出要求（严格精简防冗长重复）】：
+- title: 阶段标题（12字以内）
+- purpose: 本阶段解决的核心缺口（25字以内）
+- cause: 为什么发生此阶段（20~40字）
+- action: 核心角色具体做了什么（20~45字）
+- result: 产生的结果与局势变化（20~40字）
+- characterDecision: 角色决策动因（20~40字）
+- stateChange: 状态变化数组（1~2条，如["信息：未知 ➔ 产生怀疑"]）
+- event: 结合具体人名与场景的完整互动经过（60~120字，不要机械复读上面的短句）
+- nextCondition: 下一步前提条件（最后一步填 null）
 - twist: 可选突发变故（无则设为 null）
 - suspense: 可选伏笔细节（无则设为 null）
 - estimatedWords: 预估篇幅字数
 
-请严格输出为以下合法 JSON 格式，绝不输出任何 Markdown 标记或多余文字：
+请严格输出以下合法 JSON，绝不输出 Markdown 代码块或多余文字：
 {
   "paths": [
     {
       "id": 1,
-      "title": "方案标题（如：抽丝剥茧·稳步验证）",
-      "style": "自然因果",
-      "summary": "一句话核心因果演进逻辑",
+      "title": "<方案标题>",
+      "style": "<风格标签>",
+      "summary": "<一句话核心因果演进逻辑>",
       "steps": [
         {
           "stepIndex": 1,
-          "title": "阶段标题",
-          "purpose": "解决的因果缺口",
-          "cause": "起因",
-          "action": "具体行动",
-          "result": "阶段结果",
-          "characterDecision": "角色决策动因",
-          "stateChange": ["信息：未知 ➔ 产生怀疑"],
-          "event": "剧情发生经过...",
-          "nextCondition": "下一步前提条件",
+          "title": "<阶段标题>",
+          "purpose": "<解决的因果缺口>",
+          "cause": "<起因>",
+          "action": "<具体行动>",
+          "result": "<阶段结果>",
+          "characterDecision": "<角色决策动因>",
+          "stateChange": ["<维度：前状态 ➔ 后状态>"],
+          "event": "<60~120字具体人名与场景互动经过>",
+          "nextCondition": "<下一步前提条件或null>",
           "twist": null,
           "suspense": null,
           "estimatedWords": ${wordsPerStep}
@@ -150,9 +150,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   "missingConditions": []
 }`;
 
-    const userMessage = `【作品】：书名《${work.title}》（题材：${work.tag || "剧情小说"}）
-【参考世界观】：${ruleContext || "通用现实/设定背景"}
-【参考笔记】：${noteContext || "无"}
+    const userMessage = `【作品】：书名《${work.title}》（题材：${work.tag || "通用小说"}）
+【参考世界观】：${ruleContext || "通用设定背景"}
+【参考笔记】：${noteContext ? noteContext.slice(0, 2000) : "无"}
 【参演人物档案】：
 ${charContext}${involvedCharacters ? `\n补充提及人物：${involvedCharacters}` : ""}
 
@@ -168,106 +168,39 @@ ${charContext}${involvedCharacters ? `\n补充提及人物：${involvedCharacter
       { role: "user", content: userMessage },
     ];
 
+    const isValidPaths = (obj: any) =>
+      Boolean(obj && Array.isArray(obj.paths) && obj.paths.some((p: any) => Array.isArray(p?.steps) && p.steps.length > 0));
+
     const rawResponse = await callCloudflareAi(env.AI, messages, {
       taskType: "structured",
-      temperature: 0.55,
-      maxTokens: 4096,
+      temperature: 0.5,
+      maxTokens: 6144,
     });
 
     let parsed: any = parseStructuredJson<any>(rawResponse, null);
 
-    if (!parsed || !Array.isArray(parsed.paths) || parsed.paths.length === 0) {
-      const startBrief = startPoint.trim().slice(0, 30);
-      const targetBrief = targetPoint.trim().slice(0, 30);
+    // 首次解析失败时切换 fast 通道自动重试一次，绝不使用假模板糊弄
+    if (!isValidPaths(parsed)) {
+      try {
+        const retryRaw = await callCloudflareAi(env.AI, messages, {
+          taskType: "fast",
+          temperature: 0.45,
+          maxTokens: 5120,
+        });
+        const retryParsed = parseStructuredJson<any>(retryRaw, null);
+        if (isValidPaths(retryParsed)) {
+          parsed = retryParsed;
+        }
+      } catch (retryErr) {
+        console.warn("[plot-deduction] 备选通道重试失败:", retryErr);
+      }
+    }
 
-      parsed = {
-        paths: [
-          {
-            id: 1,
-            title: "自然因果·稳步推进",
-            style: "自然因果",
-            summary: `从【${startBrief}】出发，通过关键信息验证与合理行动，自然推进至【${targetBrief}】`,
-            steps: suggestedSteps <= 2 ? [
-              {
-                stepIndex: 1,
-                title: "核实关键线索与局势转化",
-                purpose: "打破起点僵局，获取推进所需的关键支持或事实证据",
-                cause: `承接起点【${startBrief}】遗留的未解疑问与现实阻力`,
-                action: "角色根据掌握的有限线索，主动找到核心知情人或调取记录进行交叉比对",
-                result: "确认了关键因果关系，掌握了主动权",
-                characterDecision: "审时度势，选择以最稳妥的方式验证事实而非盲目行动",
-                stateChange: ["信息：模糊怀疑 ➔ 确凿掌握", "局势：被动 ➔ 明确方向"],
-                event: `在【${startPoint}】之后，角色没有盲目冒进，而是针对核心疑点展开核实，通过可信渠道锁定了关键事实，为后续推进奠定扎实基础。`,
-                nextCondition: `直接依据确凿结果采取行动，达成【${targetPoint}】`,
-                twist: null,
-                suspense: null,
-                estimatedWords: Math.round((Number(estimatedWords) || 10000) / 2),
-              },
-              {
-                stepIndex: 2,
-                title: "采取决定性行动并达成目标",
-                purpose: "根据已具备的前置条件顺理成章达成目标状态 B",
-                cause: "前置核实工作已就绪，时机成熟",
-                action: `角色在合适场合拿出准备充分的方案与结果，顺畅推进至【${targetPoint}】`,
-                result: `成功达成预期目标【${targetBrief}】`,
-                characterDecision: "果断执行，彻底解决起点遗留的核心问题",
-                stateChange: ["目标：推进中 ➔ 顺利达成"],
-                event: `结合前期积累的成果与各方认同，角色从容化解了最后的阻力，所有因果逻辑水到渠成，完美实现【${targetPoint}】。`,
-                nextCondition: null,
-                twist: null,
-                suspense: null,
-                estimatedWords: Math.round((Number(estimatedWords) || 10000) / 2),
-              }
-            ] : [
-              {
-                stepIndex: 1,
-                title: "发现异常与确定调查切入点",
-                purpose: "使角色意识到当前状态与目标之间的实质差距并找到切入点",
-                cause: `起点【${startBrief}】造成的直接影响与信息缺失`,
-                action: "梳理现有线索，敏锐捕捉到关键漏洞或未被注意的细节",
-                result: "明确了下一步行动的目标与求证方向",
-                characterDecision: "不轻信表面结论，保持谨慎客观的态度",
-                stateChange: ["认知：未察觉 ➔ 发现关键切入点"],
-                event: `在经历【${startPoint}】后，角色仔细比对前后细节，发现了此前被忽略的矛盾点，决定顺此线索深入探查。`,
-                nextCondition: "需要获取第一手资料或关键人物口供",
-                twist: null,
-                suspense: null,
-                estimatedWords: wordsPerStep,
-              },
-              {
-                stepIndex: 2,
-                title: "突破阻碍与获取核心支撑",
-                purpose: "补齐达成目标 B 所必需的关键证据或人际支持",
-                cause: "深入调查触及到实际阻力或既得利益方的防备",
-                action: "角色利用合理手段周旋，成功取得关键支持与核心证据",
-                result: "彻底补全了达成目标所需的核心条件",
-                characterDecision: "在原则范围内灵活变通，化解沟通阻力",
-                stateChange: ["资源：匮乏 ➔ 掌握关键支撑"],
-                event: `在推进过程中遭遇了合理的阻碍，角色凭借沉着判断化解了分歧，顺利拿到足以定论的关键支撑。`,
-                nextCondition: "在关键节点正式公开或落实成果",
-                twist: null,
-                suspense: null,
-                estimatedWords: wordsPerStep,
-              },
-              {
-                stepIndex: 3,
-                title: "因果闭环与目标达成",
-                purpose: "全面达成目标状态 B 并稳固新局势",
-                cause: "所有必要前置条件均已齐备",
-                action: `正面推进并落实最终决议，使所有人认可结果`,
-                result: `顺利达成【${targetPoint}】并形成因果闭环`,
-                characterDecision: "沉着收官，巩固来之不易的发展成果",
-                stateChange: ["局势：悬而未决 ➔ 全面达成目标"],
-                event: `所有线索与准备在此刻汇聚，角色以无可辩驳的事实与扎实的准备达成目标，全篇因果严丝合缝，圆满实现【${targetPoint}】。`,
-                nextCondition: null,
-                twist: null,
-                suspense: null,
-                estimatedWords: wordsPerStep,
-              }
-            ],
-          },
-        ],
-      };
+    if (!isValidPaths(parsed)) {
+      return NextResponse.json(
+        { success: false, message: "AI 剧情推演结果解析失败，请稍后重试" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({

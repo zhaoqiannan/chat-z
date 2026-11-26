@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, chapterAiHistory, characters as dbCharacters, worldRules as dbWorldRules } from "@/db";
-import { eq, and } from "drizzle-orm";
+import { getDb, works, chapters as dbChapters, chapterAiHistory, characters as dbCharacters, characterRelations as dbRelations, worldRules as dbWorldRules } from "@/db";
+import { eq, and, lt, desc } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
 
 /**
@@ -52,12 +52,30 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    // 1. 生成初稿模式 (Draft) - 调用真实大模型创作（注入作品角色与世界观，防止盲写 OOC）
+    // 1. 生成初稿模式 (Draft) - 注入作品角色、关系网、世界观与上一章末尾衔接（防盲写 OOC 与人称跳变）
     if (mode === "draft") {
-      const [workChars, workRules] = await Promise.all([
+      const [workChars, workRules, workRelations, currentChapterRow] = await Promise.all([
         db.select().from(dbCharacters).where(eq(dbCharacters.workId, workId)).limit(8).all(),
         db.select().from(dbWorldRules).where(eq(dbWorldRules.workId, workId)).limit(6).all(),
+        db.select().from(dbRelations).where(eq(dbRelations.workId, workId)).limit(8).all(),
+        chapterId > 0
+          ? db.select({ chapterNumber: dbChapters.chapterNumber }).from(dbChapters).where(eq(dbChapters.id, chapterId)).get()
+          : Promise.resolve(null),
       ]);
+
+      let prevChapterTail = "";
+      if (currentChapterRow?.chapterNumber && currentChapterRow.chapterNumber > 1) {
+        const prevCh = await db
+          .select({ chapterNumber: dbChapters.chapterNumber, content: dbChapters.content })
+          .from(dbChapters)
+          .where(and(eq(dbChapters.workId, workId), eq(dbChapters.isVolume, 0), lt(dbChapters.chapterNumber, currentChapterRow.chapterNumber)))
+          .orderBy(desc(dbChapters.chapterNumber))
+          .limit(1)
+          .get();
+        if (prevCh?.content?.trim()) {
+          prevChapterTail = prevCh.content.trim().slice(-800);
+        }
+      }
 
       let loreContext = "";
       if (workChars.length > 0) {
@@ -68,11 +86,20 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
             .join("\n") +
           "\n\n";
       }
+      if (workRelations.length > 0) {
+        loreContext +=
+          "【人物关系网】：\n" +
+          workRelations.map((r) => `- ${r.sourceCharName} ➔ ${r.targetCharName}：${r.relationType}${r.description ? `（${r.description.slice(0, 40)}）` : ""}`).join("\n") +
+          "\n\n";
+      }
       if (workRules.length > 0) {
         loreContext +=
           "【世界观法则】：\n" +
           workRules.map((r) => `- ${r.name}: ${(r.mechanisms || r.description || "无").slice(0, 100)}`).join("\n") +
           "\n\n";
+      }
+      if (prevChapterTail) {
+        loreContext += `【上一章正文末尾（严格继承其人称视角与文风无缝承接，不要重复前文）】：\n...${prevChapterTail}\n\n`;
       }
 
       const messages: ChatMessage[] = [
@@ -81,13 +108,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           content: `你是一名专业小说执笔助手。请根据作者给出的本章大纲、核心事件、角色档案与文风要求撰写章节正文。
 【核心准则】
 1. 严格按作者指定的事件顺序与剧情走向展开，不擅自改写既定设定或凭空加入无关角色。
-2. 人物言行与心理必须符合角色档案，用具体动作、对话与环境细节推进情节，避免空洞概括和“总结式”写法。
-3. 严格控制篇幅尽量贴近目标字数，保持叙事视角统一。
-4. 【纯正文直出】：从正文第一句直接输出到最后一句，严禁输出章节标题以外的思考过程、大纲复述、字数说明或开场白。`,
+2. 人物言行与心理必须符合角色档案与人物关系，用实时发生的动作、对话与感官细节推进情节；严禁使用“很快”“转眼间”“经过一番商议”这类快进概括写法。
+3. **去 AI 味规范**：禁止滥用陈词滥调（如“嘴角勾起一抹弧度”“空气仿佛凝固”“心中掀起惊涛骇浪”“不由得/不禁”），禁止段尾强行说教或总结升华。
+4. 严格继承上一章的叙事人称与文风（若有提供），控制篇幅贴近目标字数。
+5. 【纯正文直出】：从正文第一句直接输出到最后一句，严禁输出思考过程、大纲复述、字数说明或开场白。`,
         },
         {
           role: "user",
-          content: `作品书名：《${work.title}》（题材：${work.tag || "小说"}）
+          content: `作品书名：《${work.title}》（题材：${work.tag || "通用小说"}）
 ${loreContext}【本章创作需求】
 - 本章大致内容：${overview || "推进核心主线"}
 - 核心事件安排：${events || "按大纲事件展开"}
@@ -193,12 +221,35 @@ ${original}
         },
       ];
 
+      const originalWordCount = original.trim().replace(/\s+/g, "").length;
+      const isShortenGoal = /精简|缩写|压缩|删减|去水/.test(String(optimizeGoal || ""));
+
       const rawOptimizedText = await callCloudflareAi(env.AI, messages, {
+        taskType: "creative",
         temperature: 0.65,
         maxTokens: 8192,
       });
 
-      const optimizedText = cleanNovelStoryText(rawOptimizedText);
+      let optimizedText = cleanNovelStoryText(rawOptimizedText);
+
+      // 防腰斩保护：若原文较长但润色结果不足原文 45%（且非精简指令），自动重试一次
+      if (
+        originalWordCount >= 600 &&
+        !isShortenGoal &&
+        optimizedText.replace(/\s+/g, "").length < originalWordCount * 0.45
+      ) {
+        try {
+          const retryRaw = await callCloudflareAi(env.AI, messages, {
+            taskType: "fast",
+            temperature: 0.55,
+            maxTokens: 8192,
+          });
+          const retryClean = cleanNovelStoryText(retryRaw);
+          if (retryClean.replace(/\s+/g, "").length > optimizedText.replace(/\s+/g, "").length) {
+            optimizedText = retryClean;
+          }
+        } catch {}
+      }
 
       if (!optimizedText || !optimizedText.trim()) {
         return NextResponse.json(
@@ -264,7 +315,20 @@ ${original}
       let userPrompt = `作品：《${work.title}》(${work.tag || "网文"})\n${charInfo}`;
 
       if (fullContext) {
-        userPrompt += `【上下文背景参考】：\n${fullContext.slice(0, 800)}\n\n`;
+        const snippet = selectedText.trim();
+        const idx = fullContext.indexOf(snippet);
+        let surrounding = "";
+        if (idx !== -1) {
+          const before = fullContext.slice(Math.max(0, idx - 500), idx).trim();
+          const after = fullContext.slice(idx + snippet.length, idx + snippet.length + 500).trim();
+          if (before) surrounding += `[前文]\n${before}\n`;
+          if (after) surrounding += `[后文]\n${after}\n`;
+        } else {
+          surrounding = fullContext.slice(0, 900);
+        }
+        if (surrounding) {
+          userPrompt += `【划选处前后文参考（仅供衔接语境，严禁重复输出）】：\n${surrounding.trim()}\n\n`;
+        }
       }
 
       userPrompt += `【作者划选的原始文本片段】：\n${selectedText}\n\n`;

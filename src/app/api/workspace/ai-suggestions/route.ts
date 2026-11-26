@@ -37,8 +37,8 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       });
     }
 
-    // 2. 提取该作品的核心设定摘要 (每个人物/规则只取 50 字简短描述，极省 Token)
-    const [charList, ruleList, outlineList, factionList] = await Promise.all([
+    // 2. 提取该作品的核心设定摘要（同步纳入项目总纲树与近期更新的大纲节点）
+    const [charList, ruleList, outlineList, factionList, masterRow] = await Promise.all([
       db
         .select({ name: characters.name, identity: characters.identity, personality: characters.personality, background: characters.background })
         .from(characters)
@@ -50,16 +50,34 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .where(eq(worldRules.workId, latestWork.id))
         .limit(4),
       db
-        .select({ title: outlines.title, goal: outlines.goal, conflict: outlines.conflict })
+        .select({ title: outlines.title, goal: outlines.goal, conflict: outlines.conflict, event: outlines.event })
         .from(outlines)
         .where(eq(outlines.workId, latestWork.id))
-        .limit(4),
+        .orderBy(desc(outlines.updatedAt))
+        .limit(5),
       db
         .select({ name: factions.name, doctrine: factions.doctrine })
         .from(factions)
         .where(eq(factions.workId, latestWork.id))
         .limit(4),
+      env.DB.prepare("SELECT tree_json FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1")
+        .bind(latestWork.id, user.userId)
+        .first()
+        .catch(() => null),
     ]);
+
+    let masterNodesBrief: string[] = [];
+    if (masterRow && (masterRow as any).tree_json) {
+      try {
+        const tree = JSON.parse((masterRow as any).tree_json);
+        const children = Array.isArray(tree?.children) ? tree.children : [];
+        masterNodesBrief = children
+          .slice(0, 5)
+          .map((n: any) => `${n.title || "阶段"}${n.note ? `（${String(n.note).slice(0, 45)}）` : ""}`);
+      } catch {}
+    }
+
+    const hasAnyOutline = outlineList.length > 0 || masterNodesBrief.length > 0;
 
     // 纯代码快速规则前置检测 (0 Token 消耗)
     const fastSuggestions: any[] = [];
@@ -71,18 +89,19 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         content: `作品「${latestWork.title}」尚未录入核心角色卡。建议在「世界/知识库 - 角色」中建立主角与主要配角卡片，方便 AI 协助把控人设。`,
       });
     }
-    if (outlineList.length === 0) {
+    if (!hasAnyOutline) {
       fastSuggestions.push({
         id: "fast-2",
         type: "tip",
         title: "大纲节点待规划",
-        content: `「${latestWork.title}」尚未建立故事大纲情节点。明确主线核心事件有助于理清剧情推进节奏。`,
+        content: `「${latestWork.title}」尚未建立项目总纲或章节大纲。明确主线阶段目标有助于理清剧情推进节奏。`,
       });
     }
 
-    // 如果设定相对充足，调用一次超轻量 AI 进行逻辑冲突与灵感启发诊断 (耗费 < 600 tokens)
-    if (charList.length > 0 || outlineList.length > 0 || ruleList.length > 0) {
-      let loreContext = `作品《${latestWork.title}》(类型：${latestWork.tag || "网文"})\n`;
+    // 如果设定相对充足，调用轻量 AI 进行逻辑冲突与灵感启发诊断
+    let aiSucceeded = false;
+    if (charList.length > 0 || hasAnyOutline || ruleList.length > 0) {
+      let loreContext = `作品《${latestWork.title}》(类型：${latestWork.tag || "通用小说"})\n`;
       if (charList.length > 0) {
         loreContext += `【主要角色】：` + charList.map((c) => `${c.name}（身份：${c.identity || "未知"}，性格：${c.personality || "未知"}）`).join("；") + "\n";
       }
@@ -92,8 +111,11 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       if (ruleList.length > 0) {
         loreContext += `【世界规则】：` + ruleList.map((r) => `${r.name}（${(r.mechanisms || r.effects || "基础规则").slice(0, 60)}）`).join("；") + "\n";
       }
+      if (masterNodesBrief.length > 0) {
+        loreContext += `【项目总纲阶段】：${masterNodesBrief.join("；")}\n`;
+      }
       if (outlineList.length > 0) {
-        loreContext += `【近期大纲节点】：` + outlineList.map((o) => `${o.title}（目标：${o.goal || "推进剧情"}，主要冲突：${o.conflict || "见招拆招"}）`).join("；") + "\n";
+        loreContext += `【近期大纲节点】：` + outlineList.map((o) => `${o.title}（${(o.event || o.goal || "推进剧情").slice(0, 50)}${o.conflict ? ` / 冲突：${o.conflict.slice(0, 30)}` : ""}）`).join("；") + "\n";
       }
 
       const messages: ChatMessage[] = [
@@ -103,11 +125,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 请严格基于提供的真实作品设定，给出 1~2 条具体、可落地的诊断或灵感建议（潜在设定冲突、角色张力看点、或大纲推进切入点）。
 【核心要求】
 1. 必须直接点名引用上方提供的具体角色名、势力名、规则名或大纲节点名，严禁泛泛而谈的万能套话。
-2. 仅输出合法 JSON 数组，严禁输出 Markdown 代码块或任何多余文字。
-格式：
+2. type 从 "warning"（风险/冲突提醒）、"inspiration"（剧情灵感）、"tip"（结构完善建议）中按实际内容选择，不要强行凑冲突。
+3. 仅输出合法 JSON 数组，严禁输出 Markdown 代码块或任何多余文字：
 [
-  { "type": "warning", "title": "简短标题（不超过12字）", "content": "50~100字具体诊断与可执行建议" },
-  { "type": "inspiration", "title": "简短标题（不超过12字）", "content": "50~100字具体灵感启发" }
+  { "type": "warning | inspiration | tip", "title": "<不超过12字标题>", "content": "<50~100字具体诊断与可执行建议>" }
 ]`,
         },
         {
@@ -116,37 +137,45 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         },
       ];
 
-      try {
+      const tryFetchSuggestions = async (taskType: "structured" | "fast") => {
         const rawAi = await callCloudflareAi(env.AI, messages, {
-          taskType: "structured",
+          taskType,
           temperature: 0.4,
-          maxTokens: 700,
+          maxTokens: 2048,
         });
-
         const parsed = parseStructuredJson<any[]>(rawAi, []);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          parsed.forEach((item, index) => {
-            if (item && item.content) {
-              fastSuggestions.push({
-                id: `ai-${Date.now()}-${index}`,
-                type: item.type || "warning",
-                title: item.title || "AI 创意建议",
-                content: item.content,
-              });
-            }
+        return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.content === "string" && item.content.trim().length >= 10) : [];
+      };
+
+      try {
+        let validItems = await tryFetchSuggestions("structured");
+        if (validItems.length === 0) {
+          validItems = await tryFetchSuggestions("fast");
+        }
+        if (validItems.length > 0) {
+          aiSucceeded = true;
+          validItems.slice(0, 2).forEach((item, index) => {
+            fastSuggestions.push({
+              id: `ai-${Date.now()}-${index}`,
+              type: ["warning", "inspiration", "tip", "info"].includes(item.type) ? item.type : "inspiration",
+              title: String(item.title || "AI 创意建议").trim(),
+              content: String(item.content).trim(),
+            });
           });
         }
       } catch (aiErr) {
-        console.warn("AI 诊断解析失败，返回本地建议:", aiErr);
+        console.warn("AI 诊断解析失败:", aiErr);
       }
     }
 
     if (fastSuggestions.length === 0) {
       fastSuggestions.push({
-        id: "ok-1",
-        type: "success",
-        title: "世界观与大纲自洽良好",
-        content: `「${latestWork.title}」当前角色、阵营与大纲设定逻辑通顺，无明显自相矛盾之处，可保持当前节奏继续创作！`,
+        id: "info-1",
+        type: "info",
+        title: aiSucceeded ? "暂无明显设定冲突" : "暂未获取到 AI 诊断结果",
+        content: aiSucceeded
+          ? `「${latestWork.title}」当前录入的核心设定暂未发现明显矛盾，可继续推进章节创作。`
+          : `本次未能从 AI 获取有效分析结果，请稍后点击刷新重新诊断。`,
       });
     }
 

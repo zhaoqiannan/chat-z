@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { callCloudflareAi, ChatMessage, parseStructuredJson, cleanAnalysisText } from "@/utils/ai";
+import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -15,7 +15,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const title = String(body.title || "").trim();
-    const content = String(body.content || "").trim().slice(0, 3000); // 安全截断防止超长
+    const rawContent = String(body.content || "").trim();
+    // 长素材保留前 2400 字 + 尾 1200 字，兼顾开篇定义与结尾结论
+    const content =
+      rawContent.length > 3600
+        ? `${rawContent.slice(0, 2400)}\n\n……（中段略）……\n\n${rawContent.slice(-1200)}`
+        : rawContent;
     const fileName = String(body.fileName || "").trim();
     const fileType = String(body.fileType || "document").trim();
     const customPrompt = String(body.customPrompt || "").trim();
@@ -40,9 +45,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const systemPrompt = `你是一位严谨的小说世界观与素材资料分析助手。
 请结合素材的真实文本与作者的自定义指令进行精准提炼，仅输出合法 JSON：
 {
-  "aiSummary": "80~180字精炼摘要，概括素材核心信息与创作参考价值",
-  "extractedLore": "针对作者指令的核心提取结果（使用分条 • 列出或清晰段落，便于直接采纳为笔记）",
-  "suggestedTags": ["标签1", "标签2", "标签3"]
+  "aiSummary": "<80~180字精炼摘要，概括素材核心信息与创作参考价值>",
+  "extractedLore": "<纯字符串！针对作者指令的核心提取结果，可用 \\n 换行并用 • 分条，严禁输出数组或嵌套对象>",
+  "suggestedTags": ["<标签1>", "<标签2>", "<标签3>"]
 }
 【核心准则】
 1. 若提供了【素材正文/解析文本】，所有专有名词、数值与设定必须严格忠于原文，严禁编造原文不存在的数据。
@@ -70,26 +75,45 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const rawResponse = await callCloudflareAi(env.AI, messages, {
       taskType: "structured",
       temperature: 0.3,
-      maxTokens: 2000,
+      maxTokens: 3072,
     });
 
     let parsed: any = parseStructuredJson<any>(rawResponse, null);
-
-    if (!parsed || typeof parsed !== "object") {
-      const cleaned = cleanAnalysisText(rawResponse);
-      parsed = {
-        aiSummary: cleaned.slice(0, 200),
-        extractedLore: cleaned,
-        suggestedTags: ["素材参考", "小说设定"],
-      };
+    if (!parsed || typeof parsed !== "object" || (!parsed.aiSummary && !parsed.extractedLore)) {
+      try {
+        const retryRaw = await callCloudflareAi(env.AI, messages, {
+          taskType: "fast",
+          temperature: 0.3,
+          maxTokens: 2560,
+        });
+        const retryParsed = parseStructuredJson<any>(retryRaw, null);
+        if (retryParsed && typeof retryParsed === "object" && (retryParsed.aiSummary || retryParsed.extractedLore)) {
+          parsed = retryParsed;
+        }
+      } catch {}
     }
+
+    if (!parsed || typeof parsed !== "object" || (!parsed.aiSummary && !parsed.extractedLore)) {
+      return NextResponse.json(
+        { success: false, message: "AI 素材提炼结果解析失败，请稍后重试" },
+        { status: 500 }
+      );
+    }
+
+    const normalizedLore = Array.isArray(parsed.extractedLore)
+      ? parsed.extractedLore.map((s: any) => String(s || "").trim()).filter(Boolean).join("\n")
+      : typeof parsed.extractedLore === "object" && parsed.extractedLore !== null
+        ? JSON.stringify(parsed.extractedLore, null, 2)
+        : String(parsed.extractedLore || "").trim();
 
     return NextResponse.json({
       success: true,
       result: {
-        aiSummary: parsed.aiSummary || "",
-        extractedLore: parsed.extractedLore || "",
-        suggestedTags: Array.isArray(parsed.suggestedTags) ? parsed.suggestedTags : [],
+        aiSummary: String(parsed.aiSummary || "").trim(),
+        extractedLore: normalizedLore,
+        suggestedTags: Array.isArray(parsed.suggestedTags)
+          ? parsed.suggestedTags.map((t: any) => String(t || "").trim()).filter(Boolean)
+          : [],
       },
     });
   } catch (error: any) {

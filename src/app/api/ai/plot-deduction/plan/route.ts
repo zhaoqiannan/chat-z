@@ -450,6 +450,11 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .slice(-5);
     const recentProgressText = recentBeforeNums.map((n) => outlineByNum.get(n)).join("\n");
 
+    const inRangeExistingNums = Array.from(outlineByNum.keys())
+      .filter((n) => n >= chapterStart && n <= chapterEnd)
+      .sort((a, b) => a - b);
+    const inRangeExistingText = inRangeExistingNums.map((n) => outlineByNum.get(n)).join("\n");
+
     const chapterNumbersToPlan: number[] = [];
     for (let n = chapterStart; n <= chapterEnd; n++) {
       chapterNumbersToPlan.push(n);
@@ -500,7 +505,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 【Tab 1 项目总纲目标节点及其下级子节点大纲（必须落实的硬锚点）】：
 ${subtreeText}${nextAnchorText ? `【下一阶段总纲出口锚点（供最后一章收尾衔接，切勿提前写爆）】：\n${nextAnchorText}\n\n` : ""}【Tab 2 前序已有章节大纲与当前进度】：
 ${recentProgressText || "（前序暂无已提取章节大纲，请直接基于总纲开篇或阶段起点自然展开）"}
-${prevChapterTail ? `\n【上一章（第${chapterStart - 1}章）正文末尾参考】：\n...${prevChapterTail}\n` : ""}
+${prevChapterTail ? `\n【上一章（第${chapterStart - 1}章）正文末尾参考】：\n...${prevChapterTail}\n` : ""}${inRangeExistingText ? `\n【注意：本次推演区间内以下章节已有草稿/旧大纲（可在其基础上顺延完善或给出更优替代方案）】：\n${inRangeExistingText}\n` : ""}
 ${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
 ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
 请直接输出包含 ${planCountTarget} 完整纯文本走向方案的合法 JSON：`;
@@ -510,13 +515,40 @@ ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
       { role: "user", content: userPrompt },
     ];
 
+    const hasCompletePlans = (obj: any) =>
+      Boolean(
+        obj &&
+          Array.isArray(obj.plans) &&
+          obj.plans.length > 0 &&
+          obj.plans.some(
+            (p: any) =>
+              Array.isArray(p?.chapters) &&
+              p.chapters.length >= chapterNumbersToPlan.length &&
+              p.chapters.every((c: any) => String(c?.plotText || c?.content || c?.summary || "").trim().length >= 30)
+          )
+      );
+
     const raw = await callCloudflareAi(env.AI, messages, {
       taskType: "structured",
       temperature: 0.65,
       maxTokens: 8192,
     });
 
-    const parsed = parseStructuredJson<any>(raw, null);
+    let parsed = parseStructuredJson<any>(raw, null);
+    if (!hasCompletePlans(parsed)) {
+      try {
+        const retryRaw = await callCloudflareAi(env.AI, messages, {
+          taskType: "fast",
+          temperature: 0.6,
+          maxTokens: 8192,
+        });
+        const retryParsed = parseStructuredJson<any>(retryRaw, null);
+        if (hasCompletePlans(retryParsed) || (!parsed && retryParsed?.plans?.length)) {
+          parsed = retryParsed;
+        }
+      } catch {}
+    }
+
     if (!parsed || !Array.isArray(parsed.plans) || parsed.plans.length === 0) {
       return NextResponse.json({ success: false, message: "AI 推演章节走向失败，请重试" }, { status: 500 });
     }
