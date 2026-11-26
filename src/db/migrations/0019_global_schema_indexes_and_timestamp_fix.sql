@@ -1,4 +1,4 @@
--- 补齐此前仅靠运行时 DDL 创建的表、全站高频查询索引，并修复 chapters.updated_at 毫秒时间戳异常
+-- 补齐历史缺失/仅靠运行时 DDL 创建的表、全站高频查询索引，并修复 chapters.updated_at 毫秒时间戳异常
 
 CREATE TABLE IF NOT EXISTS work_master_outlines (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -28,6 +28,93 @@ CREATE TABLE IF NOT EXISTS ai_analysis_reports (
   overall_score INTEGER DEFAULT 0,
   report_json TEXT NOT NULL,
   created_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chapter_ai_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  chapter_id INTEGER NOT NULL,
+  mode TEXT NOT NULL,
+  title TEXT NOT NULL,
+  prompt_summary TEXT,
+  content TEXT NOT NULL,
+  word_count INTEGER DEFAULT 0,
+  created_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS outline_ai_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  node_id TEXT,
+  action TEXT NOT NULL,
+  title TEXT NOT NULL,
+  prompt TEXT,
+  result_payload TEXT,
+  created_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS chapter_versions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  chapter_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  word_count INTEGER DEFAULT 0,
+  version_tag TEXT DEFAULT '手动保存快照',
+  created_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS chapter_ai_chats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  chapter_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  action_type TEXT DEFAULT 'chat',
+  selected_text TEXT,
+  context_tags TEXT,
+  applied INTEGER DEFAULT 0,
+  created_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS memory_fragments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  chapter_id INTEGER,
+  user_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  source_type TEXT DEFAULT 'ai_chat',
+  tags TEXT,
+  created_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS plot_deductions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  start_point TEXT NOT NULL,
+  target_point TEXT NOT NULL,
+  involved_characters TEXT,
+  pace_preference TEXT DEFAULT 'standard',
+  step_count INTEGER DEFAULT 3,
+  generated_paths TEXT,
+  selected_path_index INTEGER,
+  status TEXT DEFAULT 'completed',
+  created_at INTEGER,
+  updated_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS uploaded_files (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT,
+  file_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  file_size TEXT,
+  data_base64 TEXT NOT NULL,
+  created_at INTEGER
 );
 
 -- 全站高频外键与查询索引（大幅降低 D1 Rows Read）
