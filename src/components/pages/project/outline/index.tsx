@@ -15,6 +15,7 @@ import DrawerPlotDeduction from "./drawer-plot-deduction";
 import DrawerPlotDeductionHistory from "./drawer-plot-deduction/drawer-plot-deduction-history";
 import DrawerThoughtOrganizer from "./drawer-thought-organizer";
 import MasterOutlineWorkspace from "./master-outline";
+import PlotDeductionWorkspace from "./plot-deduction-workspace";
 
 export default function StoryOutlinePage() {
   const params = useParams();
@@ -37,6 +38,10 @@ export default function StoryOutlinePage() {
 
   // AI 思路整理抽屉状态
   const [thoughtDrawerOpened, setThoughtDrawerOpened] = useState(false);
+
+  // Tab 1 项目总纲 ➔ Tab 3 剧情推演联动节点与旧推演卡片视图切换
+  const [deductionTargetMasterNodeId, setDeductionTargetMasterNodeId] = useState<string | null>(null);
+  const [showLegacyDeductionList, setShowLegacyDeductionList] = useState(false);
 
   // 树结构折叠状态管理（用于支持全局 全部展开 / 全部收起）
   const [collapsedParents, setCollapsedParents] = useState<Record<string, boolean>>({});
@@ -264,7 +269,7 @@ export default function StoryOutlinePage() {
               章节大纲 ({chapterNodes.length})
             </Tabs.Tab>
             <Tabs.Tab value="deduction" leftSection={<FiZap size={15} color="#2563eb" />}>
-              剧情推演 ({deductionNodes.length})
+              剧情推演
             </Tabs.Tab>
             <Tabs.Tab value="memo" leftSection={<FiEdit3 size={15} color="#64748b" />}>
               随手卡片 ({memoNodes.length})
@@ -275,7 +280,24 @@ export default function StoryOutlinePage() {
 
       {activeTab === "master" ? (
         <Box flex={1} mih={0} style={{ overflow: "hidden" }}>
-          <MasterOutlineWorkspace workId={workId} />
+          <MasterOutlineWorkspace
+            workId={workId}
+            onJumpToPlotDeduction={(nodeId) => {
+              setDeductionTargetMasterNodeId(nodeId);
+              setShowLegacyDeductionList(false);
+              setActiveTab("deduction");
+              setSelectedNodeIds([]);
+            }}
+          />
+        </Box>
+      ) : activeTab === "deduction" && !showLegacyDeductionList ? (
+        <Box flex={1} mih={0} style={{ overflow: "hidden" }}>
+          <PlotDeductionWorkspace
+            workId={workId}
+            initialNodeId={deductionTargetMasterNodeId}
+            legacyCardCount={deductionNodes.length}
+            onShowLegacyCards={() => setShowLegacyDeductionList(true)}
+          />
         </Box>
       ) : (
         <>
@@ -330,6 +352,9 @@ export default function StoryOutlinePage() {
 
               {activeTab === "deduction" && (
                 <Group gap="xs">
+                  <Button variant="light" onClick={() => setShowLegacyDeductionList(false)}>
+                    返回章节走向推演工作台
+                  </Button>
                   <Button variant="filled" leftSection={<FiZap size={15} />} onClick={() => setDeductionDrawerOpened(true)}>
                     A➔B 剧情推演
                   </Button>

@@ -102,6 +102,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       content,
       status,
       summary,
+      chapterNumber: rawChapterNumber,
     } = body;
 
     const workId = Number(rawWorkId);
@@ -130,17 +131,22 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const isVol = Boolean(isVolume);
     let autoChapterNumber = 1;
 
-    // 如果是章节，自动顺序递增计算 chapter_number
+    // 如果是章节，优先使用传入的正整数 chapterNumber，否则自动顺序递增计算 chapter_number
     if (!isVol) {
-      const existingChapters = await db
-        .select({ chapterNumber: chapters.chapterNumber })
-        .from(chapters)
-        .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0)))
-        .orderBy(desc(chapters.chapterNumber))
-        .limit(1);
+      const explicitNum = Number(rawChapterNumber);
+      if (explicitNum && !isNaN(explicitNum) && explicitNum > 0) {
+        autoChapterNumber = Math.floor(explicitNum);
+      } else {
+        const existingChapters = await db
+          .select({ chapterNumber: chapters.chapterNumber })
+          .from(chapters)
+          .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0)))
+          .orderBy(desc(chapters.chapterNumber))
+          .limit(1);
 
-      if (existingChapters.length > 0 && typeof existingChapters[0].chapterNumber === "number") {
-        autoChapterNumber = existingChapters[0].chapterNumber + 1;
+        if (existingChapters.length > 0 && typeof existingChapters[0].chapterNumber === "number") {
+          autoChapterNumber = existingChapters[0].chapterNumber + 1;
+        }
       }
     }
 

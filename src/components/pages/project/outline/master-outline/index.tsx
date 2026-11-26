@@ -16,9 +16,10 @@ import styles from "./style.module.scss";
 
 interface MasterOutlineWorkspaceProps {
   workId: string;
+  onJumpToPlotDeduction?: (nodeId: string) => void;
 }
 
-export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspaceProps) {
+export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }: MasterOutlineWorkspaceProps) {
   const router = useRouter();
   const mindmapRef = useRef<MindMapViewHandle | null>(null);
   const [loading, setLoading] = useState(false);
@@ -369,6 +370,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
               onDeleteNode={handleDelete}
               onJumpToAiAnalysis={handleJumpToAiAnalysis}
               onOpenLogicDeduction={handleOpenLogicDeduction}
+              onJumpToPlotDeduction={onJumpToPlotDeduction}
             />
 
             {/* 方案 C：底部居中悬浮 Dock（无突兀大 Segmented，无右侧属性栏） */}
@@ -424,6 +426,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
             onToggleCollapse={handleToggleCollapse}
             onJumpToAiAnalysis={handleJumpToAiAnalysis}
             onOpenLogicDeduction={handleOpenLogicDeduction}
+            onJumpToPlotDeduction={onJumpToPlotDeduction}
           />
         )
       ) : null}

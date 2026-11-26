@@ -561,7 +561,7 @@ export default function EditorArea({
   };
 
   const handleExtractToOutline = async () => {
-    if (!chapter) return;
+    if (!chapter || extractingOutline) return;
     const cleanContent = content.trim();
     if (!cleanContent || cleanContent.length < 30) {
       useAlert.warning("本章正文内容过短，写满一段后再提取大纲吧！");
@@ -570,6 +570,7 @@ export default function EditorArea({
 
     try {
       setExtractingOutline(true);
+      useAlert.info("正在提取本章剧情到大纲，请不要跳转页面...", { autoClose: 5000 });
       const res = await extractChapterOutline({
         chapterId: chapter.id,
         workId,
@@ -578,7 +579,7 @@ export default function EditorArea({
       });
 
       if (res && res.success) {
-        useAlert.success("已提炼本章核心剧情并同步至大纲故事轴！");
+        useAlert.success("提取完毕！已将本章核心剧情同步至故事大纲", { autoClose: 3500 });
       } else {
         useAlert.error("提取大纲失败: " + (res?.message || "网络异常"));
       }

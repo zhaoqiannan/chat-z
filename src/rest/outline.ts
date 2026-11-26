@@ -349,3 +349,118 @@ export const getOutlineAiHistoryList = async (workId: number | string, nodeId?: 
 export const deleteOutlineAiHistoryRecord = async (id: number) => {
   return del(OutlineApi.history, { id });
 };
+
+// ============================================================================
+// Tab 3 剧情推演闭环（项目总纲节点 + Tab 2 章节大纲进度 ➔ 纯文本多方案 ➔ ≥3000字正文）
+// ============================================================================
+export interface MasterNodePlanMeta {
+  id: string;
+  title: string;
+  tag?: string;
+  note?: string;
+  chapterRange?: string;
+  status?: string;
+  depth: number;
+  childCount: number;
+  parsedRange: { start: number; end: number } | null;
+  writtenCount: number;
+  totalPlannedCount: number;
+  missingChapters: number[];
+  hasSnapshot: boolean;
+}
+
+export interface ChapterProgressOutlineItem {
+  chapterNumber: number;
+  chapterId: number | null;
+  title: string;
+  outlineText: string;
+  twist?: string;
+  suspense?: string;
+  wordCount: number;
+  hasOutline: boolean;
+  hasProse: boolean;
+}
+
+export interface MasterChapterPlanItem {
+  chapterNumber: number;
+  title: string;
+  plotText: string;
+}
+
+export interface MasterChapterPlanOption {
+  id: string;
+  name: string;
+  style: string;
+  overview: string;
+  chapters: MasterChapterPlanItem[];
+}
+
+export interface GeneratedProseDraft {
+  chapterNumber: number;
+  chapterTitle: string;
+  planId: string;
+  planName?: string;
+  plotText: string;
+  content: string;
+  wordCount: number;
+  updatedAt: number;
+}
+
+export interface MasterNodeDeductionSnapshot {
+  nodeId: string;
+  nodeTitle: string;
+  chapterStart: number;
+  chapterEnd: number;
+  preference?: string;
+  progressSummary: string;
+  plans: MasterChapterPlanOption[];
+  selectedPlanId: string;
+  latestDrafts?: Record<string, GeneratedProseDraft>;
+  lastGeneratedDraft?: GeneratedProseDraft | null;
+  updatedAt: number;
+}
+
+export interface MasterNodeDeductionContextResult {
+  masterNodes: MasterNodePlanMeta[];
+  selectedNodeId: string;
+  targetNode: any | null;
+  suggestedRange: { start: number; end: number };
+  inRangeOutlines: ChapterProgressOutlineItem[];
+  precedingOutlines: ChapterProgressOutlineItem[];
+  volumes: Array<{ id: number; title: string }>;
+  existingChapters: Array<{ id: number; chapterNumber: number; title: string; wordCount: number; volumeId: number | null }>;
+  snapshot: MasterNodeDeductionSnapshot | null;
+}
+
+export const getMasterNodeDeductionContext = async (
+  workId: number | string,
+  nodeId?: string
+): Promise<{ success: boolean; result?: MasterNodeDeductionContextResult; message?: string }> => {
+  return get(`/api/ai/plot-deduction/plan?workId=${workId}${nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : ""}`);
+};
+
+export const generateMasterChapterPlans = async (payload: {
+  workId: number | string;
+  nodeId: string;
+  targetNode?: any;
+  chapterStart: number;
+  chapterEnd: number;
+  preference?: string;
+}): Promise<{ success: boolean; result?: MasterNodeDeductionSnapshot; message?: string }> => {
+  return post(`/api/ai/plot-deduction/plan`, payload);
+};
+
+export const generateProseFromPlan = async (payload: {
+  workId: number | string;
+  nodeId: string;
+  planId: string;
+  planName?: string;
+  chapterNumber: number;
+  chapterTitle: string;
+  plotText: string;
+  siblingContext?: string;
+  writingStyle?: string;
+  extraInstruction?: string;
+}): Promise<{ success: boolean; result?: GeneratedProseDraft; message?: string }> => {
+  return post(`/api/ai/plot-deduction/generate-prose`, payload);
+};

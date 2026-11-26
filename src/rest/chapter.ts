@@ -35,6 +35,7 @@ export interface CreateChapterPayload {
   content?: string;
   status?: ChapterStatus;
   summary?: string;
+  chapterNumber?: number;
 }
 
 export interface UpdateChapterPayload {

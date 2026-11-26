@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { ActionIcon, Box, Flex, Group, ScrollArea, Select, Table, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiCpu, FiGitMerge, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiCpu, FiGitMerge, FiPlus, FiTrash2, FiZap } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineStatus } from "@/rest/master-outline";
 import { flattenVisibleTree, TAG_PRESETS } from "./tree-utils";
 import styles from "./style.module.scss";
@@ -58,6 +58,7 @@ interface TableViewProps {
   onToggleCollapse: (id: string) => void;
   onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
   onOpenLogicDeduction: (nodeId: string) => void;
+  onJumpToPlotDeduction?: (nodeId: string) => void;
 }
 
 export default function TableView({
@@ -70,6 +71,7 @@ export default function TableView({
   onToggleCollapse,
   onJumpToAiAnalysis,
   onOpenLogicDeduction,
+  onJumpToPlotDeduction,
 }: TableViewProps) {
   const rows = useMemo(() => {
     const all = flattenVisibleTree(tree);
@@ -88,7 +90,7 @@ export default function TableView({
               <Table.Th><Text fz={12} fw={600} c="#475569">要点说明</Text></Table.Th>
               <Table.Th w={110}><Text fz={12} fw={600} c="#475569">关联章节</Text></Table.Th>
               <Table.Th w={110}><Text fz={12} fw={600} c="#475569">状态</Text></Table.Th>
-              <Table.Th w={170}><Text fz={12} fw={600} c="#475569">操作</Text></Table.Th>
+              <Table.Th w={196}><Text fz={12} fw={600} c="#475569">操作</Text></Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -178,6 +180,14 @@ export default function TableView({
                             </ActionIcon>
                           </Tooltip>
                         </>
+                      ) : null}
+
+                      {!isRoot && node.chapterRange?.trim() && onJumpToPlotDeduction ? (
+                        <Tooltip label="章节走向推演（前往剧情推演规划未写章节并生成正文）">
+                          <ActionIcon variant="subtle" color="blue" size={24} onClick={() => onJumpToPlotDeduction(node.id)}>
+                            <FiZap size={13} />
+                          </ActionIcon>
+                        </Tooltip>
                       ) : null}
 
                       {hasChildren ? (

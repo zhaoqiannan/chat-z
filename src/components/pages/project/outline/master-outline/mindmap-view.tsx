@@ -2,7 +2,7 @@
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActionIcon, Box, Flex, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiCpu, FiEdit2, FiFileText, FiGitMerge, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiCpu, FiEdit2, FiFileText, FiGitMerge, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiTrash2, FiZap, FiZoomIn, FiZoomOut } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineSide, MasterOutlineStatus } from "@/rest/master-outline";
 import { ChildInsertPosition, STATUS_CONFIG, SiblingInsertPosition, TAG_PRESETS, findNode, findSiblingMeta } from "./tree-utils";
 import styles from "./style.module.scss";
@@ -285,6 +285,7 @@ interface MindMapViewProps {
   onDeleteNode: (id: string) => void;
   onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
   onOpenLogicDeduction: (nodeId: string) => void;
+  onJumpToPlotDeduction?: (nodeId: string) => void;
 }
 
 const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function MindMapView(
@@ -306,6 +307,7 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
     onDeleteNode,
     onJumpToAiAnalysis,
     onOpenLogicDeduction,
+    onJumpToPlotDeduction,
   },
   ref
 ) {
@@ -1128,7 +1130,20 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
       {/* 节点右键上下文菜单（渲染在画布视口内，全屏下同样可用） */}
       {contextMenu && contextNode ? (
         <Box data-mindmap-menu="true" className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
-          {/* 1. 最常用：两个 AI 诊断/推算相关按钮置顶 */}
+          {/* 1. 最常用：AI 推演 / 逻辑推算 / 区间诊断置顶 */}
+          {contextNode.id !== "root" && contextNode.chapterRange?.trim() && onJumpToPlotDeduction ? (
+            <button
+              type="button"
+              className={styles.contextMenuItem}
+              onClick={() => {
+                onJumpToPlotDeduction(contextNode.id);
+                setContextMenu(null);
+              }}
+            >
+              <Flex align="center" gap={8}><FiZap size={13} color="#2563eb" /><span>AI 章节走向推演</span></Flex>
+            </button>
+          ) : null}
+
           {contextNode.children.length > 0 ? (
             <button
               type="button"
