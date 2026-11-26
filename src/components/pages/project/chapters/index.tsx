@@ -6,6 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Box, Modal, Button, Group, Stack, Text } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
 import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
+import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import TreePanel from "./tree-panel";
@@ -52,6 +53,8 @@ export default function ChaptersPage() {
   const [volumeModalOpened, setVolumeModalOpened] = useState(false);
   const [chapterModalOpened, setChapterModalOpened] = useState(false);
   const [createChapterVolumeId, setCreateChapterVolumeId] = useState<number | string | null>(null);
+  const [batchExtracting, setBatchExtracting] = useState(false);
+  const [batchExtractProgress, setBatchExtractProgress] = useState<{ current: number; total: number; title: string } | null>(null);
 
   const activeChapterRef = useRef<ChapterItem | null>(null);
   activeChapterRef.current = activeChapter;
@@ -271,6 +274,72 @@ export default function ChaptersPage() {
     setAiPanelCollapsed(false);
   };
 
+  const handleMarkChapterExtracted = (chapterId: number | string) => {
+    setRawList((prev) => prev.map((c) => (String(c.id) === String(chapterId) ? { ...c, outlineExtracted: 1 } : c)));
+    setActiveChapter((prev) => (prev && String(prev.id) === String(chapterId) ? { ...prev, outlineExtracted: 1 } : prev));
+  };
+
+  const handleBatchExtractOutlines = async () => {
+    if (!workId || batchExtracting) return;
+    const validChapters = chaptersList.filter((ch) => (ch.wordCount || 0) >= 20 || (ch.content || "").trim().length >= 20);
+    const pendingChapters = validChapters.filter((ch) => ch.outlineExtracted !== 1);
+    const skippedCount = validChapters.length - pendingChapters.length;
+
+    if (pendingChapters.length === 0) {
+      useAlert.info(
+        skippedCount > 0
+          ? `全部 ${skippedCount} 个有正文的章节均已提取过大纲，无需重复提取！`
+          : "暂无可提取大纲的章节（章节正文需不少于 20 字）"
+      );
+      return;
+    }
+
+    const ok = await showConfirm({
+      title: "一键提取章节大纲",
+      message: `检测到 ${pendingChapters.length} 个尚未提取大纲的章节（已提取的 ${skippedCount} 章将自动跳过）。确定开始逐章提取吗？提取期间请不要跳转页面。`,
+      confirmLabel: `开始提取 (${pendingChapters.length} 章)`,
+      confirmColor: "cyan",
+    });
+    if (!ok) return;
+
+    try {
+      setBatchExtracting(true);
+      useAlert.info(`开始批量提取 ${pendingChapters.length} 个章节大纲，提取中请不要跳转页面...`, { autoClose: 5000 });
+      let successCount = 0;
+      let failCount = 0;
+
+      for (let i = 0; i < pendingChapters.length; i++) {
+        const ch = pendingChapters[i];
+        const chLabel = ch.title || `第 ${ch.chapterNumber} 章`;
+        setBatchExtractProgress({ current: i + 1, total: pendingChapters.length, title: chLabel });
+        try {
+          const res = await extractChapterOutline({
+            chapterId: ch.id,
+            workId,
+            title: ch.title,
+          });
+          if (res && res.success) {
+            successCount += 1;
+            handleMarkChapterExtracted(ch.id);
+          } else {
+            failCount += 1;
+          }
+        } catch {
+          failCount += 1;
+        }
+      }
+
+      if (failCount === 0) {
+        useAlert.success(`全部提取完毕！成功提取 ${successCount} 章${skippedCount > 0 ? `（跳过已提取 ${skippedCount} 章）` : ""}`, { autoClose: 4500 });
+      } else {
+        useAlert.warning(`批量提取结束：成功 ${successCount} 章，失败 ${failCount} 章（失败章节可再次点击一键提取补提）`, { autoClose: 5000 });
+      }
+    } finally {
+      setBatchExtracting(false);
+      setBatchExtractProgress(null);
+    }
+  };
+
   return (
     <Box
       pos="relative"
@@ -298,6 +367,9 @@ export default function ChaptersPage() {
           setChapterModalOpened(true);
         }}
         onDeleteItem={handleDelete}
+        batchExtracting={batchExtracting}
+        batchExtractProgress={batchExtractProgress}
+        onBatchExtractOutlines={handleBatchExtractOutlines}
       />
 
       <EditorArea
@@ -316,6 +388,7 @@ export default function ChaptersPage() {
         locateSnippetPayload={locateSnippetPayload}
         onDirtyChange={setIsChapterDirty}
         onDeleteChapter={handleDelete}
+        onOutlineExtracted={handleMarkChapterExtracted}
         saveRef={saveEditorRef}
       />
 

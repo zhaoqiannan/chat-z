@@ -45,6 +45,19 @@ function findMasterNode(node: any, targetId: string): any | null {
   return null;
 }
 
+function findNextSiblingNode(node: any, targetId: string): any | null {
+  if (!node || typeof node !== "object" || !Array.isArray(node.children)) return null;
+  const idx = node.children.findIndex((c: any) => String(c?.id) === String(targetId));
+  if (idx !== -1) {
+    return node.children[idx + 1] || null;
+  }
+  for (const c of node.children) {
+    const found = findNextSiblingNode(c, targetId);
+    if (found) return found;
+  }
+  return null;
+}
+
 function flattenMasterNodes(node: any, depth = 0, out: any[] = []): any[] {
   if (!node || typeof node !== "object") return out;
   out.push({
@@ -358,6 +371,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           chapterNumber: chapters.chapterNumber,
           title: chapters.title,
           summary: chapters.summary,
+          content: chapters.content,
           wordCount: chapters.wordCount,
         })
         .from(chapters)
@@ -384,15 +398,29 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .catch(() => null),
     ]);
 
-    let targetNode: any = body.targetNode || null;
-    if (!targetNode && masterRow && (masterRow as any).tree_json) {
+    let parsedMasterTree: any = null;
+    if (masterRow && (masterRow as any).tree_json) {
       try {
-        targetNode = findMasterNode(JSON.parse((masterRow as any).tree_json), nodeId);
+        parsedMasterTree = JSON.parse((masterRow as any).tree_json);
       } catch {}
+    }
+
+    let targetNode: any = body.targetNode || null;
+    if (!targetNode && parsedMasterTree) {
+      targetNode = findMasterNode(parsedMasterTree, nodeId);
     }
     if (!targetNode) {
       return NextResponse.json({ success: false, message: "未找到对应的项目总纲节点" }, { status: 404 });
     }
+
+    const nextSiblingNode = parsedMasterTree ? findNextSiblingNode(parsedMasterTree, nodeId) : null;
+    const nextAnchorText = nextSiblingNode
+      ? `${nextSiblingNode.title}${nextSiblingNode.chapterRange ? `（关联第${nextSiblingNode.chapterRange}章）` : ""}：${(nextSiblingNode.note || "").slice(0, 180)}`
+      : "";
+
+    // 若存在上一章（chapterStart - 1）的正文，截取最后 400 字作为场景衔接参考
+    const prevChapterRow = chapterRows.find((c) => Number(c.chapterNumber) === chapterStart - 1);
+    const prevChapterTail = prevChapterRow?.content ? prevChapterRow.content.trim().slice(-400) : "";
 
     // 汇总 Tab 2 已有章节大纲（优先 Tab 2 提取的大纲，补充章节表摘要）
     const outlineByNum = new Map<number, string>();
@@ -435,41 +463,31 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .map((r) => `- ${r.name}：${(r.mechanisms || "").slice(0, 70)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 40)}）` : ""}`)
       .join("\n");
 
+    const planCountTarget = chapterNumbersToPlan.length <= 2 ? "2~3 套" : "2 套";
+    const wordsRangePerChapter = chapterNumbersToPlan.length <= 3 ? "320~460 字" : "240~340 字";
+
     const systemPrompt = `你是一位经验丰富的长篇小说剧情总策划。
 作者已经在「项目总纲」中规划了某阶段节点及其下级子节点，并在「章节大纲」中积累了前序已写章节的剧情进度。
-现在需要你针对**尚未写作的章节（第 ${chapterStart} 章至第 ${chapterEnd} 章，共 ${chapterNumbersToPlan.length} 章）**，结合总纲目标与已有剧情进度，生成 **2~3 套差异化的纯文本章节走向方案**（例如：方案一稳健推进流、方案二强冲突反转流、方案三悬念暗线流）。
+现在需要你针对**尚未写作的章节（第 ${chapterStart} 章至第 ${chapterEnd} 章，共 ${chapterNumbersToPlan.length} 章）**，结合总纲目标与已有剧情进度，生成 **${planCountTarget}差异化的纯文本章节走向方案**（如方案一稳健推进流、方案二冲突反转流）。
 
-【核心输出要求】：
-1. 必须严格覆盖从第 ${chapterStart} 章到第 ${chapterEnd} 章的每一章，章节号一一对应，承接前序已写章节大纲，不可重复已写剧情，并把当前总纲节点及下级节点的要点合理拆解落实到各章中。
-2. **每章走向必须是流畅、充实的大段纯文本（plotText）**：每章 260~450 字，像编剧分集故事大纲一样自然连贯地写清楚「承接上文 ➔ 本章核心事件与人物交锋 ➔ 冲突升级/反转 ➔ 情绪落点与章末钩子」，禁止拆成碎片字段或空洞套话。
-3. 各套方案之间要有真正的剧情策略差异（切入角度、冲突引爆方式、人物选择不同），但最终都服务于当前总纲节点的阶段目标。
+【核心策划铁律】：
+1. **严格守住总纲硬锚点**：当前总纲节点及其下级子节点里已经明确写定的核心事件、人物转折与阶段目标属于**必经硬锚点**，必须在方案中完整落实；各套方案的差异体现在**切入方式、冲突引爆节奏、人物破局策略与暗线编排**上，严禁为了制造反转而把总纲设定改跑偏。
+2. **无缝衔接前后文**：第 ${chapterStart} 章必须紧承前序已写章节大纲/正文末尾（不可重复已写情节）；第 ${chapterEnd} 章收尾时要为下一阶段总纲节点自然铺好接口。
+3. **纯文本大段走向（plotText）**：必须严格覆盖从第 ${chapterStart} 章到第 ${chapterEnd} 章的每一章。每章走向写为一整段流畅充实的纯文本（${wordsRangePerChapter}），像编剧分集故事大纲一样写明「承接上文 ➔ 具体人名与场景事件 ➔ 冲突交锋与推进 ➔ 情绪落点与章末悬念钩子」，严禁空洞套话（如“剧情稳步推进”），严禁拆成零碎标签。
 4. 仅输出合法 JSON，严禁输出 Markdown 代码块或多余解释：
 {
-  "progressSummary": "用2~3句话概括当前前序章节走到了哪一步，以及第 ${chapterStart}~${chapterEnd} 章需要完成的核心总纲任务",
+  "progressSummary": "<用2~3句话概括前序章节走到了哪一步，以及第 ${chapterStart}~${chapterEnd} 章必须完成的总纲核心任务>",
   "plans": [
     {
       "id": "plan-1",
-      "name": "方案一：稳健递进·正面破局",
-      "style": "稳健推进",
-      "overview": "用60~100字概括本方案的核心走向思路与看点",
+      "name": "<方案一名称>",
+      "style": "<风格标签，如稳健递进/悬念暗线>",
+      "overview": "<用60~100字概括本方案的核心策略差异与看点>",
       "chapters": [
         {
           "chapterNumber": ${chapterStart},
-          "title": "建议章节名（不含“第X章”前缀）",
-          "plotText": "一整段 300~450 字连贯的纯文本剧情走向描述，可直接作为后续生成 3000+ 字正文的蓝本..."
-        }
-      ]
-    },
-    {
-      "id": "plan-2",
-      "name": "方案二：意外反转·借力打力",
-      "style": "冲突反转",
-      "overview": "本方案的核心走向思路与看点",
-      "chapters": [
-        {
-          "chapterNumber": ${chapterStart},
-          "title": "建议章节名",
-          "plotText": "一整段 300~450 字连贯的纯文本剧情走向描述..."
+          "title": "<建议章节名，不含“第X章”前缀>",
+          "plotText": "<一整段 ${wordsRangePerChapter} 连贯的纯文本剧情走向描述，可直接作为后续生成 3000+ 字正文的蓝本>"
         }
       ]
     }
@@ -479,14 +497,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const userPrompt = `【作品信息】：《${work.title}》（题材：${work.tag || "小说"}）
 作品简介：${work.description || "暂无"}
 
-【Tab 1 项目总纲目标节点及其下级子节点大纲】：
-${subtreeText}
-【Tab 2 前序已有章节大纲与当前进度】：
+【Tab 1 项目总纲目标节点及其下级子节点大纲（必须落实的硬锚点）】：
+${subtreeText}${nextAnchorText ? `【下一阶段总纲出口锚点（供最后一章收尾衔接，切勿提前写爆）】：\n${nextAnchorText}\n\n` : ""}【Tab 2 前序已有章节大纲与当前进度】：
 ${recentProgressText || "（前序暂无已提取章节大纲，请直接基于总纲开篇或阶段起点自然展开）"}
-
+${prevChapterTail ? `\n【上一章（第${chapterStart - 1}章）正文末尾参考】：\n...${prevChapterTail}\n` : ""}
 ${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
 ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
-请直接输出包含 2~3 套完整纯文本走向方案的合法 JSON：`;
+请直接输出包含 ${planCountTarget} 完整纯文本走向方案的合法 JSON：`;
 
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
@@ -496,7 +513,7 @@ ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
     const raw = await callCloudflareAi(env.AI, messages, {
       taskType: "structured",
       temperature: 0.65,
-      maxTokens: 6144,
+      maxTokens: 8192,
     });
 
     const parsed = parseStructuredJson<any>(raw, null);

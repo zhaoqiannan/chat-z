@@ -22,6 +22,7 @@ export interface ChapterItem {
   chapterNumber: number;
   status: ChapterStatus;
   summary: string;
+  outlineExtracted?: number;
   createdAt?: string;
   updatedAt?: string;
 }

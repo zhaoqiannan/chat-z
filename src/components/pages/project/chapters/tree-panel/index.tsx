@@ -3,7 +3,7 @@
 
 import React, { useState } from "react";
 import { Box, Flex, Text, ActionIcon, Tooltip, Badge, ScrollArea, Group, Stack, Collapse, UnstyledButton, Progress } from "@mantine/core";
-import { FiFolderPlus, FiFilePlus, FiChevronDown, FiChevronRight, FiTrash2, FiEdit2, FiSidebar, FiChevronLeft, FiArrowLeft, FiArrowRight } from "react-icons/fi";
+import { FiFolderPlus, FiFilePlus, FiChevronDown, FiChevronRight, FiTrash2, FiEdit2, FiSidebar, FiChevronLeft, FiArrowLeft, FiArrowRight, FiZap } from "react-icons/fi";
 import { ChapterItem } from "@/rest/chapter";
 
 interface TreePanelProps {
@@ -19,6 +19,9 @@ interface TreePanelProps {
   onOpenCreateChapter: (volumeId?: number | string | null) => void;
   onDeleteItem: (id: number | string) => void;
   targetWords?: number;
+  batchExtracting?: boolean;
+  batchExtractProgress?: { current: number; total: number; title: string } | null;
+  onBatchExtractOutlines?: () => void;
 }
 
 export default function TreePanel({
@@ -34,6 +37,9 @@ export default function TreePanel({
   onOpenCreateChapter,
   onDeleteItem,
   targetWords = 4000,
+  batchExtracting = false,
+  batchExtractProgress = null,
+  onBatchExtractOutlines,
 }: TreePanelProps) {
   const [collapsedVolumeIds, setCollapsedVolumeIds] = useState<Record<string | number, boolean>>({});
 
@@ -89,6 +95,13 @@ export default function TreePanel({
       <Flex justify="space-between" align="center" px="md" py={14} style={{ borderBottom: "1px solid #f8fafc" }}>
         <Text fz={13} fw={700} c="#475569">目录大纲</Text>
         <Group gap={4}>
+          {onBatchExtractOutlines ? (
+            <Tooltip label="一键提取未提取章节的大纲（已提取自动跳过）" position="bottom">
+              <ActionIcon variant="subtle" color="cyan" size="sm" loading={batchExtracting} onClick={onBatchExtractOutlines}>
+                <FiZap size={14} />
+              </ActionIcon>
+            </Tooltip>
+          ) : null}
           <Tooltip label="新建分卷" position="bottom">
             <ActionIcon variant="subtle" color="gray" size="sm" onClick={onOpenCreateVolume}>
               <FiFolderPlus size={14} />
@@ -108,6 +121,24 @@ export default function TreePanel({
           )}
         </Group>
       </Flex>
+
+      {batchExtracting && batchExtractProgress ? (
+        <Box px="sm" py={8} bg="#f0fcff" style={{ borderBottom: "1px solid rgba(0, 201, 255, 0.25)" }}>
+          <Flex align="center" justify="space-between" mb={4}>
+            <Text fz={11} fw={600} c="#0099c4">
+              提取章节大纲 ({batchExtractProgress.current}/{batchExtractProgress.total})
+            </Text>
+            <Text fz={10} c="#64748b">请勿跳转</Text>
+          </Flex>
+          <Text fz={11} c="#475569" truncate="end" mb={4}>{batchExtractProgress.title}</Text>
+          <Progress
+            value={Math.round((batchExtractProgress.current / Math.max(batchExtractProgress.total, 1)) * 100)}
+            size="xs"
+            radius="xl"
+            animated
+          />
+        </Box>
+      ) : null}
 
       <ScrollArea style={{ flex: 1 }} px="xs" py="xs">
         <Stack gap={6}>
@@ -171,15 +202,15 @@ export default function TreePanel({
                           }}
                         >
                           <Group gap={8} style={{ flex: 1, minWidth: 0 }}>
-                            <Box
-                              style={{
-                                width: 5,
-                                height: 5,
-                                borderRadius: "50%",
-                                backgroundColor: isActive ? "#0284c7" : "#10b981",
-                                flexShrink: 0,
-                              }}
-                            />
+                            <Tooltip label={ch.outlineExtracted === 1 ? "已提取章节大纲" : "尚未提取章节大纲"} position="right">
+                              <Box
+                                w={6}
+                                h={6}
+                                bdrs="50%"
+                                bg={isActive ? "#00c9ff" : ch.outlineExtracted === 1 ? "#10b981" : "#cbd5e1"}
+                                style={{ flexShrink: 0 }}
+                              />
+                            </Tooltip>
                             <Text
                               fz={12.5}
                               fw={isActive ? 600 : 400}
@@ -224,15 +255,15 @@ export default function TreePanel({
                       }}
                     >
                       <Group gap={8} style={{ flex: 1, minWidth: 0 }}>
-                        <Box
-                          style={{
-                            width: 5,
-                            height: 5,
-                            borderRadius: "50%",
-                            backgroundColor: isActive ? "#0284c7" : "#10b981",
-                            flexShrink: 0,
-                          }}
-                        />
+                        <Tooltip label={ch.outlineExtracted === 1 ? "已提取章节大纲" : "尚未提取章节大纲"} position="right">
+                          <Box
+                            w={6}
+                            h={6}
+                            bdrs="50%"
+                            bg={isActive ? "#00c9ff" : ch.outlineExtracted === 1 ? "#10b981" : "#cbd5e1"}
+                            style={{ flexShrink: 0 }}
+                          />
+                        </Tooltip>
                         <Text
                           fz={12.5}
                           fw={isActive ? 600 : 400}

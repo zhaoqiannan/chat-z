@@ -90,6 +90,8 @@ export const chapters = sqliteTable('chapters', {
   status: text('status').default('not_started'),
   /** 章节剧情摘要 / 写作备忘 */
   summary: text('summary'),
+  /** 是否已提取过章节大纲 (1=已提取, 0=未提取) */
+  outlineExtracted: integer('outline_extracted').default(0),
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后修改时间 */

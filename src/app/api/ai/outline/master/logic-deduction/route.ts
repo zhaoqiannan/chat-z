@@ -69,7 +69,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .all(),
     ]);
 
-    let context = `作品：《${work.title}》（题材：${work.tag || "小说"}）\n简介：${work.description || "暂无简介"}\n`;
+    let context = `作品：《${work.title}》（题材：${work.tag || "小说"}，全书预计 ${work.expectedWords || 500000} 字 / ${work.expectedChapters || 100} 章）\n简介：${work.description || "暂无简介"}\n`;
     if (rootSummary) {
       context += `项目总纲概览：${rootSummary}\n`;
     }
@@ -87,41 +87,40 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 【严格要求】：
 1. 这是纯大纲层面的剧情逻辑推算，**不要给出任何分数或评分**。
 2. 必须紧密结合当前父节点的目标与其所有子节点的先后顺序、因果承接、人物动机、伏笔呼应与高潮铺垫来分析，切忌泛泛而谈。
-3. 必须给出【建议章节与字数篇幅控制（suggestedChapterPacing）】：明确建议这部分剧情最好用多少章、控制在多少字以内完成（并简要说明节奏分配建议）。
+3. 必须结合作品全书预计体量与当前节点体量，给出客观的【建议章节与字数篇幅控制（suggestedChapterPacing）】：明确建议这部分剧情最好在多少章、多少字以内完成，并简述前中后段节奏分配。
 4. 在【建议最终修改逻辑线（recommendedLogicLine）】中，请逐条列出对应卡片节点的修改前后对照：
-   - 若对应已有子节点（或父节点），**必须严格原样填回输入数据中的 nodeId**，并给出原节点标题/要点（originalTitle / originalNote）以及建议修改后的标题/要点（title / note），方便作者一键点击“采纳”同步修改该卡片；
+   - 若对应已有子节点（或父节点），**必须严格原样填回输入数据中的 nodeId**，并给出原节点标题/要点（originalTitle / originalNote）以及建议修改后的标题/要点（title / note）；
+   - **克制原则**：若某个原节点本身逻辑通顺、没有问题，请尽量保持其原标题和核心要点不变（在 changeSummary 标注“结构合理，保持原样”），**严禁为了凑改动而把原本写得好的节点全部强行重写**；
    - 若认为必须补充新增一个过渡节点，则 nodeId 填空字符串 ""，并给出建议新增的 title 与 note。
-5. 如果某一方面没有发现明显问题，请实事求是说明，不要硬编漏洞。
+5. 实事求是评估是否有问题：若整体逻辑自洽，hasIssues 设为 false，logicHoles 可为空数组 []，绝不为了凑条数硬编漏洞。
 6. 仅输出合法 JSON 对象，严禁输出 Markdown 代码块或任何多余说明：
 {
-  "logicLine": "对当前节点及下属子节点整体剧情发展脉络、起承转合和因果链条的清晰梳理（分阶段叙述，流畅易读）",
-  "suggestedChapterPacing": "建议用 6~10 章、控制在 2.5 万字以内完成本阶段剧情。其中前期铺垫 2~3 章（约 6000 字），冲突升级与转折 3~4 章（约 1 万字），高潮收束 1~3 章（约 8000 字），避免中段注水。",
-  "hasIssues": true,
-  "issueConclusion": "明确判断当前节点与子节点的逻辑是否存在问题及核心原因总括（如：整体主线清晰，但第2与第3子节点间存在因果跳跃）",
+  "logicLine": "<对当前节点及下属子节点整体剧情发展脉络、起承转合和因果链条的清晰梳理>",
+  "suggestedChapterPacing": "<结合作品体量与本段事件密度，给出建议章节数、字数上限以及前中后段节奏分配>",
+  "hasIssues": false,
+  "issueConclusion": "<明确判断当前节点与子节点的逻辑是否存在问题及核心依据总括>",
   "logicHoles": [
-    "具体逻辑漏洞1（指出涉及哪个子节点及为何断裂/矛盾）",
-    "具体逻辑漏洞2"
+    "<若存在明确逻辑漏洞则逐条指出涉及的子节点与原因；若无明显漏洞则输出空数组>"
   ],
   "optimizablePoints": [
-    "可优化部分1（如节奏张力、动机铺垫、悬念钩子或前后呼应的增强方向）",
-    "可优化部分2"
+    "<从节奏张力、动机铺垫、悬念钩子或伏笔呼应角度提出可优化方向；若无则输出空数组>"
   ],
   "optimizationSuggestions": [
     {
-      "targetNodeTitle": "具体对应子节点名称（或整体衔接）",
-      "problem": "该处存在的问题或薄弱点",
-      "suggestion": "具体、可直接落地的修改与补充建议"
+      "targetNodeTitle": "<具体对应子节点名称或整体衔接>",
+      "problem": "<该处存在的具体问题或薄弱点>",
+      "suggestion": "<具体、可直接落地的修改与补充建议>"
     }
   ],
   "recommendedLogicLine": [
     {
       "step": 1,
-      "nodeId": "已有节点的真实 nodeId（若为建议新增节点则留空字符串）",
-      "originalTitle": "原节点标题",
-      "originalNote": "原节点要点说明",
-      "title": "建议修改后的节点标题",
-      "note": "建议修改后的节点要点说明（可直接替换写入卡片）",
-      "changeSummary": "一句话概括为何这样调整"
+      "nodeId": "<已有节点的真实 nodeId；若为建议新增过渡节点则留空字符串>",
+      "originalTitle": "<原节点标题>",
+      "originalNote": "<原节点要点说明>",
+      "title": "<建议修改后的节点标题（无问题可保持原样）>",
+      "note": "<建议修改后的节点要点说明（可直接替换写入卡片）>",
+      "changeSummary": "<一句话概括改动原因，或标注保持原样>"
     }
   ]
 }`;

@@ -27,6 +27,7 @@ interface EditorAreaProps {
   targetWords?: number;
   onDirtyChange?: (isDirty: boolean) => void;
   onDeleteChapter?: (chapterId: number | string) => void;
+  onOutlineExtracted?: (chapterId: number | string) => void;
   saveRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
@@ -47,6 +48,7 @@ export default function EditorArea({
   targetWords = 4000,
   onDirtyChange,
   onDeleteChapter,
+  onOutlineExtracted,
   saveRef,
 }: EditorAreaProps) {
   const [title, setTitle] = useState("");
@@ -579,6 +581,7 @@ export default function EditorArea({
       });
 
       if (res && res.success) {
+        onOutlineExtracted?.(chapter.id);
         useAlert.success("提取完毕！已将本章核心剧情同步至故事大纲", { autoClose: 3500 });
       } else {
         useAlert.error("提取大纲失败: " + (res?.message || "网络异常"));

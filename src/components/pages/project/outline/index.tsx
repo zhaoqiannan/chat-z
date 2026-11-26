@@ -16,6 +16,7 @@ import DrawerPlotDeductionHistory from "./drawer-plot-deduction/drawer-plot-dedu
 import DrawerThoughtOrganizer from "./drawer-thought-organizer";
 import MasterOutlineWorkspace from "./master-outline";
 import PlotDeductionWorkspace from "./plot-deduction-workspace";
+import ChapterOutlineTable from "./chapter-outline-table";
 
 export default function StoryOutlinePage() {
   const params = useParams();
@@ -378,23 +379,39 @@ export default function StoryOutlinePage() {
           </Flex>
 
           {/* 故事大纲列表主体 */}
-          <ScrollArea flex={1} px={24} py="md">
+          <ScrollArea flex={1} px={16} py={12}>
             <Box mx="auto" pb={80}>
-              <OutlineAxis
-                workId={workId}
-                category={currentCategory}
-                nodes={currentList}
-                selectedNodeIds={selectedNodeIds}
-                onToggleSelectNode={handleToggleSelectNode}
-                onEditNode={handleOpenEditNode}
-                onDeleteNode={handleDeleteNode}
-                onMoveNode={handleMoveNode}
-                onAddChildNode={handleOpenAddChildNode}
-                onTriggerDeduction={() => setDeductionDrawerOpened(true)}
-                onTriggerCreate={handleOpenCreateNode}
-                collapsedParents={collapsedParents}
-                onToggleParentCollapse={handleToggleParentCollapse}
-              />
+              {activeTab === "chapter" ? (
+                <ChapterOutlineTable
+                  workId={workId}
+                  nodes={currentList}
+                  selectedNodeIds={selectedNodeIds}
+                  collapsedParents={collapsedParents}
+                  onToggleParentCollapse={handleToggleParentCollapse}
+                  onToggleSelectNode={handleToggleSelectNode}
+                  onEditNode={handleOpenEditNode}
+                  onDeleteNode={handleDeleteNode}
+                  onMoveNode={handleMoveNode}
+                  onAddChildNode={handleOpenAddChildNode}
+                  onTriggerCreate={handleOpenCreateNode}
+                />
+              ) : (
+                <OutlineAxis
+                  workId={workId}
+                  category={currentCategory}
+                  nodes={currentList}
+                  selectedNodeIds={selectedNodeIds}
+                  onToggleSelectNode={handleToggleSelectNode}
+                  onEditNode={handleOpenEditNode}
+                  onDeleteNode={handleDeleteNode}
+                  onMoveNode={handleMoveNode}
+                  onAddChildNode={handleOpenAddChildNode}
+                  onTriggerDeduction={() => setDeductionDrawerOpened(true)}
+                  onTriggerCreate={handleOpenCreateNode}
+                  collapsedParents={collapsedParents}
+                  onToggleParentCollapse={handleToggleParentCollapse}
+                />
+              )}
             </Box>
           </ScrollArea>
         </>
