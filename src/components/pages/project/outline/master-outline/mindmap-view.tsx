@@ -2,7 +2,7 @@
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActionIcon, Box, Flex, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiCpu, FiEdit2, FiFileText, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiCpu, FiEdit2, FiFileText, FiGitMerge, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiTrash2, FiZoomIn, FiZoomOut } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineSide, MasterOutlineStatus } from "@/rest/master-outline";
 import { ChildInsertPosition, STATUS_CONFIG, SiblingInsertPosition, TAG_PRESETS, findNode, findSiblingMeta } from "./tree-utils";
 import styles from "./style.module.scss";
@@ -49,6 +49,10 @@ export interface MindMapViewHandle {
 }
 
 const NODE_WIDTH = 256;
+const MIN_NODE_WIDTH = 180;
+const MAX_NODE_WIDTH = 640;
+const MIN_NODE_HEIGHT = 72;
+const MAX_NODE_HEIGHT = 640;
 const H_GAP = 84;
 const V_GAP = 30;
 const PADDING = 64;
@@ -59,18 +63,32 @@ const STATUS_DOT_COLOR: Record<MasterOutlineStatus, string> = {
   completed: "#22c55e",
 };
 
+function getNodeWidth(node: MasterOutlineNode): number {
+  if (typeof node.width === "number" && !isNaN(node.width) && node.width > 0) {
+    return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, Math.round(node.width)));
+  }
+  return NODE_WIDTH;
+}
+
 function estimateWrappedLines(text: string, charsPerLine: number): number {
   if (!text) return 1;
   return text.split("\n").reduce((sum, line) => {
     const weightedLen = Array.from(line).reduce((acc, ch) => acc + (ch.charCodeAt(0) > 255 ? 1 : 0.55), 0);
-    return sum + Math.max(1, Math.ceil(weightedLen / charsPerLine));
+    return sum + Math.max(1, Math.ceil(weightedLen / Math.max(8, charsPerLine)));
   }, 0);
 }
 
 function estimateNodeHeight(node: MasterOutlineNode): number {
-  const titleLines = estimateWrappedLines(node.title || "", 17);
-  const noteLines = estimateWrappedLines(node.note?.trim() || "点击添加要点说明...", 20);
-  return Math.max(82, Math.ceil(22 + titleLines * 19 + 10 + noteLines * 16.5 + 24));
+  const width = getNodeWidth(node);
+  const titleChars = Math.max(10, Math.floor((width - 28) / 13.5));
+  const noteChars = Math.max(12, Math.floor((width - 28) / 11.5));
+  const titleLines = estimateWrappedLines(node.title || "", titleChars);
+  const noteLines = estimateWrappedLines(node.note?.trim() || "点击添加要点说明...", noteChars);
+  const estimated = Math.max(82, Math.ceil(22 + titleLines * 19 + 10 + noteLines * 16.5 + 24));
+  if (typeof node.height === "number" && !isNaN(node.height) && node.height > 0) {
+    return Math.max(estimated, Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, Math.round(node.height))));
+  }
+  return estimated;
 }
 
 function autoResizeTextarea(el: HTMLTextAreaElement | null) {
@@ -96,60 +114,68 @@ function computeMindMapLayout(
     node: MasterOutlineNode;
     depth: number;
     side: "left" | "right";
+    relX: number;
     y: number;
+    width: number;
     height: number;
     parentId: string;
     children: TempNode[];
   }
 
+  const rootWidth = getNodeWidth(root);
+
   function layoutSubtreeList(
     roots: MasterOutlineNode[],
     side: "left" | "right"
-  ): { items: TempNode[]; flat: TempNode[]; totalHeight: number; maxDepth: number } {
+  ): { items: TempNode[]; flat: TempNode[]; totalHeight: number; minRelX: number } {
     let cursorY = 0;
-    let maxDepth = 0;
+    let minRelX = 0;
     const flat: TempNode[] = [];
 
-    function place(node: MasterOutlineNode, depth: number, parentId: string): TempNode {
-      if (depth > maxDepth) maxDepth = depth;
-      const height = measuredHeights[node.id] ?? estimateNodeHeight(node);
+    function place(node: MasterOutlineNode, depth: number, parentId: string, parentRelX: number, parentWidth: number): TempNode {
+      const width = getNodeWidth(node);
+      const relX = side === "left" ? parentRelX - H_GAP - width : parentRelX + parentWidth + H_GAP;
+      if (relX < minRelX) minRelX = relX;
+
+      const measured = measuredHeights[node.id];
+      const baseHeight = measured ?? estimateNodeHeight(node);
+      const customHeight = typeof node.height === "number" && node.height > 0 ? Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, Math.round(node.height))) : 0;
+      const height = Math.max(baseHeight, customHeight);
       const visibleChildren = node.collapsed ? [] : node.children;
 
       if (visibleChildren.length === 0) {
         const y = cursorY;
         cursorY += height + V_GAP;
-        const placed: TempNode = { node, depth, side, y, height, parentId, children: [] };
+        const placed: TempNode = { node, depth, side, relX, y, width, height, parentId, children: [] };
         flat.push(placed);
         return placed;
       }
 
       const startY = cursorY;
-      const placedChildren = visibleChildren.map((child) => place(child, depth + 1, node.id));
+      const placedChildren = visibleChildren.map((child) => place(child, depth + 1, node.id, relX, width));
       const firstChild = placedChildren[0];
       const lastChild = placedChildren[placedChildren.length - 1];
       const childrenMidY = (firstChild.y + firstChild.height / 2 + lastChild.y + lastChild.height / 2) / 2;
       const y = Math.max(startY, childrenMidY - height / 2);
       cursorY = Math.max(cursorY, y + height + V_GAP);
 
-      const placed: TempNode = { node, depth, side, y, height, parentId, children: placedChildren };
+      const placed: TempNode = { node, depth, side, relX, y, width, height, parentId, children: placedChildren };
       flat.push(placed);
       return placed;
     }
 
-    const items = roots.map((child) => place(child, 1, root.id));
+    const items = roots.map((child) => place(child, 1, root.id, 0, rootWidth));
     const totalHeight = items.length > 0 ? Math.max(0, cursorY - V_GAP) : 0;
-    return { items, flat, totalHeight, maxDepth };
+    return { items, flat, totalHeight, minRelX };
   }
 
   const leftLayout = layoutSubtreeList(leftRoots, "left");
   const rightLayout = layoutSubtreeList(rightRoots, "right");
-  const rootHeight = measuredHeights[root.id] ?? estimateNodeHeight(root);
+  const rootCustomH = typeof root.height === "number" && root.height > 0 ? Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, Math.round(root.height))) : 0;
+  const rootHeight = Math.max(measuredHeights[root.id] ?? estimateNodeHeight(root), rootCustomH);
   const contentHeight = Math.max(leftLayout.totalHeight, rightLayout.totalHeight, rootHeight);
 
-  const rootX =
-    leftLayout.maxDepth > 0
-      ? PADDING + leftLayout.maxDepth * (NODE_WIDTH + H_GAP)
-      : PADDING + 40;
+  const rootX = leftLayout.minRelX < 0 ? PADDING - leftLayout.minRelX : PADDING + 40;
   const rootY = PADDING + (contentHeight - rootHeight) / 2;
 
   const rootNode: LayoutNode = {
@@ -158,7 +184,7 @@ function computeMindMapLayout(
     side: "center",
     x: rootX,
     y: rootY,
-    width: NODE_WIDTH,
+    width: rootWidth,
     height: rootHeight,
     parentId: null,
   };
@@ -177,9 +203,9 @@ function computeMindMapLayout(
       node: item.node,
       depth: item.depth,
       side: "left",
-      x: rootX - item.depth * (NODE_WIDTH + H_GAP),
+      x: rootX + item.relX,
       y: item.y + leftOffsetY,
-      width: NODE_WIDTH,
+      width: item.width,
       height: item.height,
       parentId: item.parentId,
     };
@@ -192,9 +218,9 @@ function computeMindMapLayout(
       node: item.node,
       depth: item.depth,
       side: "right",
-      x: rootX + item.depth * (NODE_WIDTH + H_GAP),
+      x: rootX + item.relX,
       y: item.y + rightOffsetY,
-      width: NODE_WIDTH,
+      width: item.width,
       height: item.height,
       parentId: item.parentId,
     };
@@ -258,6 +284,7 @@ interface MindMapViewProps {
   onMoveNode: (id: string, dir: "up" | "down") => void;
   onDeleteNode: (id: string) => void;
   onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
+  onOpenLogicDeduction: (nodeId: string) => void;
 }
 
 const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function MindMapView(
@@ -278,6 +305,7 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
     onMoveNode,
     onDeleteNode,
     onJumpToAiAnalysis,
+    onOpenLogicDeduction,
   },
   ref
 ) {
@@ -288,14 +316,17 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [metaPopover, setMetaPopover] = useState<MetaPopoverState | null>(null);
   const [customTagInput, setCustomTagInput] = useState("");
+  const [resizingNodeId, setResizingNodeId] = useState<string | null>(null);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
   const [isFallbackFullscreen, setIsFallbackFullscreen] = useState(false);
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const nodeElsRef = useRef<Map<string, HTMLDivElement>>(new Map());
   const observerRef = useRef<ResizeObserver | null>(null);
+  const hasAutoCenteredRef = useRef(false);
   const transformRef = useRef({ zoom, offset });
   const onTransformChangeRef = useRef(onTransformChange);
+  const onInlineUpdateRef = useRef(onInlineUpdate);
   const layoutRootRef = useRef(layout.rootNode);
   const draggingRef = useRef<{ active: boolean; startX: number; startY: number; origX: number; origY: number }>({
     active: false,
@@ -314,6 +345,10 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
   useEffect(() => {
     onTransformChangeRef.current = onTransformChange;
   }, [onTransformChange]);
+
+  useEffect(() => {
+    onInlineUpdateRef.current = onInlineUpdate;
+  }, [onInlineUpdate]);
 
   useEffect(() => {
     layoutRootRef.current = layout.rootNode;
@@ -363,11 +398,73 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
       return;
     }
     const rect = el.getBoundingClientRect();
-    const hasLeft = tree.children.some((c) => c.side === "left");
-    const targetX = hasLeft ? rect.width / 2 - (rn.x + rn.width / 2) : Math.max(48, rect.width * 0.14 - rn.x);
+    const targetX = rect.width / 2 - (rn.x + rn.width / 2);
     const targetY = rect.height / 2 - (rn.y + rn.height / 2) - 16;
     onTransformChangeRef.current(1, { x: Math.round(targetX), y: Math.round(targetY) });
-  }, [tree.children]);
+  }, []);
+
+  // 首次进入画布时自动以总纲根节点为中心显示
+  useEffect(() => {
+    if (hasAutoCenteredRef.current) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const el = viewportRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          centerOnRoot();
+          hasAutoCenteredRef.current = true;
+        }
+      });
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [centerOnRoot, layout.rootNode.x, layout.rootNode.y]);
+
+  const startNodeResize = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>, node: MasterOutlineNode, mode: "right" | "bottom" | "corner") => {
+      e.stopPropagation();
+      e.preventDefault();
+      setContextMenu(null);
+      setMetaPopover(null);
+      onSelect(node.id);
+      setResizingNodeId(node.id);
+
+      const el = nodeElsRef.current.get(node.id);
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const origWidth = el?.offsetWidth || getNodeWidth(node);
+      const origHeight = el?.offsetHeight || estimateNodeHeight(node);
+
+      const handleMove = (ev: MouseEvent) => {
+        const curZoom = transformRef.current.zoom || 1;
+        const dx = (ev.clientX - startX) / curZoom;
+        const dy = (ev.clientY - startY) / curZoom;
+        const patch: Partial<Omit<MasterOutlineNode, "id" | "children">> = {};
+
+        if (mode === "right" || mode === "corner") {
+          patch.width = Math.round(Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, origWidth + dx)));
+        }
+        if (mode === "bottom" || mode === "corner") {
+          patch.height = Math.round(Math.min(MAX_NODE_HEIGHT, Math.max(MIN_NODE_HEIGHT, origHeight + dy)));
+        }
+        onInlineUpdateRef.current(node.id, patch);
+      };
+
+      const handleUp = () => {
+        setResizingNodeId(null);
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseup", handleUp);
+      };
+
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleUp);
+    },
+    [onSelect]
+  );
 
   useImperativeHandle(ref, () => ({ enterFullscreen, centerOnRoot }), [enterFullscreen, centerOnRoot]);
 
@@ -602,8 +699,8 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
               ref={(el) => setNodeRef(item.node.id, el)}
               data-node-id={item.node.id}
               data-mindmap-node="true"
-              className={`${styles.nodeCard} ${isRoot ? styles.nodeRoot : ""} ${isSelected ? styles.nodeSelected : ""}`}
-              style={{ left: item.x, top: item.y, width: item.width }}
+              className={`${styles.nodeCard} ${isRoot ? styles.nodeRoot : ""} ${isSelected ? styles.nodeSelected : ""} ${resizingNodeId === item.node.id ? styles.nodeResizing : ""}`}
+              style={{ left: item.x, top: item.y, width: item.width, minHeight: item.node.height || undefined }}
               onClick={(e) => {
                 e.stopPropagation();
                 setContextMenu(null);
@@ -916,6 +1013,29 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
                   {item.node.collapsed ? item.node.children.length : "−"}
                 </div>
               ) : null}
+
+              {/* 拖拽调整节点卡片宽高度手柄 */}
+              <div
+                data-mindmap-resize="true"
+                className={styles.resizeHandleRight}
+                title="拖拽调整宽度"
+                onMouseDown={(e) => startNodeResize(e, item.node, "right")}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div
+                data-mindmap-resize="true"
+                className={styles.resizeHandleBottom}
+                title="拖拽调整高度"
+                onMouseDown={(e) => startNodeResize(e, item.node, "bottom")}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div
+                data-mindmap-resize="true"
+                className={styles.resizeHandleCorner}
+                title="拖拽调整宽高"
+                onMouseDown={(e) => startNodeResize(e, item.node, "corner")}
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           );
         })}
@@ -1126,6 +1246,20 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
           >
             <Flex align="center" gap={8}><FiFileText size={13} /><span>编辑要点说明</span></Flex>
           </button>
+
+          {contextNode.children.length > 0 ? (
+            <button
+              type="button"
+              className={styles.contextMenuItem}
+              onClick={() => {
+                onOpenLogicDeduction(contextNode.id);
+                setContextMenu(null);
+              }}
+            >
+              <Flex align="center" gap={8}><FiGitMerge size={13} color="#00a8d6" /><span>AI 逻辑推算</span></Flex>
+              {contextNode.logicDeduction ? <span className={styles.contextMenuShortcut}>已推算</span> : null}
+            </button>
+          ) : null}
 
           {contextNode.id !== "root" && contextNode.chapterRange?.trim() ? (
             <button

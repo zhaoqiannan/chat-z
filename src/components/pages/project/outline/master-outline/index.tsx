@@ -1,15 +1,16 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ActionIcon, Box, Button, Flex, Group, Modal, Select, Stack, Text, Textarea, Tooltip } from "@mantine/core";
 import { FiCpu, FiGitBranch, FiMaximize, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiSave, FiTable, FiZoomIn, FiZoomOut } from "react-icons/fi";
-import { MasterOutlineNode, MasterOutlineSide, generateMasterOutlineAi, getMasterOutline, saveMasterOutline } from "@/rest/master-outline";
+import { MasterOutlineNode, MasterOutlineSide, deduceMasterOutlineLogicAi, generateMasterOutlineAi, getMasterOutline, saveMasterOutline } from "@/rest/master-outline";
 import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import MindMapView, { MindMapViewHandle } from "./mindmap-view";
 import TableView from "./table-view";
+import ModalLogicDeduction from "./modal-logic-deduction";
 import { ChildInsertPosition, SiblingInsertPosition, addChildNode, addSiblingNode, createNodeId, deleteNode, findNode, moveNode, setAllCollapsed, updateNode } from "./tree-utils";
 import styles from "./style.module.scss";
 
@@ -33,6 +34,18 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [aiModalOpened, setAiModalOpened] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
+  const [deductionNodeId, setDeductionNodeId] = useState<string | null>(null);
+  const [deductionLoading, setDeductionLoading] = useState(false);
+  const treeRef = useRef<MasterOutlineNode | null>(null);
+
+  useEffect(() => {
+    treeRef.current = tree;
+  }, [tree]);
+
+  const deductionTargetNode = useMemo(() => {
+    if (!tree || !deductionNodeId) return null;
+    return findNode(tree, deductionNodeId);
+  }, [tree, deductionNodeId]);
 
   const fetchTree = useCallback(async () => {
     if (!workId) return;
@@ -192,6 +205,60 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
     [router, workId]
   );
 
+  const runLogicDeduction = useCallback(
+    async (nodeId: string) => {
+      const curTree = treeRef.current;
+      if (!curTree || !workId || deductionLoading) return;
+      const targetNode = findNode(curTree, nodeId);
+      if (!targetNode || targetNode.children.length === 0) {
+        useAlert.warning("该节点暂无子节点，无法进行大纲逻辑推算");
+        return;
+      }
+      try {
+        setDeductionLoading(true);
+        const rootSummary = `${curTree.title}${curTree.note ? `：${curTree.note}` : ""}`;
+        const res = await deduceMasterOutlineLogicAi({ workId, targetNode, rootSummary });
+        if (res && res.success && res.result) {
+          const latestTree = treeRef.current || curTree;
+          const nextTree = updateNode(latestTree, nodeId, { logicDeduction: res.result });
+          setTree(nextTree);
+          treeRef.current = nextTree;
+          try {
+            const saveRes = await saveMasterOutline({ workId, tree: nextTree });
+            if (saveRes && saveRes.success) {
+              setDirty(false);
+            }
+          } catch {}
+          useAlert.success("AI 逻辑推算完成");
+        } else {
+          useAlert.error(res?.message || "AI 逻辑推算失败");
+        }
+      } catch (e: any) {
+        useAlert.error("AI 逻辑推算失败: " + (e?.message || "网络异常"));
+      } finally {
+        setDeductionLoading(false);
+      }
+    },
+    [workId, deductionLoading]
+  );
+
+  const handleOpenLogicDeduction = useCallback(
+    (nodeId: string) => {
+      const curTree = treeRef.current;
+      if (!curTree) return;
+      const targetNode = findNode(curTree, nodeId);
+      if (!targetNode || targetNode.children.length === 0) {
+        useAlert.warning("该节点暂无子节点，无法进行大纲逻辑推算");
+        return;
+      }
+      setDeductionNodeId(nodeId);
+      if (!targetNode.logicDeduction) {
+        runLogicDeduction(nodeId);
+      }
+    },
+    [runLogicDeduction]
+  );
+
   // 快捷键：Ctrl/Cmd+S 保存，导图模式下 Tab 加子节点，Shift+Enter/Enter 上/下方加同级
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -301,6 +368,7 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
               onMoveNode={(id, dir) => mutateTree((prev) => moveNode(prev, id, dir))}
               onDeleteNode={handleDelete}
               onJumpToAiAnalysis={handleJumpToAiAnalysis}
+              onOpenLogicDeduction={handleOpenLogicDeduction}
             />
 
             {/* 方案 C：底部居中悬浮 Dock（无突兀大 Segmented，无右侧属性栏） */}
@@ -355,9 +423,19 @@ export default function MasterOutlineWorkspace({ workId }: MasterOutlineWorkspac
             onMoveNode={(id, dir) => mutateTree((prev) => moveNode(prev, id, dir))}
             onToggleCollapse={handleToggleCollapse}
             onJumpToAiAnalysis={handleJumpToAiAnalysis}
+            onOpenLogicDeduction={handleOpenLogicDeduction}
           />
         )
       ) : null}
+
+      {/* AI 节点大纲逻辑推算弹窗 */}
+      <ModalLogicDeduction
+        opened={Boolean(deductionNodeId && deductionTargetNode)}
+        onClose={() => setDeductionNodeId(null)}
+        node={deductionTargetNode}
+        loading={deductionLoading}
+        onReDeduce={() => deductionNodeId && runLogicDeduction(deductionNodeId)}
+      />
 
       {/* AI 生成/反推总纲弹窗 */}
       <Modal opened={aiModalOpened} onClose={() => setAiModalOpened(false)} title="AI 一键生成 / 反推项目总纲" centered size="md">

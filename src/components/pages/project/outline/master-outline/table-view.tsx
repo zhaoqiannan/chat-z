@@ -1,11 +1,52 @@
 "use client";
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { ActionIcon, Box, Flex, Group, ScrollArea, Select, Table, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiCpu, FiPlus, FiTrash2 } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiCpu, FiGitMerge, FiPlus, FiTrash2 } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineStatus } from "@/rest/master-outline";
 import { flattenVisibleTree, TAG_PRESETS } from "./tree-utils";
 import styles from "./style.module.scss";
+
+function AutoWrapNoteInput({
+  value,
+  placeholder,
+  onChange,
+}: {
+  value: string;
+  placeholder: string;
+  onChange: (next: string) => void;
+}) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const resize = () => {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    };
+    resize();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(resize);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      placeholder={placeholder}
+      className={styles.inlineTextarea}
+      onChange={(e) => {
+        onChange(e.target.value);
+        e.currentTarget.style.height = "auto";
+        e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+      }}
+    />
+  );
+}
 
 interface TableViewProps {
   tree: MasterOutlineNode;
@@ -16,6 +57,7 @@ interface TableViewProps {
   onMoveNode: (id: string, dir: "up" | "down") => void;
   onToggleCollapse: (id: string) => void;
   onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
+  onOpenLogicDeduction: (nodeId: string) => void;
 }
 
 export default function TableView({
@@ -27,6 +69,7 @@ export default function TableView({
   onMoveNode,
   onToggleCollapse,
   onJumpToAiAnalysis,
+  onOpenLogicDeduction,
 }: TableViewProps) {
   const rows = useMemo(() => {
     const all = flattenVisibleTree(tree);
@@ -45,7 +88,7 @@ export default function TableView({
               <Table.Th><Text fz={12} fw={600} c="#475569">要点说明</Text></Table.Th>
               <Table.Th w={110}><Text fz={12} fw={600} c="#475569">关联章节</Text></Table.Th>
               <Table.Th w={110}><Text fz={12} fw={600} c="#475569">状态</Text></Table.Th>
-              <Table.Th w={140}><Text fz={12} fw={600} c="#475569">操作</Text></Table.Th>
+              <Table.Th w={170}><Text fz={12} fw={600} c="#475569">操作</Text></Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -54,7 +97,7 @@ export default function TableView({
               const hasChildren = node.children.length > 0;
 
               return (
-                <Table.Tr key={node.id} className={styles.tableRow}>
+                <Table.Tr key={node.id} className={styles.tableRow} style={{ verticalAlign: "top" }}>
                   <Table.Td>
                     <Flex align="center" gap={4} pl={depth * 18}>
                       {hasChildren ? (
@@ -84,11 +127,10 @@ export default function TableView({
                   </Table.Td>
 
                   <Table.Td>
-                    <input
+                    <AutoWrapNoteInput
                       value={node.note || ""}
                       placeholder="填写核心冲突、推进目标或伏笔要点..."
-                      className={styles.inlineInput}
-                      onChange={(e) => onUpdateNode(node.id, { note: e.target.value })}
+                      onChange={(next) => onUpdateNode(node.id, { note: next })}
                     />
                   </Table.Td>
 
@@ -136,6 +178,14 @@ export default function TableView({
                             </ActionIcon>
                           </Tooltip>
                         </>
+                      ) : null}
+
+                      {hasChildren ? (
+                        <Tooltip label={node.logicDeduction ? "AI 脉络推算（查看上次结果 / 重新推算）" : "AI 脉络推算（梳理当前节点与子节点逻辑）"}>
+                          <ActionIcon variant={node.logicDeduction ? "light" : "subtle"} color="indigo" size={24} onClick={() => onOpenLogicDeduction(node.id)}>
+                            <FiGitMerge size={13} />
+                          </ActionIcon>
+                        </Tooltip>
                       ) : null}
 
                       {node.chapterRange?.trim() ? (

@@ -88,6 +88,82 @@
     .metaPillPlaceholder {
       opacity: 1;
     }
+
+    .resizeHandleCorner {
+      opacity: 1;
+    }
+  }
+}
+
+.nodeResizing {
+  transition: none !important;
+  z-index: 20 !important;
+  user-select: none;
+
+  .resizeHandleCorner {
+    opacity: 1;
+  }
+}
+
+.resizeHandleRight {
+  position: absolute;
+  top: 8px;
+  right: -3px;
+  bottom: 14px;
+  width: 7px;
+  cursor: ew-resize;
+  z-index: 6;
+}
+
+.resizeHandleBottom {
+  position: absolute;
+  left: 8px;
+  right: 14px;
+  bottom: -3px;
+  height: 7px;
+  cursor: ns-resize;
+  z-index: 6;
+}
+
+.resizeHandleCorner {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  z-index: 7;
+  opacity: 0;
+  transition: opacity 0.14s ease;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    background-color: #94a3b8;
+    border-radius: 1px;
+    transform: rotate(-45deg);
+  }
+
+  &::before {
+    width: 9px;
+    height: 1.5px;
+    right: 1px;
+    bottom: 5px;
+  }
+
+  &::after {
+    width: 5px;
+    height: 1.5px;
+    right: 2px;
+    bottom: 2px;
+  }
+
+  &:hover {
+    &::before,
+    &::after {
+      background-color: #00c9ff;
+    }
   }
 }
 
@@ -189,6 +265,10 @@
   }
 
   .metaPillPlaceholder {
+    opacity: 1;
+  }
+
+  .resizeHandleCorner {
     opacity: 1;
   }
 }
@@ -626,6 +706,34 @@
   font-size: 13px;
   color: #1e293b;
   outline: none;
+
+  &:hover {
+    border-color: #e2e8f0;
+    background-color: #ffffff;
+  }
+
+  &:focus {
+    border-color: #00c9ff;
+    background-color: #ffffff;
+  }
+}
+
+.inlineTextarea {
+  display: block;
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #1e293b;
+  font-family: inherit;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 
   &:hover {
     border-color: #e2e8f0;

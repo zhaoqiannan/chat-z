@@ -254,8 +254,8 @@ export default function StoryOutlinePage() {
       <LoadingMask visible={loading && nodes.length === 0 && activeTab !== "master"} />
 
       {/* 第一行：四大 Tab 切换栏 */}
-      <Box px="md" pt={6} style={{ borderBottom: "1px solid #f1f5f9" }}>
-        <Tabs value={activeTab} onChange={(val) => { setActiveTab(val); setSelectedNodeIds([]); }}>
+      <Box px="md" pt={0} style={{ borderBottom: "1px solid #f1f5f9" }}>
+        <Tabs value={activeTab} onChange={(val) => { setActiveTab(val); setSelectedNodeIds([]); }} styles={{ tab: { paddingTop: 6, paddingBottom: 7 } }}>
           <Tabs.List>
             <Tabs.Tab value="master" leftSection={<FiGitBranch size={15} color="#00c9ff" />}>
               项目总纲
