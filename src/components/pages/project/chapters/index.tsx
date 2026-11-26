@@ -192,21 +192,29 @@ export default function ChaptersPage() {
   };
 
   const handleUpdate = async (data: Partial<ChapterItem>) => {
-    if (!activeChapter) return;
-    const currentId = activeChapter.id;
+    const targetId = data.id ?? activeChapter?.id;
+    if (!targetId) return;
+    const targetItem = rawList.find((c) => String(c.id) === String(targetId)) || activeChapter;
+    if (!targetItem) return;
+
     const updatePayload: UpdateChapterPayload = {
-      id: currentId,
-      title: data.title !== undefined ? data.title : activeChapter.title,
-      subtitle: data.subtitle !== undefined ? data.subtitle : activeChapter.subtitle,
-      content: data.content !== undefined ? data.content : activeChapter.content,
-      status: data.status !== undefined ? data.status : activeChapter.status,
-      summary: data.summary !== undefined ? data.summary : activeChapter.summary,
+      id: targetId,
+      title: data.title !== undefined ? data.title : targetItem.title,
+      subtitle: data.subtitle !== undefined ? data.subtitle : targetItem.subtitle,
+      content: data.content !== undefined ? data.content : targetItem.content,
+      status: data.status !== undefined ? data.status : targetItem.status,
+      summary: data.summary !== undefined ? data.summary : targetItem.summary,
+      ...(data.volumeId !== undefined ? { volumeId: data.volumeId } : {}),
     };
 
     const res = await updateChapter(updatePayload);
     if (res && res.success) {
-      setActiveChapter((prev) => (prev && String(prev.id) === String(currentId) ? { ...prev, ...data } : prev));
-      await fetchChapters(currentId);
+      const mergedFields: Partial<ChapterItem> = {
+        ...data,
+        ...(res.result && typeof res.result === "object" ? res.result : {}),
+      };
+      setRawList((prev) => prev.map((c) => (String(c.id) === String(targetId) ? { ...c, ...mergedFields } : c)));
+      setActiveChapter((prev) => (prev && String(prev.id) === String(targetId) ? { ...prev, ...mergedFields } : prev));
     }
   };
 

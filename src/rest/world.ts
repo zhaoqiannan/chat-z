@@ -259,12 +259,16 @@ export const uploadImageFile = async (
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch("/api/upload", {
+  const res = await fetch("/api/upload/", {
     method: "POST",
     headers,
     body: formData,
     credentials: "include",
   });
 
-  return res.json();
+  try {
+    return await res.json();
+  } catch {
+    return { success: false, message: `上传失败 (${res.status})` };
+  }
 };

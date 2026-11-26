@@ -159,14 +159,14 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (masterRow && (masterRow as any).tree_json) {
       try {
         tree = JSON.parse((masterRow as any).tree_json);
-      } catch {}
+      } catch { }
     }
 
     const snapshotMap = new Map<string, any>();
     for (const r of (snapshotRows as any)?.results || []) {
       try {
         snapshotMap.set(String(r.master_node_id), JSON.parse(r.snapshot_json));
-      } catch {}
+      } catch { }
     }
 
     // 合并 Tab 2 章节大纲与章节表，构建按 chapterNumber 索引的每章进度与内容
@@ -355,7 +355,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    const [masterRow, chapterOutlineRows, chapterRows, charList, ruleList, existingSnapRow] = await Promise.all([
+    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, charList, ruleList, existingSnapRow] = await Promise.all([
       env.DB.prepare("SELECT tree_json FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1")
         .bind(workId, user.userId)
         .first()
@@ -366,18 +366,26 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .where(and(eq(outlines.workId, workId), eq(outlines.category, "chapter")))
         .orderBy(asc(outlines.chapterNumber), asc(outlines.id))
         .all(),
+      // 仅查询章节元数据与摘要，避免把全书正文拉入 Worker 内存
       db
         .select({
           chapterNumber: chapters.chapterNumber,
           title: chapters.title,
           summary: chapters.summary,
-          content: chapters.content,
           wordCount: chapters.wordCount,
         })
         .from(chapters)
         .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0)))
         .orderBy(asc(chapters.chapterNumber))
         .all(),
+      chapterStart > 1
+        ? db
+          .select({ content: chapters.content })
+          .from(chapters)
+          .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0), eq(chapters.chapterNumber, chapterStart - 1)))
+          .limit(1)
+          .get()
+        : Promise.resolve(null),
       db
         .select({ name: characters.name, identity: characters.identity, personality: characters.personality, abilities: characters.abilities })
         .from(characters)
@@ -402,7 +410,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (masterRow && (masterRow as any).tree_json) {
       try {
         parsedMasterTree = JSON.parse((masterRow as any).tree_json);
-      } catch {}
+      } catch { }
     }
 
     let targetNode: any = body.targetNode || null;
@@ -419,8 +427,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       : "";
 
     // 若存在上一章（chapterStart - 1）的正文，截取最后 400 字作为场景衔接参考
-    const prevChapterRow = chapterRows.find((c) => Number(c.chapterNumber) === chapterStart - 1);
-    const prevChapterTail = prevChapterRow?.content ? prevChapterRow.content.trim().slice(-400) : "";
+    const prevChapterTail = prevChapterContentRow?.content ? prevChapterContentRow.content.trim().slice(-400) : "";
 
     // 汇总 Tab 2 已有章节大纲（优先 Tab 2 提取的大纲，补充章节表摘要）
     const outlineByNum = new Map<number, string>();
@@ -518,14 +525,14 @@ ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
     const hasCompletePlans = (obj: any) =>
       Boolean(
         obj &&
-          Array.isArray(obj.plans) &&
-          obj.plans.length > 0 &&
-          obj.plans.some(
-            (p: any) =>
-              Array.isArray(p?.chapters) &&
-              p.chapters.length >= chapterNumbersToPlan.length &&
-              p.chapters.every((c: any) => String(c?.plotText || c?.content || c?.summary || "").trim().length >= 30)
-          )
+        Array.isArray(obj.plans) &&
+        obj.plans.length > 0 &&
+        obj.plans.some(
+          (p: any) =>
+            Array.isArray(p?.chapters) &&
+            p.chapters.length >= chapterNumbersToPlan.length &&
+            p.chapters.every((c: any) => String(c?.plotText || c?.content || c?.summary || "").trim().length >= 30)
+        )
       );
 
     const raw = await callCloudflareAi(env.AI, messages, {
@@ -546,7 +553,7 @@ ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
         if (hasCompletePlans(retryParsed) || (!parsed && retryParsed?.plans?.length)) {
           parsed = retryParsed;
         }
-      } catch {}
+      } catch { }
     }
 
     if (!parsed || !Array.isArray(parsed.plans) || parsed.plans.length === 0) {
@@ -587,7 +594,7 @@ ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
         if (prev?.latestDrafts && typeof prev.latestDrafts === "object") {
           prevDrafts = prev.latestDrafts;
         }
-      } catch {}
+      } catch { }
     }
 
     const now = Date.now();

@@ -125,7 +125,7 @@ export default function ModalWork({
             label="作品名称 / 文件名"
             placeholder="请输入作品名称,如:AAA地产开发"
             leftSection={<FiBook size={15} color="#94a3b8" />}
-            required
+            withAsterisk
             {...form.getInputProps("title")}
           />
 
@@ -133,7 +133,7 @@ export default function ModalWork({
             label="作品类别"
             placeholder="逗号隔开：科幻,悬疑,都市,言情,奇幻"
             leftSection={<FiTag size={15} color="#94a3b8" />}
-            required
+            withAsterisk
             {...form.getInputProps("tag")}
           />
 

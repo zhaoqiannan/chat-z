@@ -18,22 +18,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "chapterId 无效" }, { status: 400 });
     }
 
-    try {
-      await db.run(`CREATE TABLE IF NOT EXISTS chapter_ai_chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        work_id INTEGER NOT NULL,
-        chapter_id INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        action_type TEXT DEFAULT 'chat',
-        selected_text TEXT,
-        context_tags TEXT,
-        applied INTEGER DEFAULT 0,
-        created_at INTEGER
-      )`);
-    } catch (_) { }
-
     const chatList = await db.select().from(chapterAiChats).where(and(eq(chapterAiChats.chapterId, chapterId), eq(chapterAiChats.userId, user.userId))).orderBy(asc(chapterAiChats.createdAt)).all();
 
     return NextResponse.json({ success: true, result: chatList });
@@ -67,28 +51,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const [work, chapter] = await Promise.all([
       db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, user.userId))).get(),
-      db.select().from(chapters).where(eq(chapters.id, chapterId)).get(),
+      db.select().from(chapters).where(and(eq(chapters.id, chapterId), eq(chapters.workId, workId))).get(),
     ]);
 
     if (!work || !chapter) {
-      return NextResponse.json({ success: false, message: "作品或章节不存在" }, { status: 404 });
+      return NextResponse.json({ success: false, message: "作品或章节不存在或无权访问" }, { status: 403 });
     }
-
-    try {
-      await db.run(`CREATE TABLE IF NOT EXISTS chapter_ai_chats (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        work_id INTEGER NOT NULL,
-        chapter_id INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        role TEXT NOT NULL,
-        content TEXT NOT NULL,
-        action_type TEXT DEFAULT 'chat',
-        selected_text TEXT,
-        context_tags TEXT,
-        applied INTEGER DEFAULT 0,
-        created_at INTEGER
-      )`);
-    } catch (_) { }
 
     const charIds = contextTags.filter((t) => t.type === "character").map((t) => Number(t.id)).filter(Boolean);
     const locIds = contextTags.filter((t) => t.type === "location").map((t) => Number(t.id)).filter(Boolean);
@@ -99,20 +67,27 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const otherChapterIds = contextTags.filter((t) => t.type === "chapter").map((t) => Number(t.id)).filter(Boolean);
     const materialIds = contextTags.filter((t) => t.type === "material").map((t) => Number(t.id)).filter(Boolean);
 
+    // 所有标签查询均强制限定 eq(table.workId, workId)，彻底阻断跨租户上下文注入泄露
     const [charsData, locsData, facsData, itemsData, rulesData, outlinesData, otherChaptersData, materialsData] = await Promise.all([
       charIds.length > 0
-        ? db.select().from(characters).where(inArray(characters.id, charIds)).all()
+        ? db.select().from(characters).where(and(eq(characters.workId, workId), inArray(characters.id, charIds))).all()
         : db.select().from(characters).where(eq(characters.workId, workId)).limit(10).all(),
-      locIds.length > 0 ? db.select().from(locations).where(inArray(locations.id, locIds)).all() : [],
-      facIds.length > 0 ? db.select().from(factions).where(inArray(factions.id, facIds)).all() : [],
-      itemIds.length > 0 ? db.select().from(items).where(inArray(items.id, itemIds)).all() : [],
+      locIds.length > 0 ? db.select().from(locations).where(and(eq(locations.workId, workId), inArray(locations.id, locIds))).all() : [],
+      facIds.length > 0 ? db.select().from(factions).where(and(eq(factions.workId, workId), inArray(factions.id, facIds))).all() : [],
+      itemIds.length > 0 ? db.select().from(items).where(and(eq(items.workId, workId), inArray(items.id, itemIds))).all() : [],
       ruleIds.length > 0
-        ? db.select().from(worldRules).where(inArray(worldRules.id, ruleIds)).all()
+        ? db.select().from(worldRules).where(and(eq(worldRules.workId, workId), inArray(worldRules.id, ruleIds))).all()
         : db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(6).all(),
-      outlineIds.length > 0 ? db.select().from(outlines).where(inArray(outlines.id, outlineIds)).all() : [],
-      otherChapterIds.length > 0 ? db.select({ id: chapters.id, title: chapters.title, subtitle: chapters.subtitle, chapterNumber: chapters.chapterNumber, summary: chapters.summary }).from(chapters).where(inArray(chapters.id, otherChapterIds)).all() : [],
+      outlineIds.length > 0 ? db.select().from(outlines).where(and(eq(outlines.workId, workId), inArray(outlines.id, outlineIds))).all() : [],
+      otherChapterIds.length > 0
+        ? db
+            .select({ id: chapters.id, title: chapters.title, subtitle: chapters.subtitle, chapterNumber: chapters.chapterNumber, summary: chapters.summary })
+            .from(chapters)
+            .where(and(eq(chapters.workId, workId), inArray(chapters.id, otherChapterIds)))
+            .all()
+        : [],
       materialIds.length > 0
-        ? db.select().from(materials).where(inArray(materials.id, materialIds)).all()
+        ? db.select().from(materials).where(and(eq(materials.workId, workId), inArray(materials.id, materialIds))).all()
         : db.select().from(materials).where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1))).limit(6).all(),
     ]);
 

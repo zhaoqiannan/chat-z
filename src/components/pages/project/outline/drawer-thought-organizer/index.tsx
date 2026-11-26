@@ -33,13 +33,8 @@ export default function DrawerThoughtOrganizer({
   const [characters, setCharacters] = useState<CharacterItem[]>([]);
   const [notes, setNotes] = useState<NoteData[]>([]);
 
-  // 动态灵感碎片列表
-  const [thoughts, setThoughts] = useState<string[]>([
-    "主角在建材展厅被当面泼咖啡羞辱",
-    "拿出二十年前白手起家的原始专利图纸反击",
-    "对手动用商会人脉联合施压试图封杀",
-    "商会晚宴公开揭秘白手起家奋斗史，彻底打脸对手",
-  ]);
+  // 动态灵感碎片列表（默认空白，杜绝硬编码模拟故事）
+  const [thoughts, setThoughts] = useState<string[]>([""]);
 
   const [selectedCharIds, setSelectedCharIds] = useState<string[]>([]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);

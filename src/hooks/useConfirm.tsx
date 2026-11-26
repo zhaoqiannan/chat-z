@@ -127,6 +127,13 @@ export function showPromptModal(options: PromptOptions): Promise<string | null> 
   } = options;
 
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (val: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(val);
+    };
+
     const modalId = modals.open({
       title: (
         <Flex align="center" gap={8}>
@@ -138,6 +145,10 @@ export function showPromptModal(options: PromptOptions): Promise<string | null> 
       ),
       centered: true,
       radius: "md",
+      onClose: () => {
+        if (!settled && onCancel) onCancel();
+        finish(null);
+      },
       children: (
         <PromptModalContent
           message={message}
@@ -147,18 +158,18 @@ export function showPromptModal(options: PromptOptions): Promise<string | null> 
           confirmColor={confirmColor}
           expectedValue={expectedValue}
           onConfirm={async (val) => {
+            finish(val);
             modals.close(modalId);
             if (onConfirm) {
               await onConfirm(val);
             }
-            resolve(val);
           }}
           onCancel={() => {
+            finish(null);
             modals.close(modalId);
             if (onCancel) {
               onCancel();
             }
-            resolve(null);
           }}
         />
       ),

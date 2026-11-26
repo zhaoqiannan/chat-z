@@ -168,16 +168,24 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .bind(workId, user.userId)
       .all();
 
-    const history = (historyRows?.results || []).map((r: any) => ({
-      id: r.id,
-      workId: r.work_id,
-      analysisType: r.analysis_type,
-      scopeLabel: r.scope_label,
-      scopeParams: r.scope_params_json ? JSON.parse(r.scope_params_json) : null,
-      overallScore: r.overall_score || 0,
-      report: JSON.parse(r.report_json),
-      createdAt: r.created_at,
-    }));
+    const history = (historyRows?.results || [])
+      .map((r: any) => {
+        try {
+          return {
+            id: r.id,
+            workId: r.work_id,
+            analysisType: r.analysis_type,
+            scopeLabel: r.scope_label,
+            scopeParams: r.scope_params_json ? JSON.parse(r.scope_params_json) : null,
+            overallScore: r.overall_score || 0,
+            report: JSON.parse(r.report_json),
+            createdAt: r.created_at,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
 
     return NextResponse.json({
       success: true,

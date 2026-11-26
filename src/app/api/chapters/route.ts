@@ -377,17 +377,26 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    // 如果删除的是卷，将其下的子章节 volume_id 置为空
+    // 级联清理章节/分卷关联子表，防止孤儿记录与大纲章号漂移
     if (chapter.isVolume) {
-      await db
-        .update(chapters)
-        .set({ volumeId: null })
-        .where(eq(chapters.volumeId, chapterId));
+      await env.DB.batch([
+        env.DB.prepare("UPDATE chapters SET volume_id = NULL WHERE volume_id = ?").bind(chapterId),
+        env.DB.prepare("UPDATE outlines SET volume_id = NULL WHERE volume_id = ?").bind(chapterId),
+        env.DB.prepare("DELETE FROM chapters WHERE id = ?").bind(chapterId),
+      ]);
+    } else {
+      await env.DB.batch([
+        env.DB.prepare("DELETE FROM chapter_versions WHERE chapter_id = ?").bind(chapterId),
+        env.DB.prepare("DELETE FROM chapter_ai_chats WHERE chapter_id = ?").bind(chapterId),
+        env.DB.prepare("DELETE FROM chapter_ai_history WHERE chapter_id = ?").bind(chapterId),
+        env.DB.prepare("UPDATE memory_fragments SET chapter_id = NULL WHERE chapter_id = ?").bind(chapterId),
+        env.DB.prepare("DELETE FROM outlines WHERE chapter_id = ? AND category = 'chapter'").bind(chapterId),
+        env.DB.prepare("UPDATE outlines SET chapter_id = NULL WHERE chapter_id = ?").bind(chapterId),
+        env.DB.prepare("DELETE FROM chapters WHERE id = ?").bind(chapterId),
+      ]);
     }
 
-    await db.delete(chapters).where(eq(chapters.id, chapterId));
-
-    // 重新排序重置后续章节序号，并重新统计作品总字数
+    // 批量重排后续章节序号，并同步修正关联的章节大纲章号
     if (!chapter.isVolume) {
       const remainingChapters = await db
         .select({ id: chapters.id, chapterNumber: chapters.chapterNumber })
@@ -395,14 +404,18 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .where(and(eq(chapters.workId, chapter.workId), eq(chapters.isVolume, 0)))
         .orderBy(asc(chapters.chapterNumber), asc(chapters.createdAt));
 
+      const renumberStmts: any[] = [];
       for (let i = 0; i < remainingChapters.length; i++) {
         const newNum = i + 1;
         if (remainingChapters[i].chapterNumber !== newNum) {
-          await db
-            .update(chapters)
-            .set({ chapterNumber: newNum })
-            .where(eq(chapters.id, remainingChapters[i].id));
+          renumberStmts.push(
+            env.DB.prepare("UPDATE chapters SET chapter_number = ? WHERE id = ?").bind(newNum, remainingChapters[i].id),
+            env.DB.prepare("UPDATE outlines SET chapter_number = ?, order_index = ? WHERE chapter_id = ? AND category = 'chapter'").bind(newNum, newNum, remainingChapters[i].id)
+          );
         }
+      }
+      if (renumberStmts.length > 0) {
+        await env.DB.batch(renumberStmts);
       }
 
       await recountWorkWords(db, chapter.workId);

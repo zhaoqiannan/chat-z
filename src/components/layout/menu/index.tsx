@@ -8,6 +8,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { clearUser } from "@/store/userInfo";
 import { logoutUser } from "@/rest/user";
+import { clearSession } from "@/utils/rest";
 import { getWorkList, WorkItem } from "@/rest/work";
 import AvatarCircle from "@/components/common/avatar-circle";
 import useSessionToken from "@/hooks/useSessionToken";
@@ -56,10 +57,8 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
     } catch (e) {
       console.error("Error calling logout API:", e);
     }
-    localStorage.removeItem("user_info");
-    document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    dispatch(clearUser());
-    router.replace("/login");
+    clearSession();
+    router.replace("/login/");
   };
 
   const currentTab = searchParams.get("tab") || "overview";

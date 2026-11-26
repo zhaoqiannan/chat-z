@@ -2,15 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, chapters, works, characters, outlines } from "@/db";
+import { getDb, chapters, characters, outlines } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
-
-async function ensureChapterOutlineExtractedColumn(envDb: any) {
-  try {
-    await envDb.prepare("ALTER TABLE chapters ADD COLUMN outline_extracted INTEGER DEFAULT 0;").run();
-  } catch (_) {}
-}
+import { assertChapterOwnership, parseJsonBody } from "@/utils/ownership";
 
 function isBoilerplateEvent(text: string): boolean {
   const clean = (text || "").trim();
@@ -25,32 +20,25 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureChapterOutlineExtractedColumn(env.DB);
 
-    const body = await req.json();
-    const { chapterId: rawChapterId, workId: rawWorkId, content, title } = body;
+    const parsedBody = await parseJsonBody(req);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { chapterId: rawChapterId, workId: rawWorkId, content, title } = parsedBody.data;
 
     const chapterId = Number(rawChapterId);
-    const workId = Number(rawWorkId);
+    const workId = rawWorkId ? Number(rawWorkId) : undefined;
 
     if (!chapterId || isNaN(chapterId)) {
       return NextResponse.json({ success: false, message: "缺少有效章节ID" }, { status: 400 });
     }
 
-    const chapter = await db.select().from(chapters).where(eq(chapters.id, chapterId)).get();
-    if (!chapter) {
-      return NextResponse.json({ success: false, message: "章节不存在" }, { status: 404 });
+    // 严格校验 chapter 归属当前用户（并匹配可选 workId），杜绝跨租户读写他人章节
+    const owned = await assertChapterOwnership(db, chapterId, user.userId, workId);
+    if (!owned) {
+      return NextResponse.json({ success: false, message: "章节不存在或无权访问" }, { status: 403 });
     }
-
-    const effectiveWorkId = workId || chapter.workId;
-    const work = await db
-      .select()
-      .from(works)
-      .where(and(eq(works.id, effectiveWorkId), eq(works.userId, user.userId)))
-      .get();
-    if (!work) {
-      return NextResponse.json({ success: false, message: "无权访问该作品" }, { status: 403 });
-    }
+    const { chapter, work } = owned;
+    const effectiveWorkId = chapter.workId;
 
     const chapterText = (content || chapter.content || "").trim();
     if (!chapterText || chapterText.length < 20) {
@@ -209,16 +197,16 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       resultRecord = inserted[0] || outlineData;
     }
 
-    // 同步标记 chapters.outline_extracted = 1（若章节本身 summary 为空则顺便写入）
+    // 同步标记 chapters.outline_extracted = 1（使用 Unix 秒与 Drizzle timestamp 模式一致，避免时间戳漂移）
     try {
       await env.DB.prepare(
         `UPDATE chapters
          SET outline_extracted = 1,
              summary = CASE WHEN summary IS NULL OR TRIM(summary) = '' THEN ? ELSE summary END,
              updated_at = ?
-         WHERE id = ?`
+         WHERE id = ? AND work_id = ?`
       )
-        .bind(finalEvent.slice(0, 500), Date.now(), chapterId)
+        .bind(finalEvent.slice(0, 500), Math.floor(Date.now() / 1000), chapterId, effectiveWorkId)
         .run();
     } catch (markErr) {
       console.warn("[extract-outline] 更新章节提取标记失败:", markErr);

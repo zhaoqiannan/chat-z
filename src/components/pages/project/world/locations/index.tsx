@@ -443,6 +443,8 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                   {/* SVG 拓扑关联关系连线层 */}
                   {showRelations && (
                   <svg
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
                     style={{
                       position: "absolute",
                       top: 0,
@@ -517,11 +519,12 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                             fill="none"
                             stroke={isHighlighted ? "url(#rel-gradient-active)" : "url(#rel-gradient)"}
                             strokeWidth={isHighlighted ? 2.5 : 1.8}
+                            vectorEffect="non-scaling-stroke"
                             strokeDasharray={isHighlighted ? "none" : "5,4"}
                             markerEnd={isHighlighted ? "url(#arrow-active)" : "url(#arrow)"}
                           />
                           {/* 连线中点关系徽标 */}
-                          <circle cx={`${cx}%`} cy={`${cy}%`} r={isHighlighted ? 4 : 3} fill={isHighlighted ? "#0284c7" : "#06b6d4"} />
+                          <circle cx={cx} cy={cy} r={isHighlighted ? 0.65 : 0.45} fill={isHighlighted ? "#0284c7" : "#06b6d4"} />
                         </g>
                       );
                     })}

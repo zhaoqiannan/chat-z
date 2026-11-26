@@ -3,25 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, items, works } from "@/db";
-import { eq, and, desc, sql } from "drizzle-orm";
-
-async function ensureItemColumns(db: any) {
-  try {
-    await db.run(sql`ALTER TABLE items ADD COLUMN owner_id INTEGER;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE items ADD COLUMN owner_name TEXT;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE items ADD COLUMN faction TEXT;`);
-  } catch (_) {}
-}
+import { eq, and, desc } from "drizzle-orm";
+import { assertWorkOwnership } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureItemColumns(db);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
@@ -52,7 +40,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureItemColumns(db);
 
     const body = await req.json();
     const {
@@ -76,6 +63,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const workId = Number(rawWorkId);
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "缺少作品ID" }, { status: 400 });
+    }
+    if (!(await assertWorkOwnership(db, workId, user.userId))) {
+      return NextResponse.json({ success: false, message: "作品不存在或无权限访问" }, { status: 403 });
     }
 
     if (!name || !name.trim()) {
@@ -120,7 +110,6 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureItemColumns(db);
 
     const body = await req.json();
     const {
@@ -175,7 +164,12 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
     if (extra !== undefined || faction !== undefined) {
-      updateData.extra = { ...(extra || {}), ...(faction ? { faction } : {}) };
+      const prevExtra = existingItem.extra && typeof existingItem.extra === "object" ? existingItem.extra : {};
+      updateData.extra = {
+        ...prevExtra,
+        ...(extra && typeof extra === "object" ? extra : {}),
+        ...(faction !== undefined ? { faction: faction || "" } : {}),
+      };
     }
 
     const updated = await db.update(items).set(updateData).where(eq(items.id, id)).returning().get();
@@ -194,7 +188,6 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureItemColumns(db);
 
     const { searchParams } = new URL(req.url);
     let id = Number(searchParams.get("id"));

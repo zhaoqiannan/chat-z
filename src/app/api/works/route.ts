@@ -294,27 +294,19 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    // 1. 级联清理该作品下的所有子表关联数据，杜绝产生孤儿数据
-    await db.delete(chapters).where(eq(chapters.workId, workId));
-    await db.delete(characters).where(eq(characters.workId, workId));
-    await db.delete(locations).where(eq(locations.workId, workId));
-    await db.delete(factions).where(eq(factions.workId, workId));
-    await db.delete(items).where(eq(items.workId, workId));
-    await db.delete(outlines).where(eq(outlines.workId, workId));
-    await db.delete(notes).where(eq(notes.workId, workId));
-    await db.delete(materials).where(eq(materials.workId, workId));
-    await db.delete(timelines).where(eq(timelines.workId, workId));
-    await db.delete(worldRules).where(eq(worldRules.workId, workId));
-    await db.delete(characterRelations).where(eq(characterRelations.workId, workId));
-    await db.delete(chapterVersions).where(eq(chapterVersions.workId, workId));
-    await db.delete(chapterAiChats).where(eq(chapterAiChats.workId, workId));
-    await db.delete(memoryFragments).where(eq(memoryFragments.workId, workId));
-    await db.delete(plotDeductions).where(eq(plotDeductions.workId, workId));
-
-    // 2. 删除作品自身
-    await db
-      .delete(works)
-      .where(and(eq(works.id, workId), eq(works.userId, user.userId)));
+    // 原子级联清理该作品下的全部 21 张子表数据，彻底杜绝孤儿记录
+    const cascadeTables = [
+      "chapters", "characters", "locations", "factions", "items", "outlines",
+      "notes", "materials", "timelines", "timeline_events", "world_rules",
+      "character_relations", "chapter_versions", "chapter_ai_chats",
+      "chapter_ai_history", "outline_ai_history", "memory_fragments",
+      "plot_deductions", "work_master_outlines",
+      "master_node_deduction_snapshots", "ai_analysis_reports",
+    ];
+    await env.DB.batch([
+      ...cascadeTables.map((tbl) => env.DB.prepare(`DELETE FROM ${tbl} WHERE work_id = ?`).bind(workId)),
+      env.DB.prepare("DELETE FROM works WHERE id = ? AND user_id = ?").bind(workId, user.userId),
+    ]);
 
     await logUserActivity(db, {
       userId: user.userId,

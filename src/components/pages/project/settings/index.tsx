@@ -36,8 +36,8 @@ export default function ProjectSettingsPage() {
         const d = res.result;
         setWorkData(d);
         setTitle(d.title || "");
-        setTag(d.tag || "玄幻修真");
-        setTargetWords(d.targetWords || 500000);
+        setTag(d.tag || "通用小说");
+        setTargetWords(d.expectedWords ?? d.targetWords ?? 500000);
         setDescription(d.description || "");
         setStatus(d.status || "draft");
       }
@@ -83,7 +83,7 @@ export default function ProjectSettingsPage() {
     try {
       setExportingAction(action);
       const token = typeof window !== "undefined" ? localStorage.getItem("access_token") || "" : "";
-      const res = await fetch(`/api/project/settings?workId=${encodeURIComponent(workId)}&action=${action}`, {
+      const res = await fetch(`/api/project/settings/?workId=${encodeURIComponent(workId)}&action=${action}`, {
         method: "GET",
         credentials: "include",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -149,7 +149,7 @@ export default function ProjectSettingsPage() {
   const progressPercent = targetWords > 0 ? Math.min(100, Math.round((currentWords / targetWords) * 100)) : 0;
 
   return (
-    <Box p="16px 20px 48px" style={{ maxWidth: 880, margin: "0 auto", minHeight: "calc(100vh - 64px)" }}>
+    <Box pos="relative" p="16px 20px 48px" style={{ maxWidth: 880, margin: "0 auto", minHeight: "calc(100vh - 64px)" }}>
       <LoadingMask visible={loading} />
 
       <Flex align="center" gap={8} mb={14}>

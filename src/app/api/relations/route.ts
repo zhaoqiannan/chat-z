@@ -2,109 +2,58 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, characterRelations, characters } from "@/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
+import { assertWorkOwnership, parseJsonBody } from "@/utils/ownership";
 
-async function ensureRelationsTable(db: any) {
-  try {
-    await db.run(`CREATE TABLE IF NOT EXISTS character_relations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      work_id INTEGER NOT NULL,
-      source_char_id INTEGER,
-      source_char_name TEXT,
-      target_char_id INTEGER,
-      target_char_name TEXT,
-      relation_type TEXT,
-      relation_tag TEXT DEFAULT 'friendly',
-      description TEXT,
-      created_at INTEGER,
-      updated_at INTEGER
-    )`);
-  } catch (_) {}
-
-  const columns = [
-    `ALTER TABLE character_relations ADD COLUMN source_char_id INTEGER`,
-    `ALTER TABLE character_relations ADD COLUMN source_char_name TEXT`,
-    `ALTER TABLE character_relations ADD COLUMN target_char_id INTEGER`,
-    `ALTER TABLE character_relations ADD COLUMN target_char_name TEXT`,
-    `ALTER TABLE character_relations ADD COLUMN relation_type TEXT`,
-    `ALTER TABLE character_relations ADD COLUMN relation_tag TEXT DEFAULT 'friendly'`,
-    `ALTER TABLE character_relations ADD COLUMN description TEXT`,
-  ];
-  for (const colSql of columns) {
-    try {
-      await db.run(colSql);
-    } catch (_) {}
-  }
-}
-
-/**
- * 获取作品的角色关系列表及关联角色数据 (GET)
- */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureRelationsTable(db);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
-
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "缺少合法的 workId" }, { status: 400 });
     }
 
-    const relationsList = await db
-      .select()
-      .from(characterRelations)
-      .where(eq(characterRelations.workId, workId))
-      .orderBy(desc(characterRelations.id))
-      .all();
+    const work = await assertWorkOwnership(db, workId, user.userId);
+    if (!work) {
+      return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 403 });
+    }
 
-    const charList = await db
-      .select({
-        id: characters.id,
-        name: characters.name,
-        avatarUrl: characters.avatarUrl,
-        roleType: characters.roleType,
-        faction: characters.faction,
-      })
-      .from(characters)
-      .where(eq(characters.workId, workId))
-      .all();
+    const [relationsList, charList] = await Promise.all([
+      db.select().from(characterRelations).where(eq(characterRelations.workId, workId)).orderBy(desc(characterRelations.id)).all(),
+      db
+        .select({
+          id: characters.id,
+          name: characters.name,
+          avatarUrl: characters.avatarUrl,
+          roleType: characters.roleType,
+          faction: characters.faction,
+        })
+        .from(characters)
+        .where(eq(characters.workId, workId))
+        .all(),
+    ]);
 
     return NextResponse.json({
       success: true,
-      result: {
-        relations: relationsList || [],
-        characters: charList || [],
-      },
+      result: { relations: relationsList || [], characters: charList || [] },
     });
   } catch (err: any) {
     console.error("GET relations error:", err);
-    return NextResponse.json({ success: false, message: err?.message || "获取角色关系失败" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "获取角色关系失败" }, { status: 500 });
   }
 });
 
-/**
- * 新建角色关系 (POST)
- */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureRelationsTable(db);
 
-    const body = await req.json();
-    const {
-      workId: rawWorkId,
-      sourceCharId: rawSourceId,
-      sourceCharName,
-      targetCharId: rawTargetId,
-      targetCharName,
-      relationType,
-      relationTag,
-      description,
-    } = body;
+    const parsedBody = await parseJsonBody(req);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { workId: rawWorkId, sourceCharId: rawSourceId, sourceCharName, targetCharId: rawTargetId, targetCharName, relationType, relationTag, description } = parsedBody.data;
 
     const workId = Number(rawWorkId);
     const sourceCharId = Number(rawSourceId);
@@ -113,37 +62,35 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "缺少合法的作品 ID" }, { status: 400 });
     }
-
+    const work = await assertWorkOwnership(db, workId, user.userId);
+    if (!work) {
+      return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 403 });
+    }
     if (!sourceCharId || !targetCharId) {
       return NextResponse.json({ success: false, message: "请选择关联的两位角色" }, { status: 400 });
     }
-
     if (sourceCharId === targetCharId) {
       return NextResponse.json({ success: false, message: "角色不能与自身建立关联关系" }, { status: 400 });
     }
-
     if (!relationType || !String(relationType).trim()) {
       return NextResponse.json({ success: false, message: "关系类型不能为空" }, { status: 400 });
     }
 
-    let sName = String(sourceCharName || "").trim();
-    let tName = String(targetCharName || "").trim();
-
-    if (!sName || !tName) {
-      const [sChar, tChar] = await Promise.all([
-        db.select({ name: characters.name }).from(characters).where(eq(characters.id, sourceCharId)).get(),
-        db.select({ name: characters.name }).from(characters).where(eq(characters.id, targetCharId)).get(),
-      ]);
-      if (sChar?.name) sName = sChar.name;
-      if (tChar?.name) tName = tChar.name;
+    // 校验两位角色均归属当前作品，防止跨作品绑定/名称泄露
+    const [sChar, tChar] = await Promise.all([
+      db.select({ id: characters.id, name: characters.name }).from(characters).where(and(eq(characters.id, sourceCharId), eq(characters.workId, workId))).get(),
+      db.select({ id: characters.id, name: characters.name }).from(characters).where(and(eq(characters.id, targetCharId), eq(characters.workId, workId))).get(),
+    ]);
+    if (!sChar || !tChar) {
+      return NextResponse.json({ success: false, message: "所选角色不属于当前作品" }, { status: 400 });
     }
 
     const record = {
       workId,
       sourceCharId,
-      sourceCharName: sName || "未命名角色A",
+      sourceCharName: String(sourceCharName || sChar.name || "未命名角色A").trim(),
       targetCharId,
-      targetCharName: tName || "未命名角色B",
+      targetCharName: String(targetCharName || tChar.name || "未命名角色B").trim(),
       relationType: String(relationType).trim(),
       relationTag: String(relationTag || "friendly").trim(),
       description: String(description || "").trim(),
@@ -152,33 +99,34 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     };
 
     const inserted = await db.insert(characterRelations).values(record).returning().get();
-
-    return NextResponse.json({
-      success: true,
-      result: inserted || record,
-      message: "创建关系成功",
-    });
+    return NextResponse.json({ success: true, result: inserted || record, message: "创建关系成功" });
   } catch (err: any) {
     console.error("POST relation error:", err);
-    return NextResponse.json({ success: false, message: err?.message || "创建角色关系失败" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "创建角色关系失败" }, { status: 500 });
   }
 });
 
-/**
- * 编辑角色关系 (PUT)
- */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureRelationsTable(db);
 
-    const body = await req.json();
-    const { id: rawId, relationType, relationTag, description } = body;
+    const parsedBody = await parseJsonBody(req);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { id: rawId, relationType, relationTag, description } = parsedBody.data;
     const id = Number(rawId);
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "无效的关系 id" }, { status: 400 });
+    }
+
+    const existing = await db.select().from(characterRelations).where(eq(characterRelations.id, id)).get();
+    if (!existing) {
+      return NextResponse.json({ success: false, message: "角色关系不存在" }, { status: 404 });
+    }
+    const work = await assertWorkOwnership(db, existing.workId, user.userId);
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权操作该角色关系" }, { status: 403 });
     }
 
     const updatedData: Record<string, any> = { updatedAt: new Date() };
@@ -187,48 +135,44 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (description !== undefined) updatedData.description = String(description).trim();
 
     await db.update(characterRelations).set(updatedData).where(eq(characterRelations.id, id));
-
-    return NextResponse.json({
-      success: true,
-      message: "更新关系成功",
-    });
+    return NextResponse.json({ success: true, message: "更新关系成功" });
   } catch (err: any) {
     console.error("PUT relation error:", err);
-    return NextResponse.json({ success: false, message: err?.message || "更新角色关系失败" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "更新角色关系失败" }, { status: 500 });
   }
 });
 
-/**
- * 删除角色关系 (DELETE)
- */
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureRelationsTable(db);
 
     const { searchParams } = new URL(req.url);
     let id = Number(searchParams.get("id"));
-
     if (!id || isNaN(id)) {
       try {
         const body = await req.json();
         id = Number(body?.id);
-      } catch (_) {}
+      } catch {}
     }
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少关系 ID" }, { status: 400 });
     }
 
-    await db.delete(characterRelations).where(eq(characterRelations.id, id)).run();
+    const existing = await db.select().from(characterRelations).where(eq(characterRelations.id, id)).get();
+    if (!existing) {
+      return NextResponse.json({ success: false, message: "角色关系不存在" }, { status: 404 });
+    }
+    const work = await assertWorkOwnership(db, existing.workId, user.userId);
+    if (!work) {
+      return NextResponse.json({ success: false, message: "无权删除该角色关系" }, { status: 403 });
+    }
 
-    return NextResponse.json({
-      success: true,
-      message: "删除角色关系成功",
-    });
+    await db.delete(characterRelations).where(eq(characterRelations.id, id)).run();
+    return NextResponse.json({ success: true, message: "删除角色关系成功" });
   } catch (err: any) {
     console.error("DELETE relation error:", err);
-    return NextResponse.json({ success: false, message: err?.message || "删除角色关系失败" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "删除角色关系失败" }, { status: 500 });
   }
 });

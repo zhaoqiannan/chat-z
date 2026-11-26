@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, chapterAiHistory, works } from "@/db";
-import { eq, and, desc } from "drizzle-orm";
+import { getDb, chapterAiHistory } from "@/db";
+import { eq, desc } from "drizzle-orm";
+import { assertChapterOwnership, assertWorkOwnership } from "@/utils/ownership";
 
-/**
- * 获取指定章节的 AI 创作历史版本列表
- */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -14,28 +12,15 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const { searchParams } = new URL(req.url);
     const chapterId = Number(searchParams.get("chapterId"));
-    const workId = Number(searchParams.get("workId"));
+    const workId = searchParams.get("workId") ? Number(searchParams.get("workId")) : undefined;
 
     if (!chapterId || isNaN(chapterId)) {
-      return NextResponse.json(
-        { success: false, message: "缺少合法的 chapterId" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "缺少合法的 chapterId" }, { status: 400 });
     }
 
-    // 鉴权：确认该作品归属当前用户
-    if (workId) {
-      const work = await db
-        .select()
-        .from(works)
-        .where(and(eq(works.id, workId), eq(works.userId, user.userId)))
-        .get();
-      if (!work) {
-        return NextResponse.json(
-          { success: false, message: "作品不存在或无权限" },
-          { status: 403 }
-        );
-      }
+    const owned = await assertChapterOwnership(db, chapterId, user.userId, workId);
+    if (!owned) {
+      return NextResponse.json({ success: false, message: "章节不存在或无权访问" }, { status: 403 });
     }
 
     const list = await db
@@ -45,22 +30,13 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .orderBy(desc(chapterAiHistory.id))
       .all();
 
-    return NextResponse.json({
-      success: true,
-      result: list,
-    });
+    return NextResponse.json({ success: true, result: list });
   } catch (err: any) {
     console.error("获取章节 AI 历史记录失败:", err);
-    return NextResponse.json(
-      { success: false, message: err?.message || "服务器内部错误" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "获取历史记录失败" }, { status: 500 });
   }
 });
 
-/**
- * 删除指定的章节 AI 历史记录
- */
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -68,25 +44,22 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const { searchParams } = new URL(req.url);
     const id = Number(searchParams.get("id"));
-
     if (!id || isNaN(id)) {
-      return NextResponse.json(
-        { success: false, message: "缺少合法的 id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ success: false, message: "缺少合法的 id" }, { status: 400 });
+    }
+
+    const record = await db.select().from(chapterAiHistory).where(eq(chapterAiHistory.id, id)).get();
+    if (!record) {
+      return NextResponse.json({ success: false, message: "历史记录不存在" }, { status: 404 });
+    }
+    if (!(await assertWorkOwnership(db, record.workId, user.userId))) {
+      return NextResponse.json({ success: false, message: "无权删除该历史记录" }, { status: 403 });
     }
 
     await db.delete(chapterAiHistory).where(eq(chapterAiHistory.id, id)).run();
-
-    return NextResponse.json({
-      success: true,
-      message: "删除历史记录成功",
-    });
+    return NextResponse.json({ success: true, message: "删除历史记录成功" });
   } catch (err: any) {
     console.error("删除章节 AI 历史记录失败:", err);
-    return NextResponse.json(
-      { success: false, message: err?.message || "服务器内部错误" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "删除历史记录失败" }, { status: 500 });
   }
 });

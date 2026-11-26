@@ -114,7 +114,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         db
           .select({ title: memoryFragments.title, content: memoryFragments.content })
           .from(memoryFragments)
-          .where(eq(memoryFragments.workId, workId))
+          .where(and(eq(memoryFragments.workId, workId), eq(memoryFragments.userId, user.userId)))
           .orderBy(desc(memoryFragments.createdAt))
           .limit(6)
           .all(),
@@ -137,7 +137,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         if (targetNode) {
           masterGoalText = `${targetNode.title}${targetNode.note ? `：${String(targetNode.note).trim()}` : ""}`;
         }
-      } catch {}
+      } catch { }
     }
 
     const prevOutlineText = prevOutlines
@@ -258,7 +258,7 @@ ${plotText}
     if (existingSnapRow && (existingSnapRow as any).snapshot_json) {
       try {
         snapshot = JSON.parse((existingSnapRow as any).snapshot_json);
-      } catch {}
+      } catch { }
     }
     if (!snapshot.latestDrafts || typeof snapshot.latestDrafts !== "object") {
       snapshot.latestDrafts = {};

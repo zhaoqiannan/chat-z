@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb, users } from "@/db";
-import { verifyPassword, signToken } from "@/utils/auth";
+import { verifyPassword, signToken, isLegacyPasswordHash, hashPassword } from "@/utils/auth";
+import { parseJsonBody } from "@/utils/ownership";
 import { eq } from "drizzle-orm";
 
 export async function POST(req: NextRequest) {
@@ -9,10 +10,11 @@ export async function POST(req: NextRequest) {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    const body = await req.json();
-    const { username, password } = body;
+    const parsedBody = await parseJsonBody<{ username?: string; password?: string }>(req);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { username, password } = parsedBody.data;
 
-    if (!username || !password) {
+    if (!username || !password || typeof username !== "string" || typeof password !== "string") {
       return NextResponse.json(
         { success: false, message: "用户名和密码不能为空" },
         { status: 400 }
@@ -40,17 +42,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 签发 7 天长效 Token
+    // 存量旧版无盐哈希在登录成功后无感升级为 PBKDF2
+    if (isLegacyPasswordHash(user.password)) {
+      try {
+        const upgradedHash = await hashPassword(password);
+        await db.update(users).set({ password: upgradedHash }).where(eq(users.id, user.id)).run();
+      } catch (upgradeErr) {
+        console.warn("[login] 密码哈希升级失败:", upgradeErr);
+      }
+    }
+
+    const maxAge = 7 * 24 * 3600;
     const accessToken = await signToken({
       userId: user.id,
       username: user.username,
       name: user.name || user.username,
-    }, 7 * 24 * 3600);
+    }, maxAge);
 
     const response = NextResponse.json({
       success: true,
       message: "登录成功",
-      accessToken, // 兼容前端 rest.ts 的 updateSession
+      accessToken,
       userId: user.id,
       userName: user.name || user.username,
       result: {
@@ -60,21 +72,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 同时种下 auth_token cookie
-    response.cookies.set("auth_token", "true", {
+    response.cookies.set("access_token", accessToken, {
       path: "/",
-      httpOnly: false,
-      maxAge: 7 * 24 * 3600,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge,
       sameSite: "lax",
     });
 
     return response;
   } catch (error: any) {
+    console.error("[API /api/login] Error:", error);
     return NextResponse.json(
-      {
-        success: false,
-        message: error?.message || "登录服务异常",
-      },
+      { success: false, message: "登录服务异常，请稍后重试" },
       { status: 500 }
     );
   }

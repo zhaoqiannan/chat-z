@@ -6,6 +6,7 @@ export async function POST() {
     message: "退出登录成功",
   });
 
+  response.cookies.delete("access_token");
   response.cookies.delete("auth_token");
   return response;
 }

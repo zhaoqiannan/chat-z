@@ -2,77 +2,80 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, uploadedFiles } from "@/db";
+import { isSafeUrl, parseJsonBody } from "@/utils/ownership";
 
-async function ensureUploadedFilesTable(db: any) {
-  try {
-    await db.run(`CREATE TABLE IF NOT EXISTS uploaded_files (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT,
-      file_name TEXT NOT NULL,
-      mime_type TEXT NOT NULL,
-      file_size TEXT,
-      data_base64 TEXT NOT NULL,
-      created_at INTEGER
-    )`);
-  } catch (_) {}
+// Cloudflare D1 单行上限约 1MB，Base64 膨胀约 1.33 倍，因此二进制文件限制 700KB 以内
+const MAX_D1_FILE_BYTES = 700 * 1024;
+
+const ALLOWED_EXT_MIME: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".pdf": "application/pdf",
+  ".txt": "text/plain; charset=utf-8",
+  ".log": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".markdown": "text/markdown; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".csv": "text/csv; charset=utf-8",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
+
+function getSafeMimeType(fileName: string): string | null {
+  const lower = fileName.toLowerCase().trim();
+  const dotIdx = lower.lastIndexOf(".");
+  if (dotIdx === -1) return null;
+  const ext = lower.slice(dotIdx);
+  return ALLOWED_EXT_MIME[ext] || null;
 }
 
 /**
- * POST: 文件/图片统一持久化上传处理
- * 将文件存储到数据库 uploaded_files 表，并生成永久且可在新标签页直接打开的 URL: `/api/files/[id]`
+ * POST: 文件/图片持久化上传（严格白名单防同源 XSS + D1 尺寸安全校验）
  */
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureUploadedFilesTable(db);
-
     const contentType = req.headers.get("content-type") || "";
 
-    // 1. 处理 FormData 上传
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       const file = formData.get("file") as File | null;
 
       if (!file) {
+        return NextResponse.json({ success: false, message: "未检测到上传文件" }, { status: 400 });
+      }
+
+      if (file.size <= 0 || file.size > MAX_D1_FILE_BYTES) {
         return NextResponse.json(
-          { success: false, message: "未检测到上传文件" },
+          { success: false, message: "受数据库单行容量限制，单个文件大小不能超过 700 KB" },
           { status: 400 }
         );
       }
 
-      // 限制 10MB
-      if (file.size > 10 * 1024 * 1024) {
+      const safeMimeType = getSafeMimeType(file.name);
+      if (!safeMimeType) {
         return NextResponse.json(
-          { success: false, message: "文件大小不能超过 10MB" },
+          { success: false, message: "不支持的文件类型（仅允许常见位图、PDF、TXT、Markdown、JSON、CSV 及 Office 文档）" },
           { status: 400 }
         );
       }
 
       const buffer = await file.arrayBuffer();
       const base64 = Buffer.from(buffer).toString("base64");
-      let mimeType = file.type || "application/octet-stream";
-      const lowerName = file.name.toLowerCase();
-      if (lowerName.endsWith(".txt") || lowerName.endsWith(".log")) {
-        mimeType = "text/plain; charset=utf-8";
-      } else if (lowerName.endsWith(".md") || lowerName.endsWith(".markdown")) {
-        mimeType = "text/markdown; charset=utf-8";
-      } else if (lowerName.endsWith(".json")) {
-        mimeType = "application/json; charset=utf-8";
-      } else if (lowerName.endsWith(".csv")) {
-        mimeType = "text/csv; charset=utf-8";
-      }
-      const sizeStr =
-        file.size < 1024 * 1024
-          ? `${(file.size / 1024).toFixed(1)} KB`
-          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`;
+      const sizeStr = `${(file.size / 1024).toFixed(1)} KB`;
 
       const inserted = await db
         .insert(uploadedFiles)
         .values({
           userId: user.userId,
           fileName: file.name,
-          mimeType,
+          mimeType: safeMimeType,
           fileSize: sizeStr,
           dataBase64: base64,
           createdAt: new Date(),
@@ -80,38 +83,36 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .returning()
         .get();
 
-      const fileUrl = `/api/files/${inserted.id}`;
-
       return NextResponse.json({
         success: true,
-        url: fileUrl,
+        url: `/api/files/${inserted.id}`,
         fileId: inserted.id,
         fileName: file.name,
         fileSize: sizeStr,
-        mimeType,
+        mimeType: safeMimeType,
         message: "文件上传成功",
       });
     }
 
-    // 2. 处理 JSON 传参 (如外链)
-    const body = await req.json();
-    if (body?.url) {
+    const parsedBody = await parseJsonBody<{ url?: string }>(req);
+    if (!parsedBody.ok) return parsedBody.response;
+    if (parsedBody.data.url) {
+      if (!isSafeUrl(parsedBody.data.url)) {
+        return NextResponse.json(
+          { success: false, message: "仅支持 http(s) 或站内安全文件链接" },
+          { status: 400 }
+        );
+      }
       return NextResponse.json({
         success: true,
-        url: body.url,
+        url: parsedBody.data.url.trim(),
         message: "文件链接保存成功",
       });
     }
 
-    return NextResponse.json(
-      { success: false, message: "无效的上传请求格式" },
-      { status: 400 }
-    );
+    return NextResponse.json({ success: false, message: "无效的上传请求格式" }, { status: 400 });
   } catch (error: any) {
     console.error("Upload file error:", error);
-    return NextResponse.json(
-      { success: false, message: error?.message || "文件上传失败" },
-      { status: 500 }
-    );
+    return NextResponse.json({ success: false, message: "文件上传失败，请稍后重试" }, { status: 500 });
   }
 });

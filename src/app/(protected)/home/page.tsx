@@ -1,5 +1,13 @@
-import Lazy from "@/components/layout/lazy";
+"use client";
 
-const HomePage = () => <Lazy imports={[{ component: () => import("@/components/pages/home") }]} />;
+import dynamic from "next/dynamic";
+import LoadingMask from "@/components/common/loading-mask";
 
-export default HomePage;
+const HomePage = dynamic(() => import("@/components/pages/home"), {
+  ssr: false,
+  loading: () => <LoadingMask visible />,
+});
+
+export default function Page() {
+  return <HomePage />;
+}

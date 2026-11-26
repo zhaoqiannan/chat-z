@@ -22,27 +22,20 @@ export function withAuth(
         : authHeader?.trim();
 
       if (!token) {
-        token = req.cookies.get("access_token")?.value || req.cookies.get("auth_token")?.value || "";
+        token = req.cookies.get("access_token")?.value || "";
       }
 
       if (!token) {
         return NextResponse.json(
-          {
-            success: false,
-            message: "未提供访问凭证或登录已过期，请重新登录",
-          },
+          { success: false, message: "未提供访问凭证或登录已过期，请重新登录" },
           { status: 401 }
         );
       }
 
-      // 验证并解析 token
       const payload: JWTPayload | null = await verifyToken(token);
       if (!payload) {
         return NextResponse.json(
-          {
-            success: false,
-            message: "登录凭证无效或已过期，请重新登录",
-          },
+          { success: false, message: "登录凭证无效或已过期，请重新登录" },
           { status: 401 }
         );
       }
@@ -56,14 +49,11 @@ export function withAuth(
 
       return await handler(req, user);
     } catch (error: any) {
+      console.error("[withAuth] 鉴权异常:", error);
       return NextResponse.json(
-        {
-          success: false,
-          message: error?.message || "服务器鉴权内部异常",
-        },
+        { success: false, message: "服务器鉴权内部异常" },
         { status: 500 }
       );
     }
   };
 }
-

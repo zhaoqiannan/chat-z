@@ -229,6 +229,7 @@ export default function PanelAiAssistant({
   };
 
   const handleSend = async () => {
+    if (sending) return;
     const promptToSend = inputText.trim();
     if (!promptToSend && !selectedText) return;
 
@@ -264,15 +265,22 @@ export default function PanelAiAssistant({
   };
 
   const handleDeleteChat = async (id: number) => {
+    const prevChats = chats;
     setChats((prev) => prev.filter((c) => c.id !== id));
     try {
       await deleteChapterAiChat(id);
-    } catch (_) { }
+    } catch {
+      setChats(prevChats);
+      useAlert.error("删除对话记录失败，请重试");
+    }
   };
 
   const handleAccept = (chat: ChapterAiChatItem) => {
     onAcceptText(chat.content, chat.selectedText);
     setChats((prev) => prev.map((c) => (c.id === chat.id ? { ...c, applied: 1 } : c)));
+    if (chat.id > 0) {
+      applyChapterAiChat(chat.id, true).catch(() => {});
+    }
   };
 
   const handleRetry = (chat: ChapterAiChatItem) => {

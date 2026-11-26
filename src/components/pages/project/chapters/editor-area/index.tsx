@@ -72,46 +72,50 @@ export default function EditorArea({
   const lastCursorRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const lastPayloadTimestampRef = useRef<number>(0);
   const lastLocateTimestampRef = useRef<number>(0);
+  const savingRef = useRef<boolean>(false);
+  const resizeRafRef = useRef<number | null>(null);
 
-  // 触发 autosize textarea 重新计算高度与重排
+  // 使用 rAF 轻量化同步 textarea 高度，彻底移除每次击键的全局 window.resize 与合成 input 事件风暴
   const refreshTextareaHeight = useCallback(() => {
-    const el = textareaRef.current;
-    if (el) {
+    if (resizeRafRef.current !== null) {
+      cancelAnimationFrame(resizeRafRef.current);
+    }
+    resizeRafRef.current = requestAnimationFrame(() => {
+      resizeRafRef.current = null;
+      const el = textareaRef.current;
+      if (!el) return;
       el.style.height = "auto";
       el.style.height = `${Math.max(el.scrollHeight, 600)}px`;
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    window.dispatchEvent(new Event("resize"));
+    });
   }, []);
 
-  // 监听容器尺寸变化（左侧目录展开/收起、右侧 AI 面板拖拽或折叠、视口变化）
+  useEffect(() => {
+    return () => {
+      if (resizeRafRef.current !== null) cancelAnimationFrame(resizeRafRef.current);
+    };
+  }, []);
+
+  // 监听容器尺寸变化（目录折叠/AI 面板拖拽/视口变化）
   useEffect(() => {
     const el = containerRef.current;
-    const viewEl = editorViewportRef.current;
-    if (typeof ResizeObserver === "undefined") return;
-
+    if (typeof ResizeObserver === "undefined" || !el) return;
     const observer = new ResizeObserver(() => {
       refreshTextareaHeight();
     });
-
-    if (el) observer.observe(el);
-    if (viewEl) observer.observe(viewEl);
-
+    observer.observe(el);
     return () => observer.disconnect();
   }, [refreshTextareaHeight]);
 
-  // 当目录折叠状态或 AI 面板折叠/宽度改变时，延时多次刷新以配合 CSS 动画过渡
+  // 内容变化时单次 rAF 调整高度；面板折叠动画结束后再补一次
   useEffect(() => {
     refreshTextareaHeight();
-    const timers = [
-      setTimeout(refreshTextareaHeight, 20),
-      setTimeout(refreshTextareaHeight, 80),
-      setTimeout(refreshTextareaHeight, 180),
-      setTimeout(refreshTextareaHeight, 300),
-      setTimeout(refreshTextareaHeight, 450),
-    ];
-    return () => timers.forEach(clearTimeout);
-  }, [treeCollapsed, aiPanelCollapsed, aiPanelWidth, content, refreshTextareaHeight]);
+  }, [content, refreshTextareaHeight]);
+
+  useEffect(() => {
+    refreshTextareaHeight();
+    const timer = setTimeout(refreshTextareaHeight, 220);
+    return () => clearTimeout(timer);
+  }, [treeCollapsed, aiPanelCollapsed, aiPanelWidth, refreshTextareaHeight]);
 
   useEffect(() => {
     if (chapter) {
@@ -389,12 +393,14 @@ export default function EditorArea({
   };
 
   const handleManualSave = useCallback(async (): Promise<boolean> => {
-    if (!chapter) return false;
+    if (!chapter || savingRef.current) return false;
+    savingRef.current = true;
     try {
       setSaving(true);
       await onUpdateChapter({
+        id: chapter.id,
         title: title.trim() || chapter.title,
-        subtitle: subtitle.trim() || undefined,
+        subtitle: subtitle.trim(),
         content,
         wordCount: liveWordCount,
       });
@@ -408,7 +414,7 @@ export default function EditorArea({
           wordCount: liveWordCount,
           versionTag: "手动保存快照",
         });
-      } catch (_) { }
+      } catch (_) {}
 
       setLastSavedAt(new Date());
       useAlert.success("章节保存成功！");
@@ -417,6 +423,7 @@ export default function EditorArea({
       useAlert.error("保存失败: " + (e?.message || "网络异常"));
       return false;
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [chapter, title, subtitle, content, liveWordCount, onUpdateChapter, workId]);

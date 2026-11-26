@@ -4,6 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, characters, locations, factions, items, worldRules, outlines, chapters, materials } from "@/db";
 import { eq, and } from "drizzle-orm";
+import { assertWorkOwnership } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -16,6 +17,9 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "workId 无效" }, { status: 400 });
+    }
+    if (!(await assertWorkOwnership(db, workId, user.userId))) {
+      return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 403 });
     }
 
     const [charList, locList, facList, itemList, ruleList, outlineList, chapterList, materialList] = await Promise.all([
@@ -43,6 +47,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     return NextResponse.json({ success: true, result: tags });
   } catch (error: any) {
     console.error("Fetch context tags error:", error);
-    return NextResponse.json({ success: false, message: error?.message || "获取上下文标签失败" }, { status: 500 });
+    return NextResponse.json({ success: false, message: "获取上下文标签失败" }, { status: 500 });
   }
 });

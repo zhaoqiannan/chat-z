@@ -194,9 +194,11 @@ export default function ModalCreateMaterial({
       return;
     }
 
+    const escapeHtml = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     const formattedHtml = textToInsert
       .split(/\r?\n\r?\n/)
-      .map((para) => `<p>${para.replace(/\r?\n/g, "<br>")}</p>`)
+      .map((para) => `<p>${escapeHtml(para).replace(/\r?\n/g, "<br>")}</p>`)
       .join("");
 
     if (content.trim()) {

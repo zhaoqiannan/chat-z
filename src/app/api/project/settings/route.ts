@@ -3,11 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, chapters, outlines, characters, locations, factions, items, worldRules } from "@/db";
 import { eq, and, asc } from "drizzle-orm";
+import { isSafeUrl, parseJsonBody } from "@/utils/ownership";
 
-/**
- * 获取项目详情与全本导出数据 (GET)
- * action: 'detail' | 'export_json' | 'export_txt' | 'export_md'
- */
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
@@ -34,11 +31,10 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (action === "detail") {
       return NextResponse.json({
         success: true,
-        result: work,
+        result: { ...work, targetWords: work.expectedWords, coverUrl: work.cover },
       });
     }
 
-    // 全量导出模式：聚合大纲、章节正文与世界观数据
     const chapterList = await db
       .select()
       .from(chapters)
@@ -46,88 +42,54 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .orderBy(asc(chapters.chapterNumber), asc(chapters.createdAt))
       .all();
 
-    const outlineList = await db
-      .select()
-      .from(outlines)
-      .where(eq(outlines.workId, workId))
-      .all();
-
-    const charList = await db
-      .select()
-      .from(characters)
-      .where(eq(characters.workId, workId))
-      .all();
-
-    const locList = await db
-      .select()
-      .from(locations)
-      .where(eq(locations.workId, workId))
-      .all();
-
-    const factionList = await db
-      .select()
-      .from(factions)
-      .where(eq(factions.workId, workId))
-      .all();
-
-    const itemList = await db
-      .select()
-      .from(items)
-      .where(eq(items.workId, workId))
-      .all();
-
-    const ruleList = await db
-      .select()
-      .from(worldRules)
-      .where(eq(worldRules.workId, workId))
-      .all();
-
-    // 构造符合 RFC 5987 规范的纯 ASCII Content-Disposition 头，避免中文字符触发 ByteString 500 异常
     const buildDisposition = (fileName: string, ext: string) =>
       `attachment; filename="export.${ext}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
 
-    // 1. JSON 全量备份导出
     if (action === "export_json") {
-      const fullBackup = {
-        meta: {
-          exportTime: new Date().toISOString(),
-          version: "1.2.0",
-        },
-        work,
-        outlines: outlineList,
-        chapters: chapterList,
-        characters: charList,
-        locations: locList,
-        factions: factionList,
-        items: itemList,
-        worldRules: ruleList,
-      };
+      const [outlineList, charList, locList, factionList, itemList, ruleList] = await Promise.all([
+        db.select().from(outlines).where(eq(outlines.workId, workId)).all(),
+        db.select().from(characters).where(eq(characters.workId, workId)).all(),
+        db.select().from(locations).where(eq(locations.workId, workId)).all(),
+        db.select().from(factions).where(eq(factions.workId, workId)).all(),
+        db.select().from(items).where(eq(items.workId, workId)).all(),
+        db.select().from(worldRules).where(eq(worldRules.workId, workId)).all(),
+      ]);
 
-      return new NextResponse(JSON.stringify(fullBackup, null, 2), {
-        headers: {
-          "Content-Type": "application/json; charset=utf-8",
-          "Content-Disposition": buildDisposition(`${work.title}_全量备份.json`, "json"),
-        },
-      });
+      return new NextResponse(
+        JSON.stringify(
+          {
+            meta: { exportTime: new Date().toISOString(), version: "1.2.0" },
+            work,
+            outlines: outlineList,
+            chapters: chapterList,
+            characters: charList,
+            locations: locList,
+            factions: factionList,
+            items: itemList,
+            worldRules: ruleList,
+          },
+          null,
+          2
+        ),
+        {
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            "Content-Disposition": buildDisposition(`${work.title}_全量备份.json`, "json"),
+          },
+        }
+      );
     }
 
-    // 2. Markdown 全书整合导出
     if (action === "export_md") {
-      let md = `# ${work.title}\n\n`;
-      md += `> 标签：${work.tag || "网络小说"} | 总字数：${work.wordCount || 0} 字\n\n`;
-      if (work.description) {
-        md += `## 作品简介\n${work.description}\n\n---\n\n`;
-      }
-
+      let md = `# ${work.title}\n\n> 标签：${work.tag || "网络小说"} | 总字数：${work.wordCount || 0} 字\n\n`;
+      if (work.description) md += `## 作品简介\n${work.description}\n\n---\n\n`;
       md += `## 正文章节\n\n`;
       for (const ch of chapterList) {
         if (ch.isVolume) {
           md += `# ${ch.title}\n\n`;
         } else {
           md += `### 第 ${ch.chapterNumber} 章 ${ch.title}${ch.subtitle ? ` · ${ch.subtitle}` : ""}\n\n`;
-          if (ch.summary) {
-            md += `> 【本章大纲要点】：${ch.summary}\n\n`;
-          }
+          if (ch.summary) md += `> 【本章大纲要点】：${ch.summary}\n\n`;
           md += `${ch.content || "（暂无正文）"}\n\n---\n\n`;
         }
       }
@@ -140,20 +102,14 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       });
     }
 
-    // 3. 纯文本 TXT 导出
-    let txt = `《${work.title}》\n`;
-    txt += `题材：${work.tag || "小说"} | 总字数：${work.wordCount || 0} 字\n`;
-    if (work.description) {
-      txt += `\n【简介】\n${work.description}\n\n`;
-    }
+    let txt = `《${work.title}》\n题材：${work.tag || "小说"} | 总字数：${work.wordCount || 0} 字\n`;
+    if (work.description) txt += `\n【简介】\n${work.description}\n\n`;
     txt += `========================================\n\n`;
-
     for (const ch of chapterList) {
       if (ch.isVolume) {
         txt += `\n【${ch.title}】\n\n`;
       } else {
-        txt += `第 ${ch.chapterNumber} 章 ${ch.title}${ch.subtitle ? ` · ${ch.subtitle}` : ""}\n\n`;
-        txt += `${ch.content || ""}\n\n\n`;
+        txt += `第 ${ch.chapterNumber} 章 ${ch.title}${ch.subtitle ? ` · ${ch.subtitle}` : ""}\n\n${ch.content || ""}\n\n\n`;
       }
     }
 
@@ -164,41 +120,44 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       },
     });
   } catch (err: any) {
-    return NextResponse.json({ success: false, message: err?.message || "导出失败" }, { status: 500 });
+    console.error("GET project/settings error:", err);
+    return NextResponse.json({ success: false, message: "获取或导出项目失败" }, { status: 500 });
   }
 });
 
-/**
- * 更新项目设置 (PUT)
- */
 export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    const body = await req.json();
-    const { id: rawId, title, tag, targetWords, description, coverUrl, status } = body;
+    const parsedBody = await parseJsonBody(req);
+    if (!parsedBody.ok) return parsedBody.response;
+    const { id: rawId, title, tag, targetWords, expectedWords, description, coverUrl, cover, status } = parsedBody.data;
     const id = Number(rawId);
 
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "无效的工程 id" }, { status: 400 });
     }
 
+    const nextCover = cover !== undefined ? cover : coverUrl;
+    if (nextCover && !isSafeUrl(nextCover)) {
+      return NextResponse.json({ success: false, message: "非法的封面链接协议" }, { status: 400 });
+    }
+
     const updatedData: Record<string, any> = { updatedAt: new Date() };
-    if (title !== undefined) updatedData.title = title.trim();
+    if (title !== undefined) updatedData.title = String(title).trim();
     if (tag !== undefined) updatedData.tag = tag;
-    if (targetWords !== undefined) updatedData.targetWords = Number(targetWords) || 0;
+    if (expectedWords !== undefined || targetWords !== undefined) {
+      updatedData.expectedWords = Math.max(0, Number(expectedWords ?? targetWords) || 0);
+    }
     if (description !== undefined) updatedData.description = description;
-    if (coverUrl !== undefined) updatedData.coverUrl = coverUrl;
+    if (nextCover !== undefined) updatedData.cover = nextCover ? String(nextCover).trim() : null;
     if (status !== undefined) updatedData.status = status;
 
     await db.update(works).set(updatedData).where(and(eq(works.id, id), eq(works.userId, user.userId)));
-
-    return NextResponse.json({
-      success: true,
-      message: "保存项目设置成功",
-    });
+    return NextResponse.json({ success: true, message: "保存项目设置成功" });
   } catch (err: any) {
-    return NextResponse.json({ success: false, message: err?.message || "更新项目设置失败" }, { status: 500 });
+    console.error("PUT project/settings error:", err);
+    return NextResponse.json({ success: false, message: "更新项目设置失败" }, { status: 500 });
   }
 });

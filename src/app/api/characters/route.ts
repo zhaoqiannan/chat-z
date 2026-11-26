@@ -3,40 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, characters, works } from "@/db";
-import { eq, and, desc, sql } from "drizzle-orm";
-
-const ensureCharacterColumns = async (db: any) => {
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN tags TEXT;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN appearance_chapters TEXT;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN character_arc TEXT;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN is_pinned INTEGER DEFAULT 0;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN pinned_at INTEGER;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN personal_intro TEXT;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN background TEXT;`);
-  } catch (_) {}
-  try {
-    await db.run(sql`ALTER TABLE characters ADD COLUMN inspiration_fragments TEXT;`);
-  } catch (_) {}
-};
+import { eq, and, desc } from "drizzle-orm";
+import { assertWorkOwnership } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureCharacterColumns(db);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
@@ -68,7 +41,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureCharacterColumns(db);
 
     const body = await req.json();
     const {
@@ -101,6 +73,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const workId = Number(rawWorkId);
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "缺少作品ID" }, { status: 400 });
+    }
+    if (!(await assertWorkOwnership(db, workId, user.userId))) {
+      return NextResponse.json({ success: false, message: "作品不存在或无权限访问" }, { status: 403 });
     }
 
     if (!name || !name.trim()) {
@@ -156,7 +131,6 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureCharacterColumns(db);
 
     const body = await req.json();
     const {
@@ -259,7 +233,6 @@ export const PATCH = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureCharacterColumns(db);
 
     const body = await req.json();
     const id = Number(body.id);
@@ -294,7 +267,6 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureCharacterColumns(db);
 
     const { searchParams } = new URL(req.url);
     let id = Number(searchParams.get("id"));

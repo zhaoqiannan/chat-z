@@ -7,8 +7,6 @@ import SessionWrapper from "@/components/layout/session-wrapper";
 
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
-import "@mantine/dates/styles.css";
-import '@mantine/carousel/styles.css';
 import "@/static/global.scss";
 import "@/static/mantine.scss";
 import "@/static/form.scss";

@@ -1,7 +1,13 @@
-import Lazy from "@/components/layout/lazy";
+"use client";
 
-const WorkspacePage = () => (
-  <Lazy imports={[{ component: () => import("@/components/pages/workspace") }]} />
-);
+import dynamic from "next/dynamic";
+import LoadingMask from "@/components/common/loading-mask";
 
-export default WorkspacePage;
+const WorkspacePage = dynamic(() => import("@/components/pages/workspace"), {
+  ssr: false,
+  loading: () => <LoadingMask visible />,
+});
+
+export default function Page() {
+  return <WorkspacePage />;
+}

@@ -1,23 +1,97 @@
-// 工具：用户认证、密码哈希与 JWT 签发/校验（全量支持 UTF-8 字符集与中文昵称 Base64 编码）
-const JWT_SECRET = process.env.JWT_SECRET || "novel-studio-secret-key-2026";
+// 工具：用户认证、PBKDF2 密码哈希（兼容旧版平滑升级）与 HS256 JWT 签发/校验
+const FALLBACK_DEV_SECRET = "novel-studio-secret-key-2026";
+const PBKDF2_PREFIX = "pbkdf2";
+const PBKDF2_ITERATIONS = 100000;
 
-export async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + ":" + JWT_SECRET);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (secret && secret.length >= 16) {
+    return secret;
+  }
+  return FALLBACK_DEV_SECRET;
 }
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const computed = await hashPassword(password);
-  return computed === hash;
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const len = Math.floor(hex.length / 2);
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return out;
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a[i] ^ b[i];
+  }
+  return diff === 0;
+}
+
+async function legacySha256Hash(password: string): Promise<string> {
+  const data = new TextEncoder().encode(`${password}:${getJwtSecret()}`);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return bytesToHex(new Uint8Array(hashBuffer));
+}
+
+async function derivePbkdf2(password: string, salt: Uint8Array, iterations: number): Promise<Uint8Array> {
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: salt as unknown as BufferSource,
+      iterations,
+    },
+    keyMaterial,
+    256
+  );
+  return new Uint8Array(derived);
+}
+
+export function isLegacyPasswordHash(hash: string): boolean {
+  return !hash.startsWith(`${PBKDF2_PREFIX}$`);
+}
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = new Uint8Array(16);
+  crypto.getRandomValues(salt);
+  const derived = await derivePbkdf2(password, salt, PBKDF2_ITERATIONS);
+  return `${PBKDF2_PREFIX}$${PBKDF2_ITERATIONS}$${bytesToHex(salt)}$${bytesToHex(derived)}`;
+}
+
+export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  if (!storedHash) return false;
+  if (storedHash.startsWith(`${PBKDF2_PREFIX}$`)) {
+    const parts = storedHash.split("$");
+    if (parts.length !== 4) return false;
+    const iterations = Number(parts[1]);
+    if (!Number.isFinite(iterations) || iterations < 10000) return false;
+    const salt = hexToBytes(parts[2]);
+    const expected = hexToBytes(parts[3]);
+    const actual = await derivePbkdf2(password, salt, iterations);
+    return timingSafeEqual(actual, expected);
+  }
+  // 兼容存量旧版无盐 SHA-256 哈希，登录成功后由 /api/login 自动升级为 PBKDF2
+  const legacyActual = hexToBytes(await legacySha256Hash(password));
+  const legacyExpected = hexToBytes(storedHash);
+  return timingSafeEqual(legacyActual, legacyExpected);
 }
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
+  for (let i = 0; i < bytes.byteLength; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -29,8 +103,7 @@ function base64UrlToBytes(str: string): Uint8Array {
     base64 += "=";
   }
   const binary = atob(base64);
-  const buffer = new ArrayBuffer(binary.length);
-  const bytes = new Uint8Array(buffer);
+  const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i);
   }
@@ -38,13 +111,11 @@ function base64UrlToBytes(str: string): Uint8Array {
 }
 
 function utf8ToBase64Url(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  return bytesToBase64Url(bytes);
+  return bytesToBase64Url(new TextEncoder().encode(str));
 }
 
 function base64UrlToUtf8(str: string): string {
-  const bytes = base64UrlToBytes(str);
-  return new TextDecoder().decode(bytes);
+  return new TextDecoder().decode(base64UrlToBytes(str));
 }
 
 export interface JWTPayload {
@@ -66,30 +137,21 @@ export async function signToken(
     exp: now + expiresInSeconds,
   };
 
-  const header = { alg: "HS256", typ: "JWT" };
-  const encodedHeader = utf8ToBase64Url(JSON.stringify(header));
+  const encodedHeader = utf8ToBase64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const encodedPayload = utf8ToBase64Url(JSON.stringify(fullPayload));
   const message = `${encodedHeader}.${encodedPayload}`;
 
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(JWT_SECRET);
   const key = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    encoder.encode(getJwtSecret()),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
   );
 
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(message)
-  );
-
-  const encodedSignature = bytesToBase64Url(new Uint8Array(signature));
-
-  return `${message}.${encodedSignature}`;
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(message));
+  return `${message}.${bytesToBase64Url(new Uint8Array(signature))}`;
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
@@ -101,30 +163,28 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
     const message = `${encodedHeader}.${encodedPayload}`;
 
     const encoder = new TextEncoder();
-    const keyData = encoder.encode(JWT_SECRET);
     const key = await crypto.subtle.importKey(
       "raw",
-      keyData,
+      encoder.encode(getJwtSecret()),
       { name: "HMAC", hash: "SHA-256" },
       false,
       ["verify"]
     );
 
     const signatureBytes = base64UrlToBytes(encodedSignature);
-
     const isValid = await crypto.subtle.verify(
       "HMAC",
       key,
       signatureBytes as unknown as BufferSource,
       encoder.encode(message)
     );
-
     if (!isValid) return null;
 
     const payload: JWTPayload = JSON.parse(base64UrlToUtf8(encodedPayload));
     const now = Math.floor(Date.now() / 1000);
 
-    if (payload.exp && payload.exp < now) {
+    // 强制校验过期时间与 userId，拒绝无 exp 的永久 Token
+    if (typeof payload.exp !== "number" || payload.exp < now || !payload.userId) {
       return null;
     }
 

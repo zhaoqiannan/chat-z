@@ -1,4 +1,4 @@
-import { get, post, put, del } from "@/utils/rest";
+import { get, post, put, patch, del } from "@/utils/rest";
 
 export const ChapterApi = {
   list: "/api/chapters",
@@ -190,11 +190,7 @@ export const sendChapterAiChat = async (data: SendChapterAiChatPayload) => {
 };
 
 export const applyChapterAiChat = async (id: number | string, applied: boolean = true) => {
-  return fetch("/api/ai/chapter/chat", {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id, applied }),
-  }).then((r) => r.json());
+  return patch(`/api/ai/chapter/chat`, { id, applied });
 };
 
 export const deleteChapterAiChat = async (id: number | string) => {

@@ -78,8 +78,18 @@ export default function MaterialsPage() {
     }
   };
 
+  const searchReqIdRef = React.useRef(0);
+  const searchTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, []);
+
   return (
     <Box
+      pos="relative"
       style={{
         display: "flex",
         height: "calc(100vh - 64px)",
@@ -95,11 +105,17 @@ export default function MaterialsPage() {
         searchKey={searchKey}
         onSearchChange={(val) => {
           setSearchKey(val);
-          getMaterialList(workId, { keyword: val }).then((res) => {
-            if (res && res.success && Array.isArray(res.result)) {
-              setList(res.result);
-            }
-          });
+          if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+          const reqId = ++searchReqIdRef.current;
+          searchTimerRef.current = setTimeout(() => {
+            getMaterialList(workId, { keyword: val })
+              .then((res) => {
+                if (reqId === searchReqIdRef.current && res && res.success && Array.isArray(res.result)) {
+                  setList(res.result);
+                }
+              })
+              .catch(() => {});
+          }, 250);
         }}
         onOpenCreateModal={() => {
           setEditingMaterial(null);
