@@ -1,4 +1,4 @@
-import { notifications, NotificationsProps } from "@mantine/notifications";
+import { notifications, NotificationData } from "@mantine/notifications";
 import { AiOutlineInfoCircle, AiOutlineCheckCircle, AiOutlineExclamationCircle, AiOutlineCloseCircle } from "react-icons/ai";
 
 // 图标映射
@@ -9,7 +9,7 @@ const icon: any = {
     error: <AiOutlineCloseCircle color="#f53f3f" />,
 };
 
-interface Params extends NotificationsProps {
+interface Params extends Partial<NotificationData> {
     message?: string;
 }
 
@@ -25,12 +25,13 @@ const defaultSetting = {
     }
 };
 const showNotification = (params: Params, type: string) => {
-    const { message = "No message provided" } = params;
+    const { message = "No message provided", ...restParams } = params;
 
     notifications.show({
         ...defaultSetting,
         position: "top-center",
         icon: icon[type],
+        ...restParams,
         message,
     });
 };

@@ -49,6 +49,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       characters,
       factions,
       description,
+      taboos,
       isPinned,
       extra,
     } = body;
@@ -73,6 +74,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       category: category?.trim() || null,
       mechanisms: finalDesc,
       description: finalDesc,
+      taboos: typeof taboos === "string" && taboos.trim() ? taboos.trim() : null,
       isPinned: isPinned ? 1 : 0,
       pinnedAt: isPinned ? new Date() : null,
       extra: typeof extra === "object" ? { ...extra, characters, factions } : { characters, factions },
@@ -105,6 +107,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       characters,
       factions,
       description,
+      taboos,
       isPinned,
       extra,
     } = body;
@@ -129,6 +132,9 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (description !== undefined) {
       updateData.description = description;
       updateData.mechanisms = description;
+    }
+    if (taboos !== undefined) {
+      updateData.taboos = typeof taboos === "string" && taboos.trim() ? taboos.trim() : null;
     }
     if (isPinned !== undefined) {
       updateData.isPinned = isPinned ? 1 : 0;

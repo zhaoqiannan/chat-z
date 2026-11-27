@@ -167,11 +167,20 @@ export async function callCloudflareAi(
   const modelsToTry = getCandidateModels(options);
   const errors: string[] = [];
 
+  const useRest = Boolean(accountId && apiToken);
+  const useEnvAi = Boolean(envAi && typeof envAi.run === "function");
+
+  if (!useRest && !useEnvAi) {
+    throw new Error(
+      "未检测到可用的 Cloudflare AI 运行环境。在本地开发时，请在 .env.local 中配置 CF_AI_ACCOUNT_ID 与 CF_AI_API_TOKEN，或在 Cloudflare 上线环境中运行。"
+    );
+  }
+
   for (const model of modelsToTry) {
-    // 1. 若配置了 Token（本地开发模式），优先走官方 REST API 直连（支持 120s 超时，避免 Miniflare 本地 15s 超时截断）
-    if (accountId && apiToken) {
+    // 单模型仅走单一通道，避免同模型 REST + env.AI 重复推理拉长耗时与消耗额度
+    if (useRest) {
       try {
-        const restRes = await callCloudflareAiViaRest(accountId, apiToken, model, messages, options);
+        const restRes = await callCloudflareAiViaRest(accountId!, apiToken!, model, messages, options);
         if (restRes) {
           console.log(`[Workers AI] 命中模型: ${model} (通道: REST, 任务: ${options.taskType || "creative"})`);
           return restRes;
@@ -181,37 +190,101 @@ export async function callCloudflareAi(
         console.warn(`[Workers AI REST] 模型 ${model} 执行异常:`, errMsg);
         errors.push(`[REST ${model}]: ${errMsg}`);
       }
+      continue;
     }
 
-    // 2. 线上环境或未配置 Token 时，使用 env.AI 原生绑定通道
-    if (envAi && typeof envAi.run === "function") {
-      try {
-        const res = await envAi.run(model, {
-          messages,
-          temperature: options.temperature ?? 0.7,
-          max_tokens: options.maxTokens ?? 8192,
-        });
+    try {
+      const res = await envAi.run(model, {
+        messages,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? 8192,
+      });
 
-        const extracted = extractAiText(res, options.taskType);
-        if (extracted) {
-          console.log(`[Workers AI] 命中模型: ${model} (通道: env.AI, 任务: ${options.taskType || "creative"})`);
-          return extracted;
-        }
-      } catch (err: any) {
-        const errMsg = err?.message || String(err);
-        console.warn(`[Workers AI env.AI] 模型 ${model} 执行异常:`, errMsg);
-        errors.push(`[env.AI ${model}]: ${errMsg}`);
+      const extracted = extractAiText(res, options.taskType);
+      if (extracted) {
+        console.log(`[Workers AI] 命中模型: ${model} (通道: env.AI, 任务: ${options.taskType || "creative"})`);
+        return extracted;
       }
+      errors.push(`[env.AI ${model}]: 模型返回空内容`);
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      console.warn(`[Workers AI env.AI] 模型 ${model} 执行异常:`, errMsg);
+      errors.push(`[env.AI ${model}]: ${errMsg}`);
     }
-  }
-
-  if (!envAi && (!accountId || !apiToken)) {
-    throw new Error(
-      "未检测到可用的 Cloudflare AI 运行环境。在本地开发时，请在 .env.local 中配置 CF_AI_ACCOUNT_ID 与 CF_AI_API_TOKEN，或在 Cloudflare 上线环境中运行。"
-    );
   }
 
   throw new Error(`Workers AI 推理失败:\n${errors.join("\n")}`);
+}
+
+/**
+ * 流式调用 Cloudflare Workers AI（返回原始 ReadableStream<Uint8Array>，供路由转 SSE）
+ */
+export async function callCloudflareAiStream(
+  envAi: any,
+  messages: ChatMessage[],
+  options: AiCallOptions = {}
+): Promise<ReadableStream<Uint8Array>> {
+  const accountId = process.env.CF_AI_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = process.env.CF_AI_API_TOKEN || process.env.CLOUDFLARE_API_TOKEN;
+  const useRest = Boolean(accountId && apiToken);
+  const useEnvAi = Boolean(envAi && typeof envAi.run === "function");
+
+  if (!useRest && !useEnvAi) {
+    throw new Error("未检测到可用的 Cloudflare AI 运行环境");
+  }
+
+  const modelsToTry = getCandidateModels(options);
+  const errors: string[] = [];
+
+  for (const model of modelsToTry) {
+    try {
+      if (useRest) {
+        const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/run/${model}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            messages,
+            temperature: options.temperature ?? 0.7,
+            max_tokens: options.maxTokens ?? 4096,
+            stream: true,
+          }),
+          signal: AbortSignal.timeout(90000),
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`REST stream failed (${response.status})`);
+        }
+        return response.body;
+      }
+
+      const streamRes = await envAi.run(model, {
+        messages,
+        temperature: options.temperature ?? 0.7,
+        max_tokens: options.maxTokens ?? 4096,
+        stream: true,
+      });
+      if (streamRes && typeof streamRes.getReader === "function") {
+        return streamRes as ReadableStream<Uint8Array>;
+      }
+      const extracted = extractAiText(streamRes, options.taskType);
+      if (extracted) {
+        const encoder = new TextEncoder();
+        return new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ response: extracted })}\n\ndata: [DONE]\n\n`));
+            controller.close();
+          },
+        });
+      }
+      errors.push(`[env.AI stream ${model}]: 未返回可读流`);
+    } catch (err: any) {
+      errors.push(`[stream ${model}]: ${err?.message || String(err)}`);
+    }
+  }
+
+  throw new Error(`Workers AI 流式推理失败:\n${errors.join("\n")}`);
 }
 
 /**
@@ -335,20 +408,31 @@ export function parseStructuredJson<T>(rawText: string, fallbackValue: T): T {
 
   const firstBracket = text.indexOf("[");
   const lastBracket = text.lastIndexOf("]");
-  if (firstBracket !== -1) {
-    if (lastBracket > firstBracket) {
-      candidates.push(text.substring(firstBracket, lastBracket + 1));
-    }
-    candidates.push(text.substring(firstBracket));
-  }
-
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
+
+  const bracketCandidates: string[] = [];
+  if (firstBracket !== -1) {
+    if (lastBracket > firstBracket) {
+      bracketCandidates.push(text.substring(firstBracket, lastBracket + 1));
+    }
+    bracketCandidates.push(text.substring(firstBracket));
+  }
+
+  const braceCandidates: string[] = [];
   if (firstBrace !== -1) {
     if (lastBrace > firstBrace) {
-      candidates.push(text.substring(firstBrace, lastBrace + 1));
+      braceCandidates.push(text.substring(firstBrace, lastBrace + 1));
     }
-    candidates.push(text.substring(firstBrace));
+    braceCandidates.push(text.substring(firstBrace));
+  }
+
+  // 根据期望类型与根括号位置决定优先序，避免期望对象时误提取对象内部数组
+  const preferArray = Array.isArray(fallbackValue) || (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace));
+  if (preferArray) {
+    candidates.push(...bracketCandidates, ...braceCandidates);
+  } else {
+    candidates.push(...braceCandidates, ...bracketCandidates);
   }
 
   for (const raw of candidates) {
@@ -499,8 +583,8 @@ export function cleanNovelStoryText(rawText: string): string {
   // 5. 移除开头的引导短语如 "正文："、"润色后正文："
   text = text.replace(/^(?:可写[：:]|正文[：:]|剧情[：:]|故事[：:]|润色(?:后|版)?[：:]|修改后[：:])\s*/i, "");
 
-  // 6. 剥离文末的分析总结、优化重点与字数说明
-  const endPattern = /\n+(?:【(?:主要优化点|优化重点|修改说明|创作思路|字数统计)】|(?:主要优化点|优化重点|修改说明|字数估算|字数统计|总结|以上是|注)[：:])[\s\S]*$/i;
+  // 6. 剥离文末明确的 AI 元分析总结与字数说明（避免误截小说正文内以“注：”“总结：”开头的自然段）
+  const endPattern = /\n+(?:【(?:主要优化点|优化重点|修改说明|创作思路|字数统计)】|(?:主要优化点|优化重点|修改说明|字数估算|字数统计|以上是(?:本次|修改|润色|扩写|精简|续写))[：:])[\s\S]*$/i;
   text = text.replace(endPattern, "").trim();
 
   return text;

@@ -5,6 +5,7 @@ import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, worldRules, notes } from "@/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
+import { stripHtml } from "@/utils/text";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -91,7 +92,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     // 查询基础世界规则
     const rulesList = await db.select().from(worldRules).where(eq(worldRules.workId, workId)).all();
     const ruleContext = rulesList.length > 0
-      ? rulesList.slice(0, 3).map((r) => `【${r.name}】(${r.category}): ${r.mechanisms || r.description || ""}`).join("\n")
+      ? rulesList.slice(0, 3).map((r) => `【${r.name}】(${r.category}): ${stripHtml(r.mechanisms || r.description).slice(0, 150)}`).join("\n")
       : "";
 
     const systemPrompt = `你是一名专业的小说剧情架桥与因果推演助手。

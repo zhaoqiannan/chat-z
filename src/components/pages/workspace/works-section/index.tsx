@@ -17,6 +17,7 @@ export interface WorkItem {
   chapterCount: number;
   progress: number;
   lastEditTime: string;
+  updatedAt?: string | number | Date | null;
   expectedWords?: number | string;
   expectedChapters?: number | string;
   description?: string;
@@ -234,7 +235,7 @@ export default function WorksSection({
                     style={{ borderTop: "1px solid #f8fafc" }}
                   >
                     <Text fz={12} c="#94a3b8">
-                      上次编辑：{work.lastEditTime}
+                      上次编辑：{work.lastEditTime || (work.updatedAt ? new Date(work.updatedAt).toLocaleString("zh-CN", { hour12: false }) : "--")}
                     </Text>
                     <FiChevronRight color="#cbd5e1" size={14} />
                   </Flex>

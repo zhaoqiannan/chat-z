@@ -4,11 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, outlines, works, characters, notes, chapters } from "@/db";
 import { eq, and, or, asc, inArray } from "drizzle-orm";
-
-async function checkWorkOwnership(db: any, workId: number, userId: string) {
-  const work = await db.select().from(works).where(and(eq(works.id, workId), eq(works.userId, userId))).get();
-  return !!work;
-}
+import { assertWorkOwnership } from "@/utils/ownership";
 
 function parseNumberArray(val: any): number[] {
   if (Array.isArray(val)) {
@@ -46,7 +42,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const categoryParam = req.nextUrl.searchParams.get("category"); // 'chapter' | 'deduction' | 'memo' | null
 
-    const isOwner = await checkWorkOwnership(db, workId, user.userId);
+    const isOwner = Boolean(await assertWorkOwnership(db, workId, user.userId));
     if (!isOwner) {
       return NextResponse.json({ success: false, message: "无权访问该作品的大纲" }, { status: 403 });
     }
@@ -186,7 +182,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         return NextResponse.json({ success: false, message: "无效的作品ID" }, { status: 400 });
       }
 
-      const isOwner = await checkWorkOwnership(db, workId, user.userId);
+      const isOwner = Boolean(await assertWorkOwnership(db, workId, user.userId));
       if (!isOwner) {
         return NextResponse.json({ success: false, message: "无权操作该作品" }, { status: 403 });
       }
@@ -299,7 +295,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "卡片标题不能为空" }, { status: 400 });
     }
 
-    const isOwner = await checkWorkOwnership(db, workId, user.userId);
+    const isOwner = Boolean(await assertWorkOwnership(db, workId, user.userId));
     if (!isOwner) {
       return NextResponse.json({ success: false, message: "无权操作该作品" }, { status: 403 });
     }
@@ -382,7 +378,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "大纲节点不存在" }, { status: 404 });
     }
 
-    const isOwner = await checkWorkOwnership(db, existingNode.workId, user.userId);
+    const isOwner = Boolean(await assertWorkOwnership(db, existingNode.workId, user.userId));
     if (!isOwner) {
       return NextResponse.json({ success: false, message: "无权操作该大纲节点" }, { status: 403 });
     }
@@ -552,11 +548,15 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "未找到指定大纲节点" }, { status: 404 });
     }
 
-    for (const node of targetNodes) {
-      const isOwner = await checkWorkOwnership(db, node.workId, user.userId);
-      if (!isOwner) {
-        return NextResponse.json({ success: false, message: "无权操作部分大纲节点" }, { status: 403 });
-      }
+    // 单次批量校验涉及的所有 workId 归属权，消除 N+1 查询
+    const distinctWorkIds = Array.from(new Set(targetNodes.map((n: any) => Number(n.workId))));
+    const ownedWorks = await db
+      .select({ id: works.id })
+      .from(works)
+      .where(and(inArray(works.id, distinctWorkIds), eq(works.userId, user.userId)))
+      .all();
+    if (ownedWorks.length !== distinctWorkIds.length) {
+      return NextResponse.json({ success: false, message: "无权操作部分大纲节点" }, { status: 403 });
     }
 
     // 找出所有下属子节点并一并删除 (防止孤儿节点)
@@ -577,7 +577,7 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       await db
         .update(chapters)
         .set({ outlineExtracted: 0, updatedAt: new Date() })
-        .where(inArray(chapters.id, affectedChapterIds));
+        .where(and(inArray(chapters.id, affectedChapterIds), eq(chapters.userId, user.userId)));
     }
 
     return NextResponse.json({

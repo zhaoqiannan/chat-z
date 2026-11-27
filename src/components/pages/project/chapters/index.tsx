@@ -5,14 +5,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { Box, Modal, Button, Group, Stack, Text } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
+import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload, ActiveAiTask, ChapterAiApplyMode, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import TreePanel from "./tree-panel";
 import EditorArea from "./editor-area";
 import PanelAiAssistant from "./panel-ai-assistant";
-import Splitter from "./splitter";
+import PanelSplitter from "@/components/common/splitter";
 import ModalChapterDetail from "./modal-chapter-detail";
 import ModalCreateVolume from "./modal-create-volume";
 import ModalCreateChapter from "./modal-create-chapter";
@@ -38,11 +38,18 @@ export default function ChaptersPage() {
   const [aiPanelWidth, setAiPanelWidth] = useState(360);
   const [isResizingAiPanel, setIsResizingAiPanel] = useState(false);
   const [selectedTextForAi, setSelectedTextForAi] = useState("");
-  const [insertTextPayload, setInsertTextPayload] = useState<{ text: string; targetSnippet?: string; timestamp: number } | null>(null);
+  const [liveContent, setLiveContent] = useState("");
+  const [insertTextPayload, setInsertTextPayload] = useState<{
+    text: string;
+    mode: ChapterAiApplyMode;
+    targetSnippet?: string;
+    timestamp: number;
+  } | null>(null);
   const [locateSnippetPayload, setLocateSnippetPayload] = useState<{ snippet: string; timestamp: number } | null>(null);
   const [externalAiTask, setExternalAiTask] = useState<{
     actionType: string;
     selectedText: string;
+    subMode?: string;
     customPrompt?: string;
     timestamp: number;
   } | null>(null);
@@ -138,37 +145,44 @@ export default function ChaptersPage() {
   const maxNum = chaptersList.reduce((max, c) => (c.chapterNumber > max ? c.chapterNumber : max), 0);
   const nextChapterNum = maxNum + 1;
 
+  const switchChapterState = (chapter: ChapterItem) => {
+    initialTargetHandledRef.current = true;
+    setActiveChapter(chapter);
+    setLiveContent(chapter.content || "");
+    setSelectedTextForAi("");
+    setActiveTasks([]);
+    setExternalAiTask(null);
+  };
+
   const handleSelectChapter = (chapter: ChapterItem) => {
     if (isChapterDirty && activeChapter && String(activeChapter.id) !== String(chapter.id)) {
       setPendingChapter(chapter);
       setUnsavedModalOpened(true);
       return;
     }
-    initialTargetHandledRef.current = true;
-    setActiveChapter(chapter);
-    setSelectedTextForAi("");
+    switchChapterState(chapter);
   };
 
   const handleDiscardAndNavigate = () => {
     setIsChapterDirty(false);
     setUnsavedModalOpened(false);
     if (pendingChapter) {
-      initialTargetHandledRef.current = true;
-      setActiveChapter(pendingChapter);
+      switchChapterState(pendingChapter);
       setPendingChapter(null);
-      setSelectedTextForAi("");
     }
   };
 
-  const handleSaveAndStay = async () => {
+  const handleSaveAndNavigate = async () => {
     if (saveEditorRef.current) {
       const success = await saveEditorRef.current();
-      if (success) {
-        setIsChapterDirty(false);
-      }
+      if (!success) return;
+      setIsChapterDirty(false);
     }
     setUnsavedModalOpened(false);
-    setPendingChapter(null);
+    if (pendingChapter) {
+      switchChapterState(pendingChapter);
+      setPendingChapter(null);
+    }
   };
 
   const handleOpenDetailModal = (item: ChapterItem) => {
@@ -247,8 +261,10 @@ export default function ChaptersPage() {
     }
   };
 
-  const handleAcceptAiText = (text: string, targetSnippet?: string) => {
-    setInsertTextPayload({ text, targetSnippet, timestamp: Date.now() });
+  const handleAcceptAiText = (text: string, options?: { mode?: ChapterAiApplyMode; targetSnippet?: string }) => {
+    const targetSnippet = options?.targetSnippet;
+    const mode: ChapterAiApplyMode = options?.mode || (targetSnippet ? "replace_selection" : "insert_after_selection");
+    setInsertTextPayload({ text, mode, targetSnippet, timestamp: Date.now() });
     setSelectedTextForAi("");
     if (targetSnippet && targetSnippet.trim()) {
       const clean = targetSnippet.trim();
@@ -256,7 +272,7 @@ export default function ChaptersPage() {
     }
   };
 
-  const handleTriggerAiAction = (actionType: string, selectedText: string, customPrompt?: string) => {
+  const handleTriggerAiAction = (actionType: string, selectedText: string, subMode?: string, customPrompt?: string) => {
     const tempId = -Date.now() - Math.floor(Math.random() * 1000);
     const cleanSnippet = selectedText ? selectedText.trim() : "";
 
@@ -276,6 +292,7 @@ export default function ChaptersPage() {
     setExternalAiTask({
       actionType,
       selectedText,
+      subMode,
       customPrompt,
       timestamp: Date.now(),
     });
@@ -388,6 +405,7 @@ export default function ChaptersPage() {
         aiPanelWidth={aiPanelWidth}
         onToggleTree={() => setTreeCollapsed(!treeCollapsed)}
         onUpdateChapter={handleUpdate}
+        onContentChange={setLiveContent}
         onSelectionChange={(text) => setSelectedTextForAi(text)}
         onTriggerAiAction={handleTriggerAiAction}
         activeTasks={activeTasks}
@@ -401,7 +419,8 @@ export default function ChaptersPage() {
       />
 
       {activeChapter && (
-        <Splitter
+        <PanelSplitter
+          side="right"
           width={aiPanelWidth}
           onResize={(newWidth) => setAiPanelWidth(newWidth)}
           minWidth={280}
@@ -411,6 +430,8 @@ export default function ChaptersPage() {
           onToggleCollapse={() => setAiPanelCollapsed(!aiPanelCollapsed)}
           onDragStart={() => setIsResizingAiPanel(true)}
           onDragEnd={() => setIsResizingAiPanel(false)}
+          expandTooltip="展开 AI 协同创作助手"
+          collapseTooltip="收起 AI 协同面板 (双击手柄恢复默认宽度)"
         />
       )}
 
@@ -418,7 +439,7 @@ export default function ChaptersPage() {
         <PanelAiAssistant
           workId={workId}
           chapterId={activeChapter.id}
-          currentContent={activeChapter.content || ""}
+          currentContent={liveContent}
           selectedText={selectedTextForAi}
           externalTask={externalAiTask}
           collapsed={aiPanelCollapsed}
@@ -473,8 +494,8 @@ export default function ChaptersPage() {
             <Button variant="default" color="gray" onClick={handleDiscardAndNavigate}>
               确认不保存
             </Button>
-            <Button color="blue" onClick={handleSaveAndStay}>
-              保存
+            <Button color="cyan" onClick={handleSaveAndNavigate}>
+              保存并切换
             </Button>
           </Group>
         </Stack>

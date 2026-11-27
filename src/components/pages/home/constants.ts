@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiCode, FiEdit3, FiBarChart2, FiHelpCircle } from 'react-icons/fi';
+import { FiFeather, FiUsers, FiGlobe, FiCompass } from 'react-icons/fi';
 
 export interface TemplateItem {
     title: string;
@@ -11,41 +11,41 @@ export interface TemplateItem {
 
 export const TEMPLATES: TemplateItem[] = [
     {
-        title: "创意文案写作",
-        description: "撰写推文、文章大纲或创意故事内容。",
-        prompt: "请帮我写一篇关于 AI 智能体如何改变我们日常工作和生活的创意推文，文字生动有趣。",
-        icon: React.createElement(FiEdit3, { size: 20, color: "#ec4899" }),
-        color: "pink"
+        title: "开篇脑洞与钩子",
+        description: "构思抓人的黄金三章开局、核心悬念与冲突设计。",
+        prompt: "我想写一部东方奇幻长篇，主角表面是落魄账房，暗中却能看见他人命格欠债。请帮我构思 3 个不同风格的黄金三章开篇方案与核心钩子。",
+        icon: React.createElement(FiFeather, { size: 20, color: "#00c9ff" }),
+        color: "cyan"
     },
     {
-        title: "智能问答技术",
-        description: "探讨大语言模型与 AI 智能体的前沿实现。",
-        prompt: "详细介绍一下什么是 Agentic AI 智能体，以及它的核心架构和主要优势是什么？",
-        icon: React.createElement(FiHelpCircle, { size: 20, color: "#8b5cf6" }),
+        title: "立体人设打磨",
+        description: "塑造反差感强、有成长弧光与记忆点的主要角色。",
+        prompt: "请帮我设计一名既有压迫感又不脸谱化的反派宗主：给出他的核心执念、表面伪装、致命弱点，以及 3 句极具辨识度的标志性台词。",
+        icon: React.createElement(FiUsers, { size: 20, color: "#8b5cf6" }),
         color: "violet"
     },
     {
-        title: "高效代码编写",
-        description: "编写、调试和解释算法与实用工具函数。",
-        prompt: "请用 TypeScript 编写一个健壮的防抖（debounce）函数，并用简单的例子说明其原理。",
-        icon: React.createElement(FiCode, { size: 20, color: "#3b82f6" }),
-        color: "blue"
+        title: "世界观法则推演",
+        description: "搭建自洽的力量体系、代价规则与势力博弈格局。",
+        prompt: "我想设计一套“以记忆为代价施法”的超凡体系，请帮我推演它的等级划分、不可违背的禁忌代价，以及由此衍生出的黑市与权力结构。",
+        icon: React.createElement(FiGlobe, { size: 20, color: "#10b981" }),
+        color: "teal"
     },
     {
-        title: "数据分析建议",
-        description: "提供关于数据清洗、建模与可视化的思路。",
-        prompt: "我想对海量的服务器访问日志进行异常检测和可视化分析，可以提供一个完整的实施步骤和常用工具链吗？",
-        icon: React.createElement(FiBarChart2, { size: 20, color: "#10b981" }),
-        color: "teal"
+        title: "卡文剧情救急",
+        description: "打破情节僵局，推演意料之外、情理之中的剧情转折。",
+        prompt: "主角刚潜入敌方宝库拿到关键密信，却发现守卫提前换防被堵在密室里。如何不靠机械降神，用智斗和前期伏笔破局？请给 3 个方向。",
+        icon: React.createElement(FiCompass, { size: 20, color: "#f59e0b" }),
+        color: "orange"
     }
 ];
 
 export const UI_TEXT = {
     greetingPrefix: "您好，",
-    greetingDefault: "用户",
-    aiSubtitle: "我是您的智能 AI 助手 chat-z。今天有什么我可以帮您的？",
-    inputPlaceholder: "输入对话内容，按 Enter 发送，Shift + Enter 换行",
-    thinkingText: "思考中...",
-    disclaimer: "AI 可能会产生偏见或错误信息，请核对重要信息的准确性。",
+    greetingDefault: "作家",
+    aiSubtitle: "我是您的网文与小说创作 AI 搭档 chat-z，随时帮您聊灵感、磨人设、破卡文。",
+    inputPlaceholder: "输入创作问题或灵感片段，按 Enter 发送，Shift + Enter 换行",
+    thinkingText: "构思推演中...",
+    disclaimer: "AI 建议仅供创作参考，您可以随时前往「作品管理」进入完整创作工作台。",
     stopGeneratingTooltip: "停止生成"
 };

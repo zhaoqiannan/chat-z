@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, factions, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
-import { assertWorkOwnership } from "@/utils/ownership";
+import { assertWorkOwnership, isSafeUrl } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -69,6 +69,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, message: "阵营名称不能为空" }, { status: 400 });
+    }
+    if (badgeUrl && !isSafeUrl(badgeUrl)) {
+      return NextResponse.json({ success: false, message: "非法的徽章链接协议" }, { status: 400 });
     }
 
     const newFactionData = {
@@ -143,6 +146,9 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (name !== undefined) updateData.name = name.trim();
     if (leader !== undefined) updateData.leader = leader?.trim() || null;
     if (leaderId !== undefined) updateData.leaderId = leaderId ? Number(leaderId) : null;
+    if (badgeUrl && !isSafeUrl(badgeUrl)) {
+      return NextResponse.json({ success: false, message: "非法的徽章链接协议" }, { status: 400 });
+    }
     if (badgeUrl !== undefined) updateData.badgeUrl = badgeUrl || null;
     if (scale !== undefined) updateData.scale = scale?.trim() || "p3";
     if (doctrine !== undefined) updateData.doctrine = doctrine?.trim() || null;

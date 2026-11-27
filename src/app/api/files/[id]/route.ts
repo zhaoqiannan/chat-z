@@ -43,7 +43,7 @@ export async function GET(
       return new NextResponse("File not found", { status: 404 });
     }
 
-    if (fileRecord.userId && fileRecord.userId !== payload.userId) {
+    if (!fileRecord.userId || fileRecord.userId !== payload.userId) {
       return new NextResponse("Forbidden", { status: 403 });
     }
 

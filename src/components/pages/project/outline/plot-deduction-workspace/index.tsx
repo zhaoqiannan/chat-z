@@ -292,11 +292,17 @@ export default function PlotDeductionWorkspace({
     }
   };
 
+  const existingChapterMap = useMemo(() => {
+    const map = new Map<number, { id: number; chapterNumber: number; title: string; wordCount: number; volumeId: number | null }>();
+    contextData?.existingChapters.forEach((c) => map.set(c.chapterNumber, c));
+    return map;
+  }, [contextData?.existingChapters]);
+
   const handleWriteToChapter = async () => {
     if (!activeChapterPlan || !draftEditorText.trim() || savingToChapter) return;
     const cleanText = draftEditorText.trim();
     const cleanTitle = (draftTitleInput.trim() || activeChapterPlan.title || `第${activeChapterPlan.chapterNumber}章`).trim();
-    const existing = contextData?.existingChapters.find((c) => c.chapterNumber === activeChapterPlan.chapterNumber);
+    const existing = existingChapterMap.get(activeChapterPlan.chapterNumber);
 
     if (existing && existing.wordCount > 0) {
       const ok = await showConfirm({
@@ -649,7 +655,7 @@ export default function PlotDeductionWorkspace({
                   <Stack gap={14}>
                     {selectedPlan.chapters.map((ch) => {
                       const savedDraft = snapshot.latestDrafts?.[String(ch.chapterNumber)] || null;
-                      const existingCh = contextData?.existingChapters.find((c) => c.chapterNumber === ch.chapterNumber);
+                      const existingCh = existingChapterMap.get(ch.chapterNumber);
 
                       return (
                         <Paper key={ch.chapterNumber} p={14} radius="md" bg="#ffffff" bd="1px solid #e2e8f0">
@@ -835,7 +841,7 @@ export default function PlotDeductionWorkspace({
             {/* 底部闭环落库操作条 */}
             <Flex align="center" justify="space-between" gap={10} pt={6} wrap="wrap" style={{ borderTop: "1px solid #f1f5f9" }}>
               <Group gap={8}>
-                {contextData && contextData.volumes.length > 0 && !contextData.existingChapters.some((c) => c.chapterNumber === activeChapterPlan?.chapterNumber) ? (
+                {contextData && contextData.volumes.length > 0 && !(activeChapterPlan && existingChapterMap.has(activeChapterPlan.chapterNumber)) ? (
                   <Select
                     size="xs"
                     w={180}
@@ -893,8 +899,8 @@ export default function PlotDeductionWorkspace({
                   disabled={!draftEditorText.trim() || generatingProse}
                   onClick={handleWriteToChapter}
                 >
-                  {contextData?.existingChapters.some((c) => c.chapterNumber === activeChapterPlan?.chapterNumber)
-                    ? `覆盖写入第 ${activeChapterPlan?.chapterNumber} 章`
+                  {activeChapterPlan && existingChapterMap.has(activeChapterPlan.chapterNumber)
+                    ? `覆盖写入第 ${activeChapterPlan.chapterNumber} 章`
                     : `新建并写入第 ${activeChapterPlan?.chapterNumber} 章`}
                 </Button>
               </Group>

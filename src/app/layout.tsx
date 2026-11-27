@@ -9,7 +9,6 @@ import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "@/static/global.scss";
 import "@/static/mantine.scss";
-import "@/static/form.scss";
 
 import theme from "@/static/theme";
 

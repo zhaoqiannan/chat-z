@@ -61,6 +61,11 @@ export default function HomePage() {
             timestamp: new Date()
         };
 
+        const historyPayload = messages
+            .filter((m) => m.content.trim())
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content }));
+
         setMessages(prev => [...prev, userMsg, assistantMsg]);
         setLoading(true);
 
@@ -69,7 +74,7 @@ export default function HomePage() {
 
         try {
             await postChatStream(
-                { message: text },
+                { message: text, history: historyPayload },
                 (chunk) => {
                     setMessages(prev => prev.map(msg => {
                         if (msg.id === assistantMsgId) {

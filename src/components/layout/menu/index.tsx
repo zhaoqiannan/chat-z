@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname, useRouter, useParams, useSearchParams } from "next/navigation";
 import { Box, Menu, Tooltip } from "@mantine/core";
-import { FiGrid, FiChevronDown, FiSettings, FiBell, FiMessageSquare, FiCheck, FiLogOut, FiBook, FiArrowLeft, FiLayers, FiFileText, FiDatabase, FiEdit3, FiBox, FiShield, FiClock, FiShare2, FiSidebar } from "react-icons/fi";
+import { FiGrid, FiChevronDown, FiSettings, FiMessageSquare, FiCheck, FiLogOut, FiBook, FiArrowLeft, FiLayers, FiFileText, FiDatabase, FiEdit3, FiBox, FiShield, FiClock, FiShare2, FiSidebar } from "react-icons/fi";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { clearUser } from "@/store/userInfo";
@@ -254,15 +254,6 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
         </div>
 
         <div className={styles.rightSection}>
-          <button className={styles.iconBtn} type="button" title="设置">
-            <FiSettings size={17} />
-          </button>
-
-          <button className={styles.iconBtn} type="button" title="通知">
-            <FiBell size={17} />
-            <span className={styles.bellDot} />
-          </button>
-
           <Menu shadow="md" width={160} position="bottom-end" offset={8}>
             <Menu.Target>
               <div className={styles.userTarget}>

@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, locations, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
-import { assertWorkOwnership } from "@/utils/ownership";
+import { assertWorkOwnership, isSafeUrl } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -72,6 +72,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, message: "地点名称不能为空" }, { status: 400 });
+    }
+    if (imageUrl && !isSafeUrl(imageUrl)) {
+      return NextResponse.json({ success: false, message: "非法的图片链接协议" }, { status: 400 });
     }
 
     const newLocData = {
@@ -171,10 +174,21 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (posY !== undefined) updateData.posY = typeof posY === "number" ? Math.round(posY) : 50;
     if (type !== undefined) updateData.type = type;
     if (description !== undefined) updateData.description = description;
+    if (imageUrl && !isSafeUrl(imageUrl)) {
+      return NextResponse.json({ success: false, message: "非法的图片链接协议" }, { status: 400 });
+    }
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
     if (extra !== undefined) updateData.extra = extra;
 
     const updated = await db.update(locations).set(updateData).where(eq(locations.id, id)).returning().get();
+
+    // 地点改名时同步子地点 parent_name 与关联阵营据点名称
+    if (updated?.name && existingLoc.name && updated.name !== existingLoc.name) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE locations SET parent_name = ? WHERE work_id = ? AND parent_id = ?").bind(updated.name, existingLoc.workId, id),
+        env.DB.prepare("UPDATE factions SET controlled_locations = ? WHERE work_id = ? AND location_id = ?").bind(updated.name, existingLoc.workId, id),
+      ]);
+    }
 
     return NextResponse.json({
       success: true,
@@ -214,7 +228,12 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无权操作该地点" }, { status: 403 });
     }
 
-    await db.delete(locations).where(eq(locations.id, id)).run();
+    // 级联置空子地点父级引用与阵营据点外键
+    await env.DB.batch([
+      env.DB.prepare("UPDATE locations SET parent_id = NULL, parent_name = NULL WHERE work_id = ? AND parent_id = ?").bind(existingLoc.workId, id),
+      env.DB.prepare("UPDATE factions SET location_id = NULL WHERE work_id = ? AND location_id = ?").bind(existingLoc.workId, id),
+      env.DB.prepare("DELETE FROM locations WHERE id = ?").bind(id),
+    ]);
 
     return NextResponse.json({
       success: true,

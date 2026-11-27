@@ -77,7 +77,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
     const parts = storedHash.split("$");
     if (parts.length !== 4) return false;
     const iterations = Number(parts[1]);
-    if (!Number.isFinite(iterations) || iterations < 10000) return false;
+    if (!Number.isFinite(iterations) || iterations < 10000 || iterations > 100000) return false;
     const salt = hexToBytes(parts[2]);
     const expected = hexToBytes(parts[3]);
     const actual = await derivePbkdf2(password, salt, iterations);
@@ -160,6 +160,9 @@ export async function verifyToken(token: string): Promise<JWTPayload | null> {
     if (parts.length !== 3) return null;
 
     const [encodedHeader, encodedPayload, encodedSignature] = parts;
+    const header = JSON.parse(base64UrlToUtf8(encodedHeader));
+    if (!header || header.alg !== "HS256") return null;
+
     const message = `${encodedHeader}.${encodedPayload}`;
 
     const encoder = new TextEncoder();

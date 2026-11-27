@@ -4,6 +4,7 @@ import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, chapters, characters, locations, factions, items, outlines, notes, materials, timelines, worldRules, characterRelations, chapterVersions, chapterAiChats, memoryFragments, plotDeductions } from "@/db";
 import { desc, eq, and } from "drizzle-orm";
 import { logUserActivity } from "@/utils/activityLogger";
+import { isSafeUrl } from "@/utils/ownership";
 
 /**
  * 获取当前用户的作品列表或单条作品详情
@@ -90,6 +91,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (!tag || !tag.trim()) {
       return NextResponse.json(
         { success: false, message: "作品类别不能为空" },
+        { status: 400 }
+      );
+    }
+
+    if (cover && !isSafeUrl(cover)) {
+      return NextResponse.json(
+        { success: false, message: "非法的封面链接协议" },
         { status: 400 }
       );
     }
@@ -186,6 +194,13 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json(
         { success: false, message: "作品不存在或无权限编辑" },
         { status: 404 }
+      );
+    }
+
+    if (cover && !isSafeUrl(cover)) {
+      return NextResponse.json(
+        { success: false, message: "非法的封面链接协议" },
+        { status: 400 }
       );
     }
 

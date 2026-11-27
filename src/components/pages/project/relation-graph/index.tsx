@@ -35,6 +35,8 @@ export default function RelationGraphPage() {
   const [nodePositions, setNodePositions] = useState<Record<string | number, { x: number; y: number }>>({});
   const canvasRef = useRef<HTMLDivElement>(null);
   const draggingNodeId = useRef<number | null>(null);
+  const dragRectRef = useRef<DOMRect | null>(null);
+  const dragRafRef = useRef<number | null>(null);
   const [hoveredRelId, setHoveredRelId] = useState<number | null>(null);
   const [hoveredCharId, setHoveredCharId] = useState<number | null>(null);
 
@@ -52,7 +54,7 @@ export default function RelationGraphPage() {
         const rels = res.result.relations || [];
         setCharacters(chars);
         setRelations(rels);
-        initNodePositions(chars);
+        initNodePositions(chars, false);
       }
     } catch (e) {
       if (reqId === reqIdRef.current) {
@@ -65,29 +67,31 @@ export default function RelationGraphPage() {
     }
   };
 
-  const initNodePositions = (chars: RelationGraphCharNode[]) => {
+  const initNodePositions = (chars: RelationGraphCharNode[], forceReset = true) => {
     const total = chars.length;
     if (total === 0) return;
 
-    const newPos: Record<string | number, { x: number; y: number }> = {};
     const radius = 36; // 环形半径 %
     const centerX = 50;
     const centerY = 50;
 
-    chars.forEach((c, idx) => {
-      let x = 50;
-      let y = 50;
-      if (total > 1) {
-        const angle = (2 * Math.PI * idx) / total - Math.PI / 2;
-        x = Math.round(centerX + radius * Math.cos(angle));
-        y = Math.round(centerY + radius * Math.sin(angle));
-      }
-      newPos[c.id] = { x, y };
-      newPos[String(c.id)] = { x, y };
-      newPos[Number(c.id)] = { x, y };
+    setNodePositions((prev) => {
+      const nextPos: Record<string | number, { x: number; y: number }> = forceReset ? {} : { ...prev };
+      chars.forEach((c, idx) => {
+        if (!forceReset && (nextPos[c.id] || nextPos[String(c.id)])) return;
+        let x = 50;
+        let y = 50;
+        if (total > 1) {
+          const angle = (2 * Math.PI * idx) / total - Math.PI / 2;
+          x = Math.round(centerX + radius * Math.cos(angle));
+          y = Math.round(centerY + radius * Math.sin(angle));
+        }
+        nextPos[c.id] = { x, y };
+        nextPos[String(c.id)] = { x, y };
+        nextPos[Number(c.id)] = { x, y };
+      });
+      return nextPos;
     });
-
-    setNodePositions(newPos);
   };
 
   useEffect(() => {
@@ -179,29 +183,42 @@ export default function RelationGraphPage() {
     }
   };
 
-  // 拖拽人物节点逻辑
+  // 拖拽人物节点逻辑（mousedown 缓存容器 rect + rAF 节流避免 layout thrashing）
   const handleNodeMouseDown = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     draggingNodeId.current = id;
+    dragRectRef.current = canvasRef.current?.getBoundingClientRect() || null;
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!draggingNodeId.current || !canvasRef.current) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = Math.min(Math.max(((e.clientX - rect.left) / (rect.width * zoom)) * 100, 4), 96);
-    const y = Math.min(Math.max(((e.clientY - rect.top) / (rect.height * zoom)) * 100, 4), 96);
-
+    if (!draggingNodeId.current || !dragRectRef.current) return;
+    const rect = dragRectRef.current;
     const targetId = draggingNodeId.current;
-    setNodePositions((prev) => ({
-      ...prev,
-      [targetId]: { x: Math.round(x), y: Math.round(y) },
-      [String(targetId)]: { x: Math.round(x), y: Math.round(y) },
-      [Number(targetId)]: { x: Math.round(x), y: Math.round(y) },
-    }));
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+
+    if (dragRafRef.current !== null) return;
+    dragRafRef.current = requestAnimationFrame(() => {
+      dragRafRef.current = null;
+      const x = Math.round(Math.min(Math.max(((clientX - rect.left) / (rect.width * zoom)) * 100, 4), 96));
+      const y = Math.round(Math.min(Math.max(((clientY - rect.top) / (rect.height * zoom)) * 100, 4), 96));
+
+      setNodePositions((prev) => ({
+        ...prev,
+        [targetId]: { x, y },
+        [String(targetId)]: { x, y },
+        [Number(targetId)]: { x, y },
+      }));
+    });
   };
 
   const handleCanvasMouseUp = () => {
     draggingNodeId.current = null;
+    dragRectRef.current = null;
+    if (dragRafRef.current !== null) {
+      cancelAnimationFrame(dragRafRef.current);
+      dragRafRef.current = null;
+    }
   };
 
   const getTagColor = (tag: string) => {

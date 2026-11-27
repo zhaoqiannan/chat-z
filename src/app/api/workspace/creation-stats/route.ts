@@ -2,22 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, dailyWordStats, works, chapters } from "@/db";
-import { eq, and, gte, desc, sql } from "drizzle-orm";
-import dayjs from "dayjs";
+import { eq, and, gte, desc } from "drizzle-orm";
+import { getChinaDateStr, getChinaDayOfWeek } from "@/utils/wordStatsLogger";
 
 /**
- * 获取创作统计数据 (今日写作、本周写作、连续写作天数、总字数)
+ * 获取创作统计数据 (今日写作、本周写作、连续写作天数、总字数，统一采用 UTC+8 日期口径)
  */
-export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
+export const GET = withAuth(async (_req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    const todayStr = dayjs().format("YYYY-MM-DD");
-    // 计算本周一的日期 (YYYY-MM-DD)
-    const dayOfWeek = dayjs().day(); // 0(周日) ~ 6(周六)
+    const todayStr = getChinaDateStr(0);
+    const dayOfWeek = getChinaDayOfWeek(); // 0(周日) ~ 6(周六)
     const daysSinceMonday = (dayOfWeek + 6) % 7;
-    const mondayStr = dayjs().subtract(daysSinceMonday, "day").format("YYYY-MM-DD");
+    const mondayStr = getChinaDateStr(-daysSinceMonday);
 
     // 1. 总字数统计 (所有作品 actual word_count 汇总)
     let totalWords = 0;
@@ -82,27 +81,22 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
       const activeDates = new Set(allDaily.map((d: any) => d.statDate));
 
-      const yesterdayStr = dayjs().subtract(1, "day").format("YYYY-MM-DD");
-      let checkDate = dayjs();
+      const yesterdayStr = getChinaDateStr(-1);
+      let offsetDays: number | null = 0;
 
       // 如果今天还没写，检查昨天是否写了；如果昨天写了，连击保留
       if (!activeDates.has(todayStr)) {
         if (activeDates.has(yesterdayStr)) {
-          checkDate = dayjs().subtract(1, "day");
+          offsetDays = -1;
         } else {
-          checkDate = null as any;
+          offsetDays = null;
         }
       }
 
-      if (checkDate) {
-        while (checkDate) {
-          const dateFormatted = checkDate.format("YYYY-MM-DD");
-          if (activeDates.has(dateFormatted)) {
-            streakDays++;
-            checkDate = checkDate.subtract(1, "day");
-          } else {
-            break;
-          }
+      if (offsetDays !== null) {
+        while (activeDates.has(getChinaDateStr(offsetDays))) {
+          streakDays++;
+          offsetDays -= 1;
         }
       }
     } catch (e) {
@@ -121,7 +115,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .get();
 
       if (recentCh && recentCh.updatedAt) {
-        const updateDate = dayjs(recentCh.updatedAt).format("YYYY-MM-DD");
+        const updateDate = new Date(new Date(recentCh.updatedAt).getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
         if (updateDate === todayStr) {
           todayWords = recentCh.wordCount || 0;
           weekWords = recentCh.wordCount || 0;

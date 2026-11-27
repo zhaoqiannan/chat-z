@@ -3,17 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works } from "@/db";
-import { eq, and, sql } from "drizzle-orm";
-
-async function ensureMasterOutlineTable(db: any) {
-  await db.run(sql`CREATE TABLE IF NOT EXISTS work_master_outlines (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    work_id INTEGER NOT NULL UNIQUE,
-    user_id TEXT NOT NULL,
-    tree_json TEXT NOT NULL,
-    updated_at INTEGER NOT NULL
-  )`);
-}
+import { eq, and } from "drizzle-orm";
 
 function buildDefaultTree(workTitle: string, description?: string | null) {
   return {
@@ -76,8 +66,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    await ensureMasterOutlineTable(db);
-
     const [row, writtenChaptersRes]: any[] = await Promise.all([
       env.DB.prepare(
         "SELECT tree_json, updated_at FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1"
@@ -106,7 +94,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
           success: true,
           result: { tree, updatedAt: row.updated_at, isDefault: false, writtenChapterNumbers },
         });
-      } catch {}
+      } catch { }
     }
 
     return NextResponse.json({
@@ -146,8 +134,6 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (!work) {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
-
-    await ensureMasterOutlineTable(db);
 
     const now = Date.now();
     const treeJson = JSON.stringify(tree);

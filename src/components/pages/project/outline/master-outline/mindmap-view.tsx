@@ -503,9 +503,12 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
     };
   }, []);
 
+  const nodeRefCallbacksRef = useRef<Map<string, (el: HTMLDivElement | null) => void>>(new Map());
+
   const setNodeRef = useCallback((id: string, el: HTMLDivElement | null) => {
     const prevEl = nodeElsRef.current.get(id);
-    if (prevEl && prevEl !== el) {
+    if (prevEl === el) return;
+    if (prevEl) {
       observerRef.current?.unobserve(prevEl);
       nodeElsRef.current.delete(id);
     }
@@ -514,6 +517,18 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
       observerRef.current?.observe(el);
     }
   }, []);
+
+  const getNodeRefCallback = useCallback(
+    (id: string) => {
+      let cb = nodeRefCallbacksRef.current.get(id);
+      if (!cb) {
+        cb = (el: HTMLDivElement | null) => setNodeRef(id, el);
+        nodeRefCallbacksRef.current.set(id, cb);
+      }
+      return cb;
+    },
+    [setNodeRef]
+  );
 
   // 鼠标滚轮以指针为中心平滑缩放画布
   useEffect(() => {
@@ -700,7 +715,7 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
           return (
             <div
               key={item.node.id}
-              ref={(el) => setNodeRef(item.node.id, el)}
+              ref={getNodeRefCallback(item.node.id)}
               data-node-id={item.node.id}
               data-mindmap-node="true"
               className={`${styles.nodeCard} ${isRoot ? styles.nodeRoot : ""} ${isSelected ? styles.nodeSelected : ""} ${resizingNodeId === item.node.id ? styles.nodeResizing : ""}`}

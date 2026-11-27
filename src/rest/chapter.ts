@@ -1,14 +1,19 @@
-import { get, post, put, patch, del } from "@/utils/rest";
+import { get, post, put, patch, del, ensureTrailingSlash, refreshSession } from "@/utils/rest";
 
 export const ChapterApi = {
   list: "/api/chapters",
   create: "/api/chapters",
   update: "/api/chapters",
   delete: "/api/chapters",
-  ai: "/api/ai/chapter",
 };
 
 export type ChapterStatus = "not_started" | "revising" | "completed";
+
+export type ChapterAiApplyMode =
+  | "replace_selection"
+  | "insert_after_selection"
+  | "replace_full_chapter"
+  | "readonly";
 
 export interface ChapterItem {
   id: number | string;
@@ -50,36 +55,6 @@ export interface UpdateChapterPayload {
   chapterNumber?: number;
 }
 
-export interface AiDraftPayload {
-  workId: number | string;
-  chapterId?: number | string;
-  mode: "draft";
-  overview: string;
-  events?: string;
-  plotDirection?: string;
-  characters?: string;
-  writingStyle?: string;
-  targetWords?: number | string;
-}
-
-export interface AiOptimizePayload {
-  workId: number | string;
-  chapterId?: number | string;
-  mode: "optimize";
-  currentContent: string;
-  optimizeGoal?: string;
-}
-
-export interface AiSelectionPayload {
-  workId: number | string;
-  chapterId?: number | string;
-  mode: "selection_ai";
-  selectedText: string;
-  actionType: "polish" | "expand" | "shorten" | "enrich_desc" | "dialogue" | "custom";
-  customInstruction?: string;
-  fullContext?: string;
-}
-
 export const getChapterList = async (workId: string) => {
   return get(ChapterApi.list, { workId });
 };
@@ -96,42 +71,10 @@ export const deleteChapter = async (id: string) => {
   return del(ChapterApi.delete, { id });
 };
 
-export const requestChapterAiDraft = async (data: AiDraftPayload) => {
-  return post(ChapterApi.ai, data);
-};
-
-export const requestChapterAiOptimize = async (data: AiOptimizePayload) => {
-  return post(ChapterApi.ai, data);
-};
-
-export const requestChapterSelectionAi = async (data: AiSelectionPayload) => {
-  return post(ChapterApi.ai, data);
-};
-
-export interface ChapterAiHistoryItem {
-  id: number;
-  workId: number;
-  chapterId: number;
-  mode: "draft" | "optimize" | "selection_ai" | string;
-  title: string;
-  promptSummary?: string;
-  content: string;
-  wordCount: number;
-  createdAt: string | number;
-}
-
-export const getChapterAiHistoryList = async (chapterId: number | string, workId?: number | string) => {
-  return get(`/api/ai/chapter/history?chapterId=${chapterId}${workId ? `&workId=${workId}` : ""}`);
-};
-
-export const deleteChapterAiHistory = async (id: number | string) => {
-  return del(`/api/ai/chapter/history`, { id });
-};
-
 export interface ContextTagOption {
   id: string | number;
   name: string;
-  type: "character" | "location" | "faction" | "item" | "rule" | "outline" | "chapter" | string;
+  type: "character" | "location" | "faction" | "item" | "rule" | "outline" | "chapter" | "material" | string;
   desc?: string;
 }
 
@@ -150,7 +93,7 @@ export const HIGHLIGHT_COLORS = [
   { bg: "rgba(244, 114, 182, 0.40)", border: "#f472b6", tagBg: "#fdf2f8", tagText: "#be185d", name: "玫粉" },
   { bg: "rgba(196, 181, 253, 0.50)", border: "#a78bfa", tagBg: "#faf5ff", tagText: "#6b21a8", name: "紫罗兰" },
   { bg: "rgba(253, 186, 116, 0.50)", border: "#fb923c", tagBg: "#fff7ed", tagText: "#c2410c", name: "日落橙" },
-  { bg: "rgba(94, 234, 212, 0.50)",  border: "#2dd4bf", tagBg: "#f0fdfa", tagText: "#0f766e", name: "薄荷青" },
+  { bg: "rgba(94, 234, 212, 0.50)", border: "#2dd4bf", tagBg: "#f0fdfa", tagText: "#0f766e", name: "薄荷青" },
 ];
 
 export interface ChapterAiChatItem {
@@ -164,6 +107,7 @@ export interface ChapterAiChatItem {
   selectedText?: string;
   contextTags?: ContextTagOption[];
   applied: number;
+  applyMode?: ChapterAiApplyMode;
   createdAt: string | number;
 }
 
@@ -172,9 +116,11 @@ export interface SendChapterAiChatPayload {
   chapterId: number | string;
   prompt?: string;
   actionType?: string;
+  subMode?: string;
   selectedText?: string;
   currentContent?: string;
   contextTags?: ContextTagOption[];
+  stream?: boolean;
 }
 
 export const getWorkContextTagOptions = async (workId: number | string, chapterId?: number | string) => {
@@ -187,6 +133,89 @@ export const getChapterAiChatList = async (chapterId: number | string) => {
 
 export const sendChapterAiChat = async (data: SendChapterAiChatPayload) => {
   return post(`/api/ai/chapter/chat`, data);
+};
+
+export const sendChapterAiChatStream = async (
+  data: SendChapterAiChatPayload,
+  callbacks: {
+    onChunk: (chunk: string) => void;
+    onDone?: (result: ChapterAiChatItem, applyMode: ChapterAiApplyMode) => void;
+    onError?: (message: string) => void;
+  },
+  signal?: AbortSignal
+): Promise<void> => {
+  const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+  const url = `${baseApi}${ensureTrailingSlash("/api/ai/chapter/chat")}`;
+
+  const doFetch = () =>
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ...data, stream: true }),
+      signal,
+    });
+
+  let res = await doFetch();
+  if (res.status === 401) {
+    const refreshed = await refreshSession().catch(() => false);
+    if (refreshed) {
+      res = await doFetch();
+    }
+  }
+
+  if (!res.ok) {
+    let msg = `请求失败 (${res.status})`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.message) msg = errJson.message;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("text/event-stream")) {
+    const json = await res.json();
+    if (json?.success && json.result) {
+      callbacks.onChunk(json.result.content || "");
+      callbacks.onDone?.(json.result, json.applyMode || "readonly");
+      return;
+    }
+    throw new Error(json?.message || "AI 协同推演失败");
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("响应流不可读");
+
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  const handleLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("data:")) return;
+    const raw = trimmed.slice(5).trim();
+    if (!raw || raw === "[DONE]") return;
+    try {
+      const evt = JSON.parse(raw);
+      if (evt.chunk) {
+        callbacks.onChunk(evt.chunk);
+      } else if (evt.done && evt.result) {
+        callbacks.onDone?.(evt.result, evt.applyMode || "readonly");
+      } else if (evt.error) {
+        callbacks.onError?.(evt.error);
+      }
+    } catch {}
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    lines.forEach(handleLine);
+  }
+  if (buffer) handleLine(buffer);
 };
 
 export const applyChapterAiChat = async (id: number | string, applied: boolean = true) => {
@@ -256,4 +285,3 @@ export const createMemoryFragment = async (data: {
 export const deleteMemoryFragment = async (id: number | string) => {
   return del(`/api/chapters/fragments?id=${id}`, { id: Number(id) });
 };
-

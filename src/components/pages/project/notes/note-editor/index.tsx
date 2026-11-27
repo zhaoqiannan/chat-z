@@ -87,11 +87,13 @@ export default function NoteEditor({
 
   const handleConvertToCharacter = async () => {
     if (!activeNote || !workId) return;
+    const currentTitle = title.trim() || activeNote.title;
+    const currentContent = content || activeNote.content;
     try {
       await createCharacter({
         workId: Number(workId),
-        name: activeNote.title,
-        description: activeNote.content,
+        name: currentTitle,
+        description: currentContent,
         roleType: "major",
       });
       useAlert.success("已成功将该笔记转为「角色设定」！可在世界观->角色库中查看。");
@@ -102,15 +104,19 @@ export default function NoteEditor({
 
   const handleConvertToOutline = async () => {
     if (!activeNote || !workId) return;
+    const currentTitle = title.trim() || activeNote.title;
+    const currentContent = content || activeNote.content;
     try {
       await createOutlineNode({
         workId: Number(workId),
-        title: activeNote.title,
-        eventDescription: activeNote.content,
-        goal: activeNote.title,
+        category: "memo",
+        title: currentTitle,
+        summary: currentContent.slice(0, 200),
+        event: currentContent,
+        content: currentContent,
         type: "scene",
       });
-      useAlert.success("已成功将该笔记转为「大纲剧情节点」！可在大纲树中查看。");
+      useAlert.success("已成功将该笔记转为「灵感卡片大纲」！可在故事大纲中查看。");
     } catch (e: any) {
       useAlert.error("转换失败: " + (e?.message || "网络异常"));
     }
@@ -118,12 +124,14 @@ export default function NoteEditor({
 
   const handleConvertToChapter = async () => {
     if (!activeNote || !workId) return;
+    const currentTitle = title.trim() || activeNote.title;
+    const currentContent = content || activeNote.content;
     try {
       await createChapter({
         workId: Number(workId),
-        title: activeNote.title,
-        summary: activeNote.content.slice(0, 200),
-        content: activeNote.content,
+        title: currentTitle,
+        summary: currentContent.slice(0, 200),
+        content: currentContent,
         isVolume: 0,
       });
       useAlert.success("已成功将该笔记转为「章节规划」！可在章节列表中查看。");

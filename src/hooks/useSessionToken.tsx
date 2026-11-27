@@ -10,48 +10,37 @@ const useSessionToken = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const forceBackToLogin = async () => {
-      try {
-        await logoutUser();
-      } catch {}
-      clearSession();
-      router.replace("/login/");
-    };
+    let cancelled = false;
 
-    const fetchProfile = async (userId: string, userName: string) => {
+    const hydrateProfile = async () => {
       try {
-        const res = await getUser(userId);
+        const res = await getUser();
+        if (cancelled) return;
         if (res.success && res.result) {
           dispatch(
             setUser({
-              id: userId,
-              name: res.result.userName || userName || "User",
+              id: res.result.id || "",
+              name: res.result.name || res.result.username || "作家",
               ...res.result,
             })
           );
-        } else {
-          throw new Error(res.message || "Failed to fetch profile");
+          return;
         }
-      } catch (err) {
-        console.error("Failed to restore profile:", err);
-        await forceBackToLogin();
+        throw new Error(res.message || "Failed to fetch profile");
+      } catch {
+        if (cancelled) return;
+        try {
+          await logoutUser();
+        } catch {}
+        clearSession();
+        router.replace("/login/");
       }
     };
 
-    const userInfoStr = localStorage.getItem("user_info");
-    if (userInfoStr) {
-      try {
-        const session = JSON.parse(userInfoStr);
-        if (session && session.user && session.user.id) {
-          fetchProfile(session.user.id, session.user.name);
-          return;
-        }
-      } catch (e) {
-        console.error("Error parsing user_info", e);
-      }
-    }
-
-    forceBackToLogin();
+    hydrateProfile();
+    return () => {
+      cancelled = true;
+    };
   }, [dispatch, router]);
 };
 

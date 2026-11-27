@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, items, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
-import { assertWorkOwnership } from "@/utils/ownership";
+import { assertWorkOwnership, isSafeUrl } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -70,6 +70,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, message: "物品名称不能为空" }, { status: 400 });
+    }
+    if (imageUrl && !isSafeUrl(imageUrl)) {
+      return NextResponse.json({ success: false, message: "非法的图片链接协议" }, { status: 400 });
     }
 
     const finalEffects = effects?.trim() || description?.trim() || "暂无描述";
@@ -161,6 +164,9 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (description !== undefined) {
       updateData.description = description?.trim() || null;
       if (effects === undefined) updateData.effects = description.trim();
+    }
+    if (imageUrl && !isSafeUrl(imageUrl)) {
+      return NextResponse.json({ success: false, message: "非法的图片链接协议" }, { status: 400 });
     }
     if (imageUrl !== undefined) updateData.imageUrl = imageUrl || null;
     if (extra !== undefined || faction !== undefined) {

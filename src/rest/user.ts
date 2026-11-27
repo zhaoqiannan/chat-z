@@ -16,7 +16,7 @@ export const loginUser = async (data: any) => {
     return post(UserApi.login, data);
 }
 
-export const getUser = async (id: string) => await get(UserApi.user, { userId: id });
+export const getUser = async () => await get(UserApi.user);
 
 export const logoutUser = async () => {
     return post(UserApi.logout, {});

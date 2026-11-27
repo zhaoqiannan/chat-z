@@ -43,7 +43,9 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     let filtered = allNotes;
     if (category === "archived") {
       filtered = filtered.filter((n) => Boolean(n.isArchived));
-    } else if (category !== "all") {
+    } else if (category === "all") {
+      filtered = filtered.filter((n) => !n.isArchived);
+    } else {
       filtered = filtered.filter((n) => !n.isArchived && n.category === category);
     }
 
@@ -66,7 +68,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const parsedBody = await parseJsonBody(req);
     if (!parsedBody.ok) return parsedBody.response;
-    const { workId: rawWorkId, title, content, category, isPinned, linkedChapterIds, linkedEntityIds } = parsedBody.data;
+    const { workId: rawWorkId, title, content, category, isPinned, linkedChapterIds, linkedEntityIds, isTodo, priority } = parsedBody.data;
     const workId = Number(rawWorkId);
 
     if (!workId || isNaN(workId)) {
@@ -76,6 +78,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 403 });
     }
 
+    const safePriority = ["low", "medium", "high"].includes(String(priority)) ? String(priority) : "medium";
     const record = {
       workId,
       title: String(title || "未命名笔记").trim() || "未命名笔记",
@@ -86,9 +89,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       isArchived: 0,
       linkedChapterIds: linkedChapterIds || null,
       linkedEntityIds: linkedEntityIds || null,
-      isTodo: 0,
+      isTodo: isTodo ? 1 : 0,
       isCompleted: 0,
-      priority: "medium",
+      priority: safePriority,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

@@ -5,6 +5,7 @@ import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, worldRules } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
+import { stripHtml } from "@/utils/text";
 
 function serializeSubtree(node: any, depth = 0, indexLabel = ""): string {
   if (!node || typeof node !== "object") return "";
@@ -77,7 +78,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       context += `【核心角色参考】：${charList.map((c) => `${c.name}(${c.identity || ""}${c.personality ? `/${c.personality}` : ""})`).join("；")}\n`;
     }
     if (ruleList.length > 0) {
-      context += `【核心世界规则参考】：${ruleList.map((r) => `${r.name}(机制:${(r.mechanisms || "").slice(0, 50)}${r.taboos ? ` 禁忌:${r.taboos.slice(0, 40)}` : ""})`).join("；")}\n`;
+      context += `【核心世界规则参考】：${ruleList.map((r) => `${r.name}(机制:${stripHtml(r.mechanisms).slice(0, 80)}${r.taboos ? ` 禁忌:${r.taboos.slice(0, 50)}` : ""})`).join("；")}\n`;
     }
 
     const subtreeText = serializeSubtree(targetNode);

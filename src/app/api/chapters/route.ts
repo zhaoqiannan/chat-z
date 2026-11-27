@@ -5,24 +5,7 @@ import { getDb, chapters, works } from "@/db";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { logUserActivity } from "@/utils/activityLogger";
 import { trackDailyWords } from "@/utils/wordStatsLogger";
-
-async function ensureChapterOutlineExtractedColumn(envDb: any) {
-  try {
-    await envDb.prepare("ALTER TABLE chapters ADD COLUMN outline_extracted INTEGER DEFAULT 0;").run();
-  } catch (_) {}
-}
-
-/**
- * 校验作品归属权
- */
-async function checkWorkOwnership(db: any, workId: number, userId: string) {
-  const work = await db
-    .select()
-    .from(works)
-    .where(and(eq(works.id, workId), eq(works.userId, userId)))
-    .get();
-  return work;
-}
+import { assertWorkOwnership } from "@/utils/ownership";
 
 /**
  * 重新计算并更新作品的总字数与正文章节总数
@@ -63,15 +46,13 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    const work = await checkWorkOwnership(db, workId, user.userId);
+    const work = await assertWorkOwnership(db, workId, user.userId);
     if (!work) {
       return NextResponse.json(
         { success: false, message: "作品不存在或无访问权限" },
         { status: 403 }
       );
     }
-
-    await ensureChapterOutlineExtractedColumn(env.DB);
 
     const list = await db
       .select()
@@ -133,7 +114,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    const work = await checkWorkOwnership(db, workId, user.userId);
+    const work = await assertWorkOwnership(db, workId, user.userId);
     if (!work) {
       return NextResponse.json(
         { success: false, message: "无权操作该作品" },
@@ -289,7 +270,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (!chapter.isVolume) {
       await recountWorkWords(db, chapter.workId);
       const delta = wordCount - (chapter.wordCount || 0);
-      if (delta > 0) {
+      if (delta !== 0) {
         await trackDailyWords(db, user.userId, delta);
       }
     }

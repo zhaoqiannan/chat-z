@@ -12,7 +12,7 @@ export interface CurrentUser {
  * 服务端鉴权高阶函数
  */
 export function withAuth(
-  handler: (req: NextRequest, user: CurrentUser) => Promise<NextResponse>
+  handler: (req: NextRequest, user: CurrentUser) => Promise<NextResponse | Response>
 ) {
   return async (req: NextRequest) => {
     try {

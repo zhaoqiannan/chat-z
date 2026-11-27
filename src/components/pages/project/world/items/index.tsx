@@ -32,6 +32,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
   const [ownerName, setOwnerName] = useState("");
   const [faction, setFaction] = useState("");
   const [description, setDescription] = useState("");
+  const [drawbacks, setDrawbacks] = useState("");
 
   const fetchData = async () => {
     if (!workId) return;
@@ -71,6 +72,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
     setOwnerName("");
     setFaction("");
     setDescription("");
+    setDrawbacks("");
     setModalOpened(true);
   };
 
@@ -82,6 +84,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
     setOwnerName(item.ownerName || item.currentHolder || "");
     setFaction(item.faction || (item.extra?.faction as string) || "");
     setDescription(item.description || item.effects || "");
+    setDrawbacks((item as any).drawbacks || "");
     setModalOpened(true);
   };
 
@@ -93,19 +96,20 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
 
     try {
       setFormLoading(true);
-      const selectedChar = characters.find((c) => String(c.id) === ownerId);
-      const finalOwner = selectedChar ? selectedChar.name : ownerName.trim();
+      const selectedChar = ownerId ? characters.find((c) => String(c.id) === ownerId) : null;
+      const finalOwner = selectedChar ? selectedChar.name : "";
 
-      const payload = {
+      const payload: any = {
         name: name.trim(),
-        category: category.trim() || undefined,
-        tier: category.trim() || undefined,
-        ownerId: ownerId ? Number(ownerId) : undefined,
-        ownerName: finalOwner || undefined,
-        currentHolder: finalOwner || undefined,
-        faction: faction.trim() || undefined,
-        description: description.trim() || undefined,
-        effects: description.trim() || undefined,
+        category: category.trim() || null,
+        tier: category.trim() || null,
+        ownerId: selectedChar ? Number(selectedChar.id) : null,
+        ownerName: finalOwner || null,
+        currentHolder: finalOwner || null,
+        faction: faction.trim() || "",
+        description: description.trim() || null,
+        effects: description.trim() || null,
+        drawbacks: drawbacks.trim() || null,
       };
 
       if (editingItem) {
@@ -360,11 +364,21 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
 
           <Textarea
             label="效果机制与背景描述"
-            placeholder="详细描述物品的异能特效、使用限制、反噬代价、来历背景..."
+            placeholder="详细描述物品的异能特效、来历背景..."
             size="xs"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            minRows={5}
+            minRows={4}
+            autosize
+          />
+
+          <Textarea
+            label="使用限制 / 反噬代价 (AI 战力防崩坏参考)"
+            placeholder="例如：每次催动折损十年寿元、每月初一失效、仅限雷灵根使用..."
+            size="xs"
+            value={drawbacks}
+            onChange={(e) => setDrawbacks(e.target.value)}
+            minRows={2}
             autosize
           />
 

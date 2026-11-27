@@ -4,6 +4,7 @@ import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, outlines, worldRules, factions } from "@/db";
 import { eq, desc } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
+import { stripHtml } from "@/utils/text";
 
 /**
  * AI 创意智囊与设定冲突诊断接口 (按需单次调用，极简 Token 消耗)
@@ -109,7 +110,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         loreContext += `【主要势力】：` + factionList.map((f) => `${f.name}（宗旨：${f.doctrine || "未知"}）`).join("；") + "\n";
       }
       if (ruleList.length > 0) {
-        loreContext += `【世界规则】：` + ruleList.map((r) => `${r.name}（${(r.mechanisms || r.effects || "基础规则").slice(0, 60)}）`).join("；") + "\n";
+        loreContext += `【世界规则】：` + ruleList.map((r) => `${r.name}（${(stripHtml(r.mechanisms || r.effects) || "基础规则").slice(0, 80)}）`).join("；") + "\n";
       }
       if (masterNodesBrief.length > 0) {
         loreContext += `【项目总纲阶段】：${masterNodesBrief.join("；")}\n`;

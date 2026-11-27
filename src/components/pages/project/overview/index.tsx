@@ -1,60 +1,71 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Box, Flex, Text, Paper, SimpleGrid, Button } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiEdit3, FiCompass } from "react-icons/fi";
+import { FiEdit3, FiCompass, FiShield } from "react-icons/fi";
 import { getWorkDetail, WorkItem } from "@/rest/work";
+import { getAnalysisOverview, AnalysisWorkMetrics } from "@/rest/analysis";
+
+const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
+  completed: { label: "已完结", bg: "#e6fcf5", color: "#0ca678" },
+  revising: { label: "精修打磨中", bg: "#fff7ed", color: "#ea580c" },
+  draft: { label: "构思草稿", bg: "#f1f5f9", color: "#64748b" },
+  ongoing: { label: "连载中", bg: "rgba(0, 201, 255, 0.12)", color: "#0099cc" },
+};
 
 export default function ProjectOverviewPage() {
   const params = useParams();
+  const router = useRouter();
   const workId = String(params?.id || "");
 
   const [work, setWork] = useState<WorkItem | null>(null);
+  const [metrics, setMetrics] = useState<AnalysisWorkMetrics | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!workId) return;
+    let cancelled = false;
     const fetchDetail = async () => {
       try {
         setLoading(true);
-        const res = await getWorkDetail(workId);
-        if (res && res.success && res.result) {
-          setWork(res.result);
+        const [workRes, overviewRes] = await Promise.all([
+          getWorkDetail(workId),
+          getAnalysisOverview(workId).catch(() => null),
+        ]);
+        if (cancelled) return;
+        if (workRes && workRes.success && workRes.result) {
+          setWork(workRes.result);
+        }
+        if (overviewRes && overviewRes.success && overviewRes.result?.metrics) {
+          setMetrics(overviewRes.result.metrics);
         }
       } catch (e) {
         console.error("获取项目详情失败:", e);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchDetail();
+    return () => {
+      cancelled = true;
+    };
   }, [workId]);
 
-  const getStatusBadge = (status?: string) => {
-    const isCompleted = status === "completed" || status === "已完结";
-    return (
-      <Box
-        bg={isCompleted ? "#e6fcf5" : "rgba(0, 201, 255, 0.12)"}
-        c={isCompleted ? "#0ca678" : "#0099cc"}
-        fz={11}
-        fw={600}
-        px={8}
-        py={2}
-        style={{ borderRadius: 4 }}
-      >
-        {isCompleted ? "已完结" : "连载中"}
-      </Box>
-    );
-  };
+  const statusMeta = STATUS_META[work?.status || "ongoing"] || STATUS_META.ongoing;
+  const charCount = metrics?.characters?.length;
+  const outlineRate =
+    metrics && metrics.chapterCount > 0
+      ? `${Math.min(100, Math.round((metrics.outlineNodeCount / metrics.chapterCount) * 100))}%`
+      : null;
 
   return (
     <Box pos="relative">
       <LoadingMask visible={loading && !work} />
 
-      <Flex p={10} direction="column" gap={15}>
+      <Flex p={16} direction="column" gap={15}>
         {/* 项目头部基础信息 */}
         <Paper p="22px 26px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
           <Flex justify="space-between" align="center" wrap="wrap" gap={16}>
@@ -62,35 +73,24 @@ export default function ProjectOverviewPage() {
               <Text fz={22} fw={800} c="#1e293b">
                 {work?.title || "加载中..."}
               </Text>
-              {work?.tag && (
-                <Box
-                  bg="rgba(0, 201, 255, 0.12)"
-                  c="#0099cc"
-                  fz={11}
-                  fw={600}
-                  px={8}
-                  py={2}
-                  style={{ borderRadius: 4 }}
-                >
+              {work?.tag ? (
+                <Box bg="rgba(0, 201, 255, 0.12)" c="#0099cc" fz={11} fw={600} px={8} py={2} bdrs={4}>
                   {work.tag}
                 </Box>
-              )}
-              {getStatusBadge(work?.status)}
+              ) : null}
+              <Box bg={statusMeta.bg} c={statusMeta.color} fz={11} fw={600} px={8} py={2} bdrs={4}>
+                {statusMeta.label}
+              </Box>
             </Flex>
 
             <Flex align="center" gap={10}>
-              <Button
-                variant="outline"
-                color="gray"
-                size="sm"
-                leftSection={<FiCompass size={15} />}
-              >
-                查看脑图
+              <Button variant="outline" color="gray" size="sm" leftSection={<FiCompass size={15} />} onClick={() => router.push(`/project/${workId}?tab=outline`)}>
+                查看总纲脑图
               </Button>
-              <Button
-                size="sm"
-                leftSection={<FiEdit3 size={15} />}
-              >
+              <Button variant="light" size="sm" leftSection={<FiShield size={15} />} onClick={() => router.push(`/project/${workId}?tab=ai_analysis`)}>
+                质量诊断
+              </Button>
+              <Button size="sm" leftSection={<FiEdit3 size={15} />} onClick={() => router.push(`/project/${workId}?tab=chapters`)}>
                 进入写作
               </Button>
             </Flex>
@@ -104,158 +104,33 @@ export default function ProjectOverviewPage() {
         {/* 核心数据统计指标 */}
         <SimpleGrid cols={{ base: 2, sm: 4 }} spacing={16}>
           <Paper p="16px 20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-            <Text fz={12} c="#94a3b8" mb={6}>
-              总字数
-            </Text>
+            <Text fz={12} c="#94a3b8" mb={6}>总字数</Text>
             <Text fz={24} fw={800} c="#1e293b">
-              {(work?.wordCount || 0).toLocaleString()} 字
+              {(metrics?.totalWords ?? work?.wordCount ?? 0).toLocaleString()} 字
             </Text>
           </Paper>
 
           <Paper p="16px 20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-            <Text fz={12} c="#94a3b8" mb={6}>
-              章节进度
-            </Text>
+            <Text fz={12} c="#94a3b8" mb={6}>章节进度</Text>
             <Text fz={24} fw={800} c="#00c9ff">
-              共 {work?.chapterCount || 0} / {work?.expectedChapters || 100} 章
+              共 {metrics?.chapterCount ?? work?.chapterCount ?? 0} / {work?.expectedChapters || 100} 章
             </Text>
           </Paper>
 
-          <Paper p="16px 20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-            <Text fz={12} c="#94a3b8" mb={6}>
-              核心角色
-            </Text>
+          <Paper p="16px 20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md" style={{ cursor: "pointer" }} onClick={() => router.push(`/project/${workId}?tab=world&subTab=characters`)}>
+            <Text fz={12} c="#94a3b8" mb={6}>核心角色</Text>
             <Text fz={24} fw={800} c="#3b82f6">
-              --
+              {charCount !== undefined ? `${charCount} 位` : "--"}
             </Text>
           </Paper>
 
-          <Paper p="16px 20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-            <Text fz={12} c="#94a3b8" mb={6}>
-              大纲完成度
-            </Text>
+          <Paper p="16px 20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md" style={{ cursor: "pointer" }} onClick={() => router.push(`/project/${workId}?tab=outline`)}>
+            <Text fz={12} c="#94a3b8" mb={6}>大纲节点 / 覆盖度</Text>
             <Text fz={24} fw={800} c="#10b981">
-              --
+              {metrics ? `${metrics.outlineNodeCount} 条${outlineRate ? ` (${outlineRate})` : ""}` : "--"}
             </Text>
           </Paper>
         </SimpleGrid>
-
-        {/* <Paper p="20px 24px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-          <Flex justify="space-between" align="center" mb={16}>
-            <Text fz={15} fw={700} c="#1e293b">
-              近期目录章节
-            </Text>
-            <Flex
-              align="center"
-              gap={4}
-              fz={13}
-              fw={600}
-              c="#00c9ff"
-              style={{ cursor: "pointer" }}
-            >
-              <FiPlus size={14} />
-              新建章节
-            </Flex>
-          </Flex>
-
-          <Flex direction="column">
-            {data.recentChapters.map((chap, idx) => (
-              <Flex
-                key={chap.id}
-                justify="space-between"
-                align="center"
-                py={12}
-                style={{
-                  borderBottom:
-                    idx < data.recentChapters.length - 1
-                      ? "1px solid #f1f5f9"
-                      : "none",
-                }}
-              >
-                <Flex align="center" gap={12}>
-                  <Text fz={13} c="#94a3b8" w={56}>
-                    {chap.index}
-                  </Text>
-                  <Text fz={14} fw={600} c="#1e293b">
-                    {chap.title}
-                  </Text>
-                </Flex>
-
-                <Flex align="center" gap={20}>
-                  {getStatusBadge(chap.status)}
-                  <Text fz={12} c="#64748b" w={64} ta="right">
-                    {chap.wordCount}
-                  </Text>
-                  <Text fz={12} c="#94a3b8" w={56} ta="right">
-                    {chap.time}
-                  </Text>
-                  <ActionIcon variant="subtle" color="gray" size="sm">
-                    <FiEdit3 size={14} />
-                  </ActionIcon>
-                </Flex>
-              </Flex>
-            ))}
-          </Flex>
-        </Paper>
-
-        <Paper p="20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-          <Text fz={15} fw={700} c="#1e293b" mb={14}>
-            近期更新设定
-          </Text>
-          <SimpleGrid cols={2} spacing={10}>
-            {data.recentLores.map((lore) => (
-              <Box
-                key={lore.id}
-                p="10px 12px"
-                bg="#f8fafc"
-                bd="1px solid #f1f5f9"
-                style={{ borderRadius: 8, textAlign: "center" }}
-              >
-                <Text fz={13} fw={700} c="#1e293b">
-                  {lore.name}
-                </Text>
-                <Text fz={11} c="#94a3b8" mt={2}>
-                  {lore.desc}
-                </Text>
-              </Box>
-            ))}
-          </SimpleGrid>
-        </Paper>
-
-        <Paper p="20px" bg="#ffffff" bd="1px solid #e2e8f0" radius="md">
-          <Flex justify="space-between" align="center" mb={14}>
-            <Text fz={15} fw={700} c="#1e293b">
-              备忘与灵感笔记
-            </Text>
-            <ActionIcon variant="subtle"  size="sm">
-              <FiPlusCircle size={16} color="#00c9ff" />
-            </ActionIcon>
-          </Flex>
-
-          <Flex direction="column" gap={12}>
-            {data.memos.map((memo) => (
-              <Box
-                key={memo.id}
-                p="10px 12px"
-                bg="#f8fafc"
-                bd="1px solid #f1f5f9"
-                style={{ borderRadius: 8 }}
-              >
-                <Flex justify="space-between" align="baseline" gap={8} mb={4}>
-                  <Text fz={13} fw={600} c="#1e293b" lineClamp={1}>
-                    {memo.title}
-                  </Text>
-                  <Text fz={11} c="#94a3b8" style={{ whiteSpace: "nowrap" }}>
-                    {memo.time}
-                  </Text>
-                </Flex>
-                <Text fz={12} c="#64748b" lh={1.5} lineClamp={2}>
-                  {memo.content}
-                </Text>
-              </Box>
-            ))}
-          </Flex>
-        </Paper> */}
       </Flex>
     </Box>
   );

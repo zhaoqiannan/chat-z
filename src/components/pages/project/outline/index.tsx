@@ -2,18 +2,20 @@
 "use client";
 
 import React from "react";
+import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { Box, Flex, Tabs } from "@mantine/core";
 import { FiBookOpen, FiEdit3, FiGitBranch, FiZap } from "react-icons/fi";
 import { createOutlineNode, updateOutlineNode } from "@/rest/outline";
 import ModalNodeEditor from "./modal-node-editor";
-import DrawerPlotDeduction from "./drawer-plot-deduction";
-import DrawerPlotDeductionHistory from "./drawer-plot-deduction/drawer-plot-deduction-history";
-import DrawerThoughtOrganizer from "./drawer-thought-organizer";
-import MasterOutlineWorkspace from "./master-outline";
-import PlotDeductionWorkspace from "./plot-deduction-workspace";
 import OutlineCategoryPanel from "./category-panel";
 import { OutlineProvider, OutlineTabKey, useOutlineContext } from "./context/OutlineContext";
+
+const MasterOutlineWorkspace = dynamic(() => import("./master-outline"), { ssr: false });
+const PlotDeductionWorkspace = dynamic(() => import("./plot-deduction-workspace"), { ssr: false });
+const DrawerPlotDeduction = dynamic(() => import("./drawer-plot-deduction"), { ssr: false });
+const DrawerPlotDeductionHistory = dynamic(() => import("./drawer-plot-deduction/drawer-plot-deduction-history"), { ssr: false });
+const DrawerThoughtOrganizer = dynamic(() => import("./drawer-thought-organizer"), { ssr: false });
 
 function StoryOutlineContent() {
   const {

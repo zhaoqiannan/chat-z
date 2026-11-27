@@ -1,4 +1,4 @@
-import { get, post, put, patch, del, getToken } from "@/utils/rest";
+import { get, post, put, patch, del } from "@/utils/rest";
 
 // ============================================================================
 // 1. 角色 API 与类型 (Characters)
@@ -36,10 +36,6 @@ export interface CharacterItem {
 
 export const getCharacterList = async (workId: number | string) => {
   return get("/api/characters", { workId });
-};
-
-export const getCharacterDetail = async (workId: number | string, id: number | string) => {
-  return get("/api/characters", { workId, id });
 };
 
 export const createCharacter = async (data: Partial<CharacterItem> & { workId: number | string; name: string }) => {
@@ -92,10 +88,6 @@ export const getLocationList = async (workId: number | string) => {
   return get("/api/locations", { workId });
 };
 
-export const getLocationDetail = async (workId: number | string, id: number | string) => {
-  return get("/api/locations", { workId, id });
-};
-
 export const createLocation = async (data: Partial<LocationRecord> & { workId: number | string; name: string }) => {
   return post("/api/locations", data);
 };
@@ -133,10 +125,6 @@ export interface FactionItem {
 
 export const getFactionList = async (workId: number | string) => {
   return get("/api/factions", { workId });
-};
-
-export const getFactionDetail = async (workId: number | string, id: number | string) => {
-  return get("/api/factions", { workId, id });
 };
 
 export const createFaction = async (data: Partial<FactionItem> & { workId: number | string; name: string }) => {
@@ -177,10 +165,6 @@ export interface ItemData {
 
 export const getItemList = async (workId: number | string) => {
   return get("/api/items", { workId });
-};
-
-export const getItemDetail = async (workId: number | string, id: number | string) => {
-  return get("/api/items", { workId, id });
 };
 
 export const createItem = async (data: Partial<ItemData> & { workId: number | string; name: string }) => {
@@ -231,10 +215,6 @@ export const getWorldRuleList = async (workId: number | string) => {
   return get("/api/rules", { workId });
 };
 
-export const getWorldRuleDetail = async (workId: number | string, id: number | string) => {
-  return get("/api/rules", { workId, id });
-};
-
 export const createWorldRule = async (data: Partial<WorldRuleItem> & { workId: number | string; name: string }) => {
   return post("/api/rules", data);
 };
@@ -253,15 +233,8 @@ export const uploadImageFile = async (
   const formData = new FormData();
   formData.append("file", file);
 
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
   const res = await fetch("/api/upload/", {
     method: "POST",
-    headers,
     body: formData,
     credentials: "include",
   });

@@ -1,14 +1,16 @@
-// 组件：居中沉浸式章节文本编辑区（目录展开开关、面包屑导航、段落自动缩进与一键智能排版、光标精准插入、Ctrl/Cmd+S保存、上次保存时间、全高沉浸写作）
+// 组件：居中沉浸式章节文本编辑区（划词悬浮快捷 AI 工具条、卡文一键续写、安全采纳与一键撤销、Ctrl/Cmd+S 快捷保存）
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu, Paper, Stack } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy, FiAlignJustify, FiMinimize2 } from "react-icons/fi";
-import { ChapterItem, createChapterVersion, ActiveAiTask, HIGHLIGHT_COLORS } from "@/rest/chapter";
+import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu, Paper } from "@mantine/core";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy, FiMinimize2, FiRotateCcw, FiChevronDown } from "react-icons/fi";
+import { ChapterItem, createChapterVersion, ActiveAiTask, ChapterAiApplyMode, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
+import { countWords, formatDateTime, copyToClipboard } from "@/utils/text";
 import DrawerVersionHistory from "../drawer-version-history";
 import DrawerMemoryFragments from "../drawer-memory-fragments";
+import SelectionBubbleBar from "./SelectionBubbleBar";
 
 interface EditorAreaProps {
   chapter: ChapterItem | null;
@@ -18,17 +20,44 @@ interface EditorAreaProps {
   aiPanelWidth?: number;
   onToggleTree?: () => void;
   onUpdateChapter: (fields: Partial<ChapterItem>) => Promise<void>;
+  onContentChange?: (content: string) => void;
   onSelectionChange?: (selectedText: string) => void;
-  onTriggerAiAction?: (actionType: string, selectedText: string) => void;
+  onTriggerAiAction?: (actionType: string, selectedText: string, subMode?: string) => void;
   activeTasks?: ActiveAiTask[];
   onToggleAiPanel?: () => void;
-  insertTextPayload?: { text: string; targetSnippet?: string; timestamp: number } | null;
+  insertTextPayload?: { text: string; mode: ChapterAiApplyMode; targetSnippet?: string; timestamp: number } | null;
   locateSnippetPayload?: { snippet: string; timestamp: number } | null;
   targetWords?: number;
   onDirtyChange?: (isDirty: boolean) => void;
   onDeleteChapter?: (chapterId: number | string) => void;
   onOutlineExtracted?: (chapterId: number | string) => void;
   saveRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
+}
+
+function locateSnippetInText(current: string, snippet: string): { start: number; length: number } | null {
+  const cleanSnippet = snippet.trim();
+  if (!cleanSnippet) return null;
+
+  const exactIdx = current.indexOf(cleanSnippet);
+  if (exactIdx !== -1) return { start: exactIdx, length: cleanSnippet.length };
+
+  const noCrCurrent = current.replace(/\r/g, "");
+  const noCrSnippet = cleanSnippet.replace(/\r/g, "");
+  const noCrIdx = noCrCurrent.indexOf(noCrSnippet);
+  if (noCrIdx !== -1) return { start: noCrIdx, length: noCrSnippet.length };
+
+  if (cleanSnippet.length >= 24) {
+    const prefix = cleanSnippet.slice(0, 20);
+    const prefixIdx = current.indexOf(prefix);
+    if (prefixIdx !== -1) {
+      const suffix = cleanSnippet.slice(-20);
+      const suffixIdx = current.indexOf(suffix, prefixIdx);
+      if (suffixIdx !== -1) {
+        return { start: prefixIdx, length: suffixIdx + suffix.length - prefixIdx };
+      }
+    }
+  }
+  return null;
 }
 
 export default function EditorArea({
@@ -39,6 +68,7 @@ export default function EditorArea({
   aiPanelWidth = 360,
   onToggleTree,
   onUpdateChapter,
+  onContentChange,
   onSelectionChange,
   onTriggerAiAction,
   activeTasks = [],
@@ -59,11 +89,8 @@ export default function EditorArea({
   const [versionDrawerOpened, setVersionDrawerOpened] = useState(false);
   const [fragmentDrawerOpened, setFragmentDrawerOpened] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | string | number | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    selectedText: string;
-  } | null>(null);
+  const [selectionBubble, setSelectionBubble] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [undoSnapshot, setUndoSnapshot] = useState<{ prevContent: string; label: string } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -74,8 +101,9 @@ export default function EditorArea({
   const lastLocateTimestampRef = useRef<number>(0);
   const savingRef = useRef<boolean>(false);
   const resizeRafRef = useRef<number | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveHandlerRef = useRef<() => Promise<boolean>>(async () => false);
 
-  // 使用 rAF 轻量化同步 textarea 高度，彻底移除每次击键的全局 window.resize 与合成 input 事件风暴
   const refreshTextareaHeight = useCallback(() => {
     if (resizeRafRef.current !== null) {
       cancelAnimationFrame(resizeRafRef.current);
@@ -92,21 +120,18 @@ export default function EditorArea({
   useEffect(() => {
     return () => {
       if (resizeRafRef.current !== null) cancelAnimationFrame(resizeRafRef.current);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
     };
   }, []);
 
-  // 监听容器尺寸变化（目录折叠/AI 面板拖拽/视口变化）
   useEffect(() => {
     const el = containerRef.current;
     if (typeof ResizeObserver === "undefined" || !el) return;
-    const observer = new ResizeObserver(() => {
-      refreshTextareaHeight();
-    });
+    const observer = new ResizeObserver(() => refreshTextareaHeight());
     observer.observe(el);
     return () => observer.disconnect();
   }, [refreshTextareaHeight]);
 
-  // 内容变化时单次 rAF 调整高度；面板折叠动画结束后再补一次
   useEffect(() => {
     refreshTextareaHeight();
   }, [content, refreshTextareaHeight]);
@@ -119,26 +144,24 @@ export default function EditorArea({
 
   useEffect(() => {
     if (chapter) {
+      const nextContent = chapter.content || "";
       setTitle(chapter.title || "");
       setSubtitle(chapter.subtitle || "");
-      setContent(chapter.content || "");
+      setContent(nextContent);
+      onContentChange?.(nextContent);
       setLastSavedAt(chapter.updatedAt || chapter.createdAt || null);
-      lastCursorRef.current = { start: chapter.content?.length || 0, end: chapter.content?.length || 0 };
-      if (onSelectionChange) onSelectionChange("");
+      setSelectionBubble(null);
+      setUndoSnapshot(null);
+      lastCursorRef.current = { start: nextContent.length, end: nextContent.length };
+      onSelectionChange?.("");
       setTimeout(refreshTextareaHeight, 30);
     }
   }, [chapter?.id, refreshTextareaHeight]);
 
-  // 全局关闭右键菜单监听
+  // 实时同步正文给父组件，确保右侧 AI 助手始终读取未保存的最新正文
   useEffect(() => {
-    const handleGlobalClick = () => {
-      setContextMenu(null);
-    };
-    window.addEventListener("click", handleGlobalClick);
-    return () => {
-      window.removeEventListener("click", handleGlobalClick);
-    };
-  }, []);
+    onContentChange?.(content);
+  }, [content, onContentChange]);
 
   const isDirty = useMemo(() => {
     if (!chapter) return false;
@@ -153,130 +176,120 @@ export default function EditorArea({
     onDirtyChange?.(isDirty);
   }, [isDirty, onDirtyChange]);
 
-  const applyAiText = useCallback((textToInsert: string, targetSnippet?: string) => {
-    setContent((prevContent) => {
-      const current = prevContent || "";
-      const el = textareaRef.current;
+  const pushUndoSnapshot = useCallback((prevContent: string, label: string) => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoSnapshot({ prevContent, label });
+    undoTimerRef.current = setTimeout(() => {
+      setUndoSnapshot(null);
+      undoTimerRef.current = null;
+    }, 8000);
+  }, []);
 
-      // 1. 如果存在明确的目标片段，优先精确/模糊替换目标文本
-      if (targetSnippet && targetSnippet.trim()) {
-        const cleanSnippet = targetSnippet.trim();
-        let startIdx = current.indexOf(cleanSnippet);
-        let matchLength = cleanSnippet.length;
+  const handleUndoAiApply = () => {
+    if (!undoSnapshot) return;
+    setContent(undoSnapshot.prevContent);
+    setUndoSnapshot(null);
+    if (undoTimerRef.current) {
+      clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    useAlert.info("已撤销上次 AI 采纳，恢复原正文");
+  };
 
-        // 尝试去除换行差异等空白干扰
-        if (startIdx === -1) {
-          const noCrCurrent = current.replace(/\r/g, "");
-          const noCrSnippet = cleanSnippet.replace(/\r/g, "");
-          const idx = noCrCurrent.indexOf(noCrSnippet);
-          if (idx !== -1) {
-            startIdx = idx;
-            matchLength = noCrSnippet.length;
-          } else {
-            // 尝试头尾锚点匹配
-            const prefix = cleanSnippet.slice(0, Math.min(20, cleanSnippet.length));
-            const prefixIdx = current.indexOf(prefix);
-            if (prefixIdx !== -1) {
-              const suffix = cleanSnippet.slice(-Math.min(20, cleanSnippet.length));
-              const suffixIdx = current.indexOf(suffix, prefixIdx);
-              if (suffixIdx !== -1) {
-                startIdx = prefixIdx;
-                matchLength = suffixIdx + suffix.length - prefixIdx;
-              }
-            }
-          }
-        }
+  const applyAiText = useCallback(
+    (textToInsert: string, mode: ChapterAiApplyMode = "insert_after_selection", targetSnippet?: string) => {
+      if (mode === "readonly") return;
 
-        if (startIdx !== -1) {
-          const nextContent = current.substring(0, startIdx) + textToInsert + current.substring(startIdx + matchLength);
-          const nextCursorPos = startIdx + textToInsert.length;
-          lastCursorRef.current = { start: nextCursorPos, end: nextCursorPos };
-          const scrollPos = editorViewportRef.current?.scrollTop;
-          useAlert.success("已精准替换所选协同文本！");
+      setContent((prevContent) => {
+        const current = prevContent || "";
+        const el = textareaRef.current;
+        const scrollPos = editorViewportRef.current?.scrollTop;
+
+        const restoreCursor = (nextPos: number) => {
+          lastCursorRef.current = { start: nextPos, end: nextPos };
           setTimeout(() => {
             if (el) {
               el.focus({ preventScroll: true });
-              el.setSelectionRange(nextCursorPos, nextCursorPos);
+              el.setSelectionRange(nextPos, nextPos);
             }
             if (editorViewportRef.current && scrollPos !== undefined) {
               editorViewportRef.current.scrollTop = scrollPos;
             }
           }, 20);
-          return nextContent;
+        };
+
+        // 1. 替换整章正文（全章润色/精简/换风格）
+        if (mode === "replace_full_chapter") {
+          pushUndoSnapshot(current, "已替换本章正文");
+          restoreCursor(textToInsert.length);
+          useAlert.success("已用改写结果更新本章正文（8 秒内可一键撤销）");
+          return textToInsert;
         }
-      }
 
-      // 2. 回退：在当前光标处精准插入或追加
-      if (!el) {
-        useAlert.success("已采纳写入正文！");
-        return current ? `${current}\n\n${textToInsert}` : textToInsert;
-      }
-
-      const start = lastCursorRef.current.start ?? el.selectionStart ?? current.length;
-      const end = lastCursorRef.current.end ?? el.selectionEnd ?? current.length;
-      const nextContent = current.substring(0, start) + textToInsert + current.substring(end);
-      const nextCursorPos = start + textToInsert.length;
-      lastCursorRef.current = { start: nextCursorPos, end: nextCursorPos };
-      const scrollPos = editorViewportRef.current?.scrollTop;
-      useAlert.success("已采纳写入正文！");
-
-      setTimeout(() => {
-        if (el) {
-          el.focus({ preventScroll: true });
-          el.setSelectionRange(nextCursorPos, nextCursorPos);
+        // 2. 精准替换选中片段
+        if (mode === "replace_selection" && targetSnippet?.trim()) {
+          const match = locateSnippetInText(current, targetSnippet);
+          if (match) {
+            pushUndoSnapshot(current, "已替换选中片段");
+            const nextContent =
+              current.substring(0, match.start) + textToInsert + current.substring(match.start + match.length);
+            restoreCursor(match.start + textToInsert.length);
+            useAlert.success("已精准替换选中片段（8 秒内可一键撤销）");
+            return nextContent;
+          }
         }
-        if (editorViewportRef.current && scrollPos !== undefined) {
-          editorViewportRef.current.scrollTop = scrollPos;
-        }
-      }, 0);
 
-      return nextContent;
-    });
-  }, []);
+        // 3. 在目标片段之后或光标/章末安全续写插入（绝不覆盖原文）
+        pushUndoSnapshot(current, "已接续插入正文");
+        if (targetSnippet?.trim()) {
+          const match = locateSnippetInText(current, targetSnippet);
+          if (match) {
+            const insertAt = match.start + match.length;
+            const sep = current[insertAt - 1] === "\n" ? "" : "\n\n";
+            const nextContent = current.substring(0, insertAt) + sep + textToInsert + current.substring(insertAt);
+            restoreCursor(insertAt + sep.length + textToInsert.length);
+            useAlert.success("已紧接所选片段之后插入正文（8 秒内可一键撤销）");
+            return nextContent;
+          }
+        }
+
+        const insertPos = Math.min(
+          current.length,
+          Math.max(lastCursorRef.current.end ?? current.length, lastCursorRef.current.start ?? current.length)
+        );
+        const prefixSep = insertPos > 0 && current[insertPos - 1] !== "\n" ? "\n\n" : "";
+        const nextContent = current.substring(0, insertPos) + prefixSep + textToInsert + current.substring(insertPos);
+        restoreCursor(insertPos + prefixSep.length + textToInsert.length);
+        useAlert.success("已安全写入正文（8 秒内可一键撤销）");
+        return nextContent;
+      });
+    },
+    [pushUndoSnapshot]
+  );
 
   useEffect(() => {
     if (insertTextPayload && insertTextPayload.text && insertTextPayload.timestamp !== lastPayloadTimestampRef.current) {
       lastPayloadTimestampRef.current = insertTextPayload.timestamp;
-      applyAiText(insertTextPayload.text, insertTextPayload.targetSnippet);
+      applyAiText(insertTextPayload.text, insertTextPayload.mode, insertTextPayload.targetSnippet);
     }
   }, [insertTextPayload, applyAiText]);
 
-  // 定位正文划选片段并平滑滚动
   useEffect(() => {
     if (locateSnippetPayload && locateSnippetPayload.snippet && locateSnippetPayload.timestamp !== lastLocateTimestampRef.current) {
       lastLocateTimestampRef.current = locateSnippetPayload.timestamp;
-      const snippet = locateSnippetPayload.snippet.trim();
-      const current = content;
-      if (!snippet || !current) return;
-
-      let idx = current.indexOf(snippet);
-      let matchLen = snippet.length;
-
-      if (idx === -1) {
-        const noCrCurrent = current.replace(/\r/g, "");
-        const noCrSnippet = snippet.replace(/\r/g, "");
-        idx = noCrCurrent.indexOf(noCrSnippet);
-        if (idx !== -1) {
-          matchLen = noCrSnippet.length;
-        }
-      }
-
-      if (idx !== -1) {
+      const match = locateSnippetInText(content, locateSnippetPayload.snippet);
+      if (match) {
         const el = textareaRef.current;
         if (el) {
           el.focus({ preventScroll: true });
-          el.setSelectionRange(idx, idx + matchLen);
-          lastCursorRef.current = { start: idx, end: idx + matchLen };
-
-          const charRatio = idx / Math.max(1, current.length);
+          el.setSelectionRange(match.start, match.start + match.length);
+          lastCursorRef.current = { start: match.start, end: match.start + match.length };
+          const charRatio = match.start / Math.max(1, content.length);
           const totalHeight = el.scrollHeight || 1000;
-          const targetScroll = Math.max(0, charRatio * totalHeight - 140);
-
           editorViewportRef.current?.scrollTo({
-            top: targetScroll,
+            top: Math.max(0, charRatio * totalHeight - 140),
             behavior: "smooth",
           });
-
           useAlert.info("已定位到该片段！");
         }
       } else {
@@ -285,7 +298,7 @@ export default function EditorArea({
     }
   }, [locateSnippetPayload, content]);
 
-  const liveWordCount = content.replace(/\s+/g, "").length;
+  const liveWordCount = useMemo(() => countWords(content), [content]);
 
   const handleFormatAll = () => {
     if (!content) return;
@@ -293,7 +306,6 @@ export default function EditorArea({
       .split(/\r?\n/)
       .map((line) => line.replace(/^[ 　\t]+/, "").trimEnd())
       .filter((line) => line.trim() !== "");
-
     if (validLines.length === 0) return;
 
     const formatted = validLines.map((line) => `　　${line}`).join("\n\n");
@@ -308,17 +320,18 @@ export default function EditorArea({
       .split(/\r?\n/)
       .map((line) => line.trimEnd())
       .filter((line) => line.trim() !== "");
-
     if (validLines.length === 0) return;
 
-    const formatted = validLines.join("\n");
-    setContent(formatted);
+    setContent(validLines.join("\n"));
     setTimeout(refreshTextareaHeight, 20);
     useAlert.success("已取消分段（恢复紧凑段落）");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.nativeEvent as any).isComposing || e.keyCode === 229) {
+    if ((e.nativeEvent as any).isComposing || e.keyCode === 229) return;
+
+    if (e.key === "Escape") {
+      setSelectionBubble(null);
       return;
     }
 
@@ -348,21 +361,13 @@ export default function EditorArea({
 
       const start = el.selectionStart ?? content.length;
       const end = el.selectionEnd ?? content.length;
-
-      const beforeCursor = content.substring(0, start);
-      const currentLine = beforeCursor.split("\n").pop() || "";
-
-      let indent = "\n　　";
-      if (currentLine.trim() === "") {
-        indent = "\n";
-      }
-
+      const currentLine = content.substring(0, start).split("\n").pop() || "";
+      const indent = currentLine.trim() === "" ? "\n" : "\n　　";
       const nextContent = content.substring(0, start) + indent + content.substring(end);
       setContent(nextContent);
 
       const nextPos = start + indent.length;
       lastCursorRef.current = { start: nextPos, end: nextPos };
-
       setTimeout(() => {
         el.focus();
         el.setSelectionRange(nextPos, nextPos);
@@ -370,26 +375,15 @@ export default function EditorArea({
       }, 0);
     }
   };
+
   const handleCopyContent = async () => {
     if (!content) {
       useAlert.warning("当前章节正文内容为空");
       return;
     }
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(content);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = content;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
-      }
-      useAlert.success("已复制本章正文内容至剪贴板！");
-    } catch (err) {
-      useAlert.error("复制失败，请手动选择复制");
-    }
+    const ok = await copyToClipboard(content);
+    if (ok) useAlert.success("已复制本章正文内容至剪贴板！");
+    else useAlert.error("复制失败，请手动选择复制");
   };
 
   const handleManualSave = useCallback(async (): Promise<boolean> => {
@@ -414,7 +408,7 @@ export default function EditorArea({
           wordCount: liveWordCount,
           versionTag: "手动保存快照",
         });
-      } catch (_) {}
+      } catch {}
 
       setLastSavedAt(new Date());
       useAlert.success("章节保存成功！");
@@ -428,32 +422,27 @@ export default function EditorArea({
     }
   }, [chapter, title, subtitle, content, liveWordCount, onUpdateChapter, workId]);
 
+  saveHandlerRef.current = handleManualSave;
+
   useEffect(() => {
-    if (saveRef) {
-      saveRef.current = handleManualSave;
-    }
+    if (saveRef) saveRef.current = handleManualSave;
     return () => {
-      if (saveRef) {
-        saveRef.current = null;
-      }
+      if (saveRef) saveRef.current = null;
     };
   }, [saveRef, handleManualSave]);
 
-  // 全局快捷键保存 (兼容 macOS 的 Cmd+S 与 Windows/Linux 的 Ctrl+S)
+  // 全局快捷键保存：仅绑定一次，不再随每次击键解绑重绑
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         e.stopPropagation();
-        handleManualSave();
+        saveHandlerRef.current();
       }
     };
-
     window.addEventListener("keydown", handleGlobalKeyDown, true);
-    return () => {
-      window.removeEventListener("keydown", handleGlobalKeyDown, true);
-    };
-  }, [handleManualSave]);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown, true);
+  }, []);
 
   const handleTrackCursor = () => {
     const el = textareaRef.current;
@@ -462,31 +451,29 @@ export default function EditorArea({
     const end = el.selectionEnd ?? 0;
     lastCursorRef.current = { start, end };
     const text = el.value.substring(start, end).trim();
-    if (onSelectionChange) {
-      onSelectionChange(text.length >= 2 ? text : "");
+    onSelectionChange?.(text.length >= 2 ? text : "");
+    if (text.length < 4) {
+      setSelectionBubble(null);
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleMouseUp = (e: React.MouseEvent<HTMLTextAreaElement>) => {
+    handleTrackCursor();
     const el = textareaRef.current;
-    const start = el?.selectionStart ?? 0;
-    const end = el?.selectionEnd ?? 0;
-    const selected = el ? el.value.substring(start, end).trim() : "";
-
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      selectedText: selected,
-    });
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = el.value.substring(start, end).trim();
+    if (selected.length >= 4) {
+      setSelectionBubble({ x: e.clientX, y: e.clientY, text: selected });
+    } else {
+      setSelectionBubble(null);
+    }
   };
 
-  const renderHighlightedBackdrop = (text: string, tasks: ActiveAiTask[] = []) => {
-    if (!text) return null;
-    if (!tasks || tasks.length === 0) {
-      return <span>{text}</span>;
-    }
+  const highlightedBackdrop = useMemo(() => {
+    if (!content) return null;
+    if (!activeTasks || activeTasks.length === 0) return <span>{content}</span>;
 
     interface MatchSpan {
       start: number;
@@ -496,11 +483,10 @@ export default function EditorArea({
     }
 
     const matches: MatchSpan[] = [];
-
-    tasks.forEach((task) => {
-      if (!task.snippet || !task.snippet.trim()) return;
-      const cleanSnippet = task.snippet.trim();
-      let idx = text.indexOf(cleanSnippet);
+    activeTasks.forEach((task) => {
+      const cleanSnippet = task.snippet?.trim();
+      if (!cleanSnippet) return;
+      const idx = content.indexOf(cleanSnippet);
       if (idx !== -1) {
         matches.push({
           start: idx,
@@ -511,14 +497,9 @@ export default function EditorArea({
       }
     });
 
-    if (matches.length === 0) {
-      return <span>{text}</span>;
-    }
+    if (matches.length === 0) return <span>{content}</span>;
 
-    // 按起始位置升序排序
     matches.sort((a, b) => a.start - b.start);
-
-    // 过滤重叠区间
     const nonOverlapping: MatchSpan[] = [];
     let lastEnd = 0;
     matches.forEach((m) => {
@@ -530,10 +511,9 @@ export default function EditorArea({
 
     const nodes: React.ReactNode[] = [];
     let currentIdx = 0;
-
     nonOverlapping.forEach((m, i) => {
       if (m.start > currentIdx) {
-        nodes.push(<span key={`plain-${i}`}>{text.substring(currentIdx, m.start)}</span>);
+        nodes.push(<span key={`plain-${i}`}>{content.substring(currentIdx, m.start)}</span>);
       }
       nodes.push(
         <mark
@@ -546,27 +526,25 @@ export default function EditorArea({
             padding: "1px 0",
           }}
         >
-          {text.substring(m.start, m.end)}
+          {content.substring(m.start, m.end)}
         </mark>
       );
       currentIdx = m.end;
     });
-
-    if (currentIdx < text.length) {
-      nodes.push(<span key="plain-tail">{text.substring(currentIdx)}</span>);
+    if (currentIdx < content.length) {
+      nodes.push(<span key="plain-tail">{content.substring(currentIdx)}</span>);
     }
-
     return nodes;
-  };
+  }, [content, activeTasks]);
 
   const handleRestoreVersion = async (restoredContent: string) => {
     setContent(restoredContent);
-    await onUpdateChapter({ content: restoredContent, wordCount: restoredContent.replace(/\s+/g, "").length });
+    await onUpdateChapter({ content: restoredContent, wordCount: countWords(restoredContent) });
     setTimeout(refreshTextareaHeight, 30);
   };
 
   const handleInsertFragment = (fragmentContent: string) => {
-    applyAiText(fragmentContent);
+    applyAiText(fragmentContent, "insert_after_selection");
   };
 
   const handleExtractToOutline = async () => {
@@ -605,41 +583,19 @@ export default function EditorArea({
     }
   };
 
-  const formatExactDateTime = (dateVal?: string | number | Date | null) => {
-    if (!dateVal) return "未记录";
-    const d = new Date(dateVal);
-    if (isNaN(d.getTime())) return "未记录";
-    const YYYY = d.getFullYear();
-    const MM = String(d.getMonth() + 1).padStart(2, "0");
-    const DD = String(d.getDate()).padStart(2, "0");
-    const HH = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    const ss = String(d.getSeconds()).padStart(2, "0");
-    return `${YYYY}-${MM}-${DD} ${HH}:${mm}:${ss}`;
-  };
-
   if (!chapter) {
     return (
-      <Flex style={{ flex: 1, height: "100%" }} justify="center" align="center" direction="column" gap="sm">
+      <Flex flex={1} h="100%" justify="center" align="center" direction="column" gap="sm">
         <FiFileText size={48} color="#cbd5e1" />
-        <Text fz={15} fw={600} c="#94a3b8">请在左侧选择或新建章节开始创作</Text>
+        <Text fz={15} fw={600} c="#94a3b8">
+          请在左侧选择或新建章节开始创作
+        </Text>
       </Flex>
     );
   }
 
   return (
-    <Box
-      ref={containerRef}
-      style={{
-        flex: 1,
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: "#ffffff",
-        overflow: "hidden",
-        minWidth: 0,
-      }}
-    >
+    <Flex ref={containerRef} flex={1} h="100%" direction="column" bg="#ffffff" miw={0} pos="relative" style={{ overflow: "hidden" }}>
       {/* 顶部面包屑与工具栏 */}
       <Flex justify="space-between" align="center" px={16} py={10} style={{ borderBottom: "1px solid #f1f5f9", flexShrink: 0 }}>
         <Group gap={8} align="center">
@@ -653,7 +609,8 @@ export default function EditorArea({
           <Text fz={12.5} c="#94a3b8">章节</Text>
           <Text fz={12.5} c="#cbd5e1">/</Text>
           <Text fz={13} fw={600} c="#334155">
-            {title || chapter.title || `第${chapter.chapterNumber}章`}{(subtitle || chapter.subtitle) ? `  ${subtitle || chapter.subtitle}` : ""}
+            {title || chapter.title || `第${chapter.chapterNumber}章`}
+            {subtitle || chapter.subtitle ? `  ${subtitle || chapter.subtitle}` : ""}
           </Text>
           {isDirty && (
             <Badge size="xs" color="orange" variant="light" styles={{ root: { fontSize: 10, padding: "0 6px" } }}>
@@ -664,18 +621,43 @@ export default function EditorArea({
 
         <Group gap="xs" align="center">
           <Group gap={6} align="center" mr="xs">
-            <Box style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: isDirty ? "#f59e0b" : "#10b981" }} />
-            <Text fz={12} c="#64748b">{liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字</Text>
+            <Box w={6} h={6} bdrs="50%" bg={isDirty ? "#f59e0b" : "#10b981"} />
+            <Text fz={12} c="#64748b">
+              {liveWordCount.toLocaleString()} 字 / 目标 {targetWords.toLocaleString()} 字
+            </Text>
           </Group>
 
+          {/* 卡文救星：一键顺着往下写 */}
+          <Menu position="bottom-end" shadow="md" width={185}>
+            <Menu.Target>
+              <Button
+                size="xs"
+                variant="light"
+                color="cyan"
+                leftSection={<FiZap size={12} />}
+                rightSection={<FiChevronDown size={11} />}
+                styles={{ root: { height: 28, fontWeight: 600, fontSize: 12 } }}
+                title="卡文时自动承接上章与本章大纲无缝续写"
+              >
+                顺着往下写
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Label>卡文救星 · 选择续写方向</Menu.Label>
+              <Menu.Item fz={12} onClick={() => onTriggerAiAction?.("continue", "", "natural")}>
+                ⚡ 自然顺着往下写
+              </Menu.Item>
+              <Menu.Item fz={12} onClick={() => onTriggerAiAction?.("continue", "", "twist")}>
+                🌀 来个意外反转
+              </Menu.Item>
+              <Menu.Item fz={12} onClick={() => onTriggerAiAction?.("continue", "", "hook")}>
+                🪝 收尾留个悬念钩子
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
+
           <Tooltip label="一键复制本章内容" position="bottom">
-            <ActionIcon
-              variant="default"
-              size="sm"
-              onClick={handleCopyContent}
-              styles={{ root: { height: 28, width: 28 } }}
-              title="一键复制本章正文"
-            >
+            <ActionIcon variant="default" size="sm" onClick={handleCopyContent} styles={{ root: { height: 28, width: 28 } }}>
               <FiCopy size={13} color="#475569" />
             </ActionIcon>
           </Tooltip>
@@ -712,22 +694,14 @@ export default function EditorArea({
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<FiZap size={14} color="#0284c7" />}
-                onClick={onToggleAiPanel}
-                styles={{ item: { fontWeight: 600 } }}
-              >
-                唤起 AI 协同助手
+              <Menu.Item leftSection={<FiZap size={14} color="#0284c7" />} onClick={onToggleAiPanel} styles={{ item: { fontWeight: 600 } }}>
+                {aiPanelCollapsed ? "打开 AI 协同助手" : "收起 AI 协同助手"}
               </Menu.Item>
 
               <Menu.Divider />
 
               <Menu.Label>智能与辅助</Menu.Label>
-              <Menu.Item
-                leftSection={<FiLayers size={13} color="#16a34a" />}
-                onClick={handleExtractToOutline}
-                disabled={extractingOutline}
-              >
+              <Menu.Item leftSection={<FiLayers size={13} color="#16a34a" />} onClick={handleExtractToOutline} disabled={extractingOutline}>
                 {extractingOutline ? "提取大纲中..." : "提取剧情到大纲"}
               </Menu.Item>
               <Menu.Item leftSection={<FiBookmark size={13} color="#06b6d4" />} onClick={() => setFragmentDrawerOpened(true)}>
@@ -740,21 +714,14 @@ export default function EditorArea({
               <Menu.Divider />
 
               <Menu.Label>文本排版</Menu.Label>
-              <Menu.Item
-                leftSection={<FiMinimize2 size={13} color="#8b5cf6" />}
-                onClick={handleFormatCompactNewline}
-              >
+              <Menu.Item leftSection={<FiMinimize2 size={13} color="#8b5cf6" />} onClick={handleFormatCompactNewline}>
                 取消分段 (紧凑段落)
               </Menu.Item>
 
               {onDeleteChapter && (
                 <>
                   <Menu.Divider />
-                  <Menu.Item
-                    color="red"
-                    leftSection={<FiTrash2 size={13} />}
-                    onClick={() => onDeleteChapter(chapter.id)}
-                  >
+                  <Menu.Item color="red" leftSection={<FiTrash2 size={13} />} onClick={() => onDeleteChapter(chapter.id)}>
                     删除本章
                   </Menu.Item>
                 </>
@@ -764,68 +731,67 @@ export default function EditorArea({
         </Group>
       </Flex>
 
+      {/* 8 秒浮层撤销条（AI 采纳写入后随时无悔回退） */}
+      {undoSnapshot && (
+        <Paper
+          shadow="md"
+          radius="xl"
+          px={14}
+          py={6}
+          bg="#0f172a"
+          pos="absolute"
+          bottom={20}
+          left="50%"
+          style={{ transform: "translateX(-50%)", zIndex: 800 }}
+        >
+          <Group gap={10}>
+            <Text fz={12} c="#f8fafc">
+              {undoSnapshot.label}
+            </Text>
+            <Button size="compact-xs" variant="light" color="cyan" leftSection={<FiRotateCcw size={11} />} onClick={handleUndoAiApply}>
+              撤销本次采纳
+            </Button>
+          </Group>
+        </Paper>
+      )}
+
       {/* 沉浸式正文全高滚动区域 */}
       <ScrollArea
         style={{ flex: 1, height: "100%" }}
         viewportRef={editorViewportRef}
+        onScrollPositionChange={() => setSelectionBubble(null)}
         p={{ base: "md", md: 24 }}
-        styles={{
-          viewport: {
-            paddingBottom: 0,
-          },
-        }}
+        styles={{ viewport: { paddingBottom: 0 } }}
       >
-        <Box
-          style={{
-            margin: "0 auto",
-            maxWidth: 820,
-            minHeight: "calc(100vh - 120px)",
-            paddingBottom: "25vh",
-            position: "relative",
-          }}
-        >
+        <Box maw={820} mx="auto" mih="calc(100vh - 120px)" pb="25vh" pos="relative">
           <TextInput
             variant="unstyled"
             placeholder="输入章节标题..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            styles={{
-              input: {
-                fontSize: 24,
-                fontWeight: 800,
-                color: "#0f172a",
-              },
-            }}
+            styles={{ input: { fontSize: 24, fontWeight: 800, color: "#0f172a" } }}
           />
           <TextInput
             variant="unstyled"
             placeholder="添加小标题 / 章节副标题 (选填)..."
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
-            styles={{
-              input: {
-                fontSize: 14,
-                color: "#64748b",
-                padding: "0 0 4px 0",
-              },
-            }}
+            styles={{ input: { fontSize: 14, color: "#64748b", padding: "0 0 4px 0" } }}
           />
 
-          {/* 上次保存时间与状态提示 */}
           <Group gap="xs" align="center" mt={4} mb={12}>
             <Group gap={4} align="center">
               <FiClock size={11.5} color="#94a3b8" />
               <Text fz={11.5} c="#94a3b8">
-                上次修改时间：{formatExactDateTime(lastSavedAt || chapter.updatedAt || chapter.createdAt)}
+                上次修改时间：{formatDateTime(lastSavedAt || chapter.updatedAt || chapter.createdAt)}
               </Text>
             </Group>
+            <Text fz={11} c="#cbd5e1">·</Text>
+            <Text fz={11} c="#94a3b8">划选正文任意段落即可唤起 AI 润色 / 扩写 / 换味道悬浮条</Text>
           </Group>
 
-          <Box
-            style={{ position: "relative", marginTop: 4 }}
-            onContextMenu={handleContextMenu}
-          >
-            {/* 高亮背景衬底层 (Backdrop Highlight Layer) */}
+          <Box pos="relative" mt={4}>
+            {/* 高亮背景衬底层 */}
             <div
               ref={backdropRef}
               aria-hidden="true"
@@ -848,36 +814,29 @@ export default function EditorArea({
                 boxSizing: "border-box",
               }}
             >
-              {renderHighlightedBackdrop(content, activeTasks)}
+              {highlightedBackdrop}
             </div>
 
-            {/* 前台文本编辑区 (透明背景确保原生打字与高亮对齐) */}
+            {/* 前台文本编辑区（完整保留浏览器原生右键菜单） */}
             <Textarea
               ref={textareaRef}
               variant="unstyled"
-              autosize
               minRows={26}
               placeholder="在此开始撰写正文（回车自动段首缩进两格，支持 Ctrl+S / Cmd+S 快速保存）..."
               value={content}
               onChange={(e) => {
                 setContent(e.target.value);
                 handleTrackCursor();
-                setContextMenu(null);
+                setSelectionBubble(null);
               }}
-              onKeyDown={(e) => {
-                handleKeyDown(e);
-                if (e.key === "Escape") {
-                  setContextMenu(null);
-                }
-              }}
+              onKeyDown={handleKeyDown}
               onSelect={handleTrackCursor}
-              onMouseUp={handleTrackCursor}
+              onMouseUp={handleMouseUp}
               onKeyUp={handleTrackCursor}
               onClick={() => {
                 handleTrackCursor();
-                setContextMenu(null);
+                setSelectionBubble(null);
               }}
-              onContextMenu={handleContextMenu}
               styles={{
                 input: {
                   fontSize: 16,
@@ -888,6 +847,8 @@ export default function EditorArea({
                   backgroundColor: "transparent",
                   position: "relative",
                   zIndex: 2,
+                  overflow: "hidden",
+                  resize: "none",
                 },
               }}
             />
@@ -895,139 +856,15 @@ export default function EditorArea({
         </Box>
       </ScrollArea>
 
-      {/* 自定义右键快捷操作菜单 (彻底拦截并替代原生弹窗) */}
-      {contextMenu && (
-        <Paper
-          shadow="xl"
-          radius="md"
-          p={6}
-          style={{
-            position: "fixed",
-            left: Math.min(contextMenu.x, (typeof window !== "undefined" ? window.innerWidth : 1200) - 190),
-            top: Math.min(contextMenu.y, (typeof window !== "undefined" ? window.innerHeight : 800) - 260),
-            zIndex: 1000,
-            backgroundColor: "#ffffff",
-            border: "1px solid #e2e8f0",
-            minWidth: 175,
-            boxShadow: "0 10px 28px rgba(15, 23, 42, 0.16)",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Stack gap={2}>
-            <Button
-              size="xs"
-              variant="subtle"
-              color="gray"
-              justify="flex-start"
-              leftSection={<FiCopy size={13} color="#475569" />}
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) {
-                  navigator.clipboard.writeText(txt);
-                  useAlert.success(contextMenu.selectedText ? "已复制选中文本到剪贴板" : "已复制全篇内容到剪贴板");
-                }
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, color: "#334155", fontWeight: 500 } }}
-            >
-              复制 {contextMenu.selectedText ? "选中文本" : "全篇内容"}
-            </Button>
-
-            <Box style={{ height: 1, backgroundColor: "#f1f5f9", margin: "3px 0" }} />
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="blue"
-              justify="flex-start"
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) onTriggerAiAction?.("polish", txt);
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
-            >
-              ✨ 文学润色
-            </Button>
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="cyan"
-              justify="flex-start"
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) onTriggerAiAction?.("expand", txt);
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
-            >
-              🌱 场景扩写
-            </Button>
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="orange"
-              justify="flex-start"
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) onTriggerAiAction?.("shorten", txt);
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
-            >
-              ✂️ 精简去水
-            </Button>
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="grape"
-              justify="flex-start"
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) onTriggerAiAction?.("tone", txt);
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
-            >
-              🎭 语气重塑
-            </Button>
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="red"
-              justify="flex-start"
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) onTriggerAiAction?.("critique", txt);
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
-            >
-              🔍 逻辑审查
-            </Button>
-
-            <Box style={{ height: 1, backgroundColor: "#f1f5f9", margin: "3px 0" }} />
-
-            <Button
-              size="xs"
-              variant="subtle"
-              color="indigo"
-              justify="flex-start"
-              onClick={() => {
-                const txt = contextMenu.selectedText || content;
-                if (txt) onTriggerAiAction?.("custom_focus", txt);
-                setContextMenu(null);
-              }}
-              styles={{ root: { height: 28, fontSize: 12, fontWeight: 500 } }}
-            >
-              💬 自定义调整诉求...
-            </Button>
-          </Stack>
-        </Paper>
+      {/* 划词悬浮 AI 快捷条 */}
+      {selectionBubble && (
+        <SelectionBubbleBar
+          x={selectionBubble.x}
+          y={selectionBubble.y}
+          selectedText={selectionBubble.text}
+          onTrigger={(actionType, text, subMode) => onTriggerAiAction?.(actionType, text, subMode)}
+          onClose={() => setSelectionBubble(null)}
+        />
       )}
 
       <DrawerVersionHistory
@@ -1044,6 +881,6 @@ export default function EditorArea({
         chapterId={chapter.id}
         onInsertToContent={handleInsertFragment}
       />
-    </Box>
+    </Flex>
   );
 }

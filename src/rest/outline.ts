@@ -6,8 +6,6 @@ export const OutlineApi = {
   create: "/api/outlines",
   update: "/api/outlines",
   delete: "/api/outlines",
-  aiAssistant: "/api/ai/outline",
-  history: "/api/ai/outline/history",
   deductAi: "/api/ai/plot-deduction",
   deductions: "/api/plot-deductions",
   extractOutline: "/api/ai/chapter/extract-outline",
@@ -290,67 +288,6 @@ export const extractChapterOutline = async (payload: {
 
 export const organizeOutlineThoughts = async (payload: ThoughtOrganizePayload): Promise<{ success: boolean; result?: ThoughtOrganizeResult; message?: string }> => {
   return post(OutlineApi.organizeThoughts, payload);
-};
-
-// 兼容历史 AI 辅助功能接口定义
-export type OutlineAiAction =
-  | "generate_from_premise"
-  | "plan_chapters"
-  | "expand_node"
-  | "split_node"
-  | "find_plot_holes"
-  | "polish_rhythm"
-  | "generate_alternatives"
-  | "alternative_plots"
-  | "check_mainline"
-  | "check_conflict"
-  | "check_pacing"
-  | "diagnose";
-
-export interface OutlineAiPayload {
-  workId: number | string;
-  nodeId?: string;
-  targetNodeId?: string;
-  targetNode?: any;
-  action: OutlineAiAction;
-  premise?: string;
-  currentContent?: string;
-  targetChapterCount?: number;
-  genre?: string;
-  customPrompt?: string;
-}
-
-export interface OutlineAiHistoryRecord {
-  id: number;
-  workId: number;
-  nodeId?: string | null;
-  action: string;
-  title: string;
-  prompt?: string | null;
-  resultPayload: any;
-  createdAt: string | number;
-}
-
-export interface OutlineAiResponse {
-  success: boolean;
-  action?: string;
-  title?: string;
-  data?: any;
-  result?: any;
-  rawText?: string;
-  message?: string;
-}
-
-export const requestOutlineAi = async (data: OutlineAiPayload): Promise<OutlineAiResponse> => {
-  return post(OutlineApi.aiAssistant, data);
-};
-
-export const getOutlineAiHistoryList = async (workId: number | string, nodeId?: string): Promise<{ success: boolean; result?: OutlineAiHistoryRecord[]; message?: string }> => {
-  return get(OutlineApi.history, { workId, nodeId });
-};
-
-export const deleteOutlineAiHistoryRecord = async (id: number) => {
-  return del(OutlineApi.history, { id });
 };
 
 // ============================================================================

@@ -12,32 +12,16 @@ interface UnifiedResponse<T = any> {
   result?: T;
 }
 
-let accessToken = typeof window !== "undefined" ? localStorage.getItem("access_token") || "" : "";
-
-const getToken = () => {
-  if (!accessToken && typeof window !== "undefined") {
-    accessToken = localStorage.getItem("access_token") || "";
-  }
-  return accessToken;
-};
-
 const updateSession = (data: any) => {
-  const token = data?.accessToken || "";
-  if (token) {
-    accessToken = token;
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("access_token", token);
-      const name = data.userName || "user";
-      const id = data.userId || "";
-      localStorage.setItem("user_info", JSON.stringify({ user: { id, name } }));
-      store.dispatch(setUser({ id, name }));
-    }
+  const userObj = data?.result || data;
+  const id = userObj?.userId || "";
+  const name = userObj?.userName || "";
+  if (id && typeof window !== "undefined") {
+    store.dispatch(setUser({ id, name: name || "作家" }));
   }
 };
 
 const clearSession = () => {
-  accessToken = "";
   if (typeof window !== "undefined") {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user_info");
@@ -46,7 +30,13 @@ const clearSession = () => {
   }
 };
 
-const handleLogout = () => {
+let isLoggingOut = false;
+const handleLogout = async () => {
+  if (isLoggingOut) return;
+  isLoggingOut = true;
+  try {
+    await fetch("/api/logout/", { method: "POST", credentials: "include" });
+  } catch {}
   clearSession();
   if (typeof window !== "undefined") {
     window.location.href = "/login/";
@@ -54,7 +44,6 @@ const handleLogout = () => {
 };
 
 const REFRESH_API_ROUTE = "/api/refresh";
-const AUTH_REGISTER_ROUTE = "/api/register";
 const AUTH_LOGIN_ROUTE = "/api/login";
 
 const ensureTrailingSlash = (url?: string) => {
@@ -64,20 +53,15 @@ const ensureTrailingSlash = (url?: string) => {
   return query !== undefined ? `${normalizedPath}?${query}` : normalizedPath;
 };
 
-const refreshSession = async (): Promise<string> => {
+const refreshSession = async (): Promise<boolean> => {
   const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-  const token = getToken();
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
   const response = await Axios.post(
     `${baseApi}${ensureTrailingSlash(REFRESH_API_ROUTE)}`,
     {},
-    { withCredentials: true, headers }
+    { withCredentials: true }
   );
   updateSession(response.data);
-  return response.data?.accessToken || "";
+  return Boolean(response.data?.success);
 };
 
 const formatResponse = (response: AxiosResponse): UnifiedResponse => {
@@ -130,28 +114,18 @@ rest.interceptors.request.use((config) => {
     config.baseURL = baseApi;
   }
 
-  const isAuthRoute =
-    matchRoute(config.url, AUTH_REGISTER_ROUTE) ||
-    matchRoute(config.url, AUTH_LOGIN_ROUTE) ||
-    matchRoute(config.url, REFRESH_API_ROUTE);
-  if (!isAuthRoute) {
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-  }
   return config;
 });
 
 let isRefreshing = false;
-let failedQueue: Array<{ resolve: (token: string | null) => void; reject: (err: any) => void }> = [];
+let failedQueue: Array<{ resolve: (ok: boolean) => void; reject: (err: any) => void }> = [];
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: any, ok = false) => {
   failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
-      prom.resolve(token);
+      prom.resolve(ok);
     }
   });
   failedQueue = [];
@@ -178,21 +152,18 @@ rest.interceptors.response.use(
       const originalRequest = config;
 
       if (response.status === 401 && !originalRequest._retry) {
-        if (matchRoute(originalRequest.url, REFRESH_API_ROUTE)) {
-          handleLogout();
+        if (matchRoute(originalRequest.url, REFRESH_API_ROUTE) || matchRoute(originalRequest.url, AUTH_LOGIN_ROUTE)) {
+          if (matchRoute(originalRequest.url, REFRESH_API_ROUTE)) {
+            handleLogout();
+          }
           return Promise.reject(formatError(error));
         }
 
         if (isRefreshing) {
-          return new Promise((resolve, reject) => {
+          return new Promise<boolean>((resolve, reject) => {
             failedQueue.push({ resolve, reject });
           })
-            .then((token) => {
-              if (token) {
-                originalRequest.headers.Authorization = `Bearer ${token}`;
-              }
-              return rest(originalRequest);
-            })
+            .then((ok) => (ok ? rest(originalRequest) : Promise.reject(formatError(error))))
             .catch((err) => Promise.reject(err));
         }
 
@@ -200,17 +171,16 @@ rest.interceptors.response.use(
         isRefreshing = true;
 
         try {
-          const newAccessToken = await refreshSession();
-          if (newAccessToken) {
-            processQueue(null, newAccessToken);
-            originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          const refreshed = await refreshSession();
+          if (refreshed) {
+            processQueue(null, true);
             return rest(originalRequest);
           }
-          processQueue(error, null);
+          processQueue(error, false);
           handleLogout();
           return Promise.reject(formatError(error));
         } catch (refreshErr: any) {
-          processQueue(refreshErr, null);
+          processQueue(refreshErr, false);
           handleLogout();
           return Promise.reject(formatError(refreshErr));
         } finally {
@@ -270,34 +240,30 @@ export type PostStream = (
 ) => Promise<void>;
 
 const postStream: PostStream = async (url, data, onChunk, signal) => {
-  const makeRequest = async (tokenToUse: string | null): Promise<Response> => {
+  const makeRequest = async (): Promise<Response> => {
     const baseApi = process.env.NEXT_PUBLIC_API_BASE_URL || "";
     const formattedUrl = ensureTrailingSlash(url) || url;
     const fullUrl = baseApi && formattedUrl.startsWith("/api") ? `${baseApi}${formattedUrl}` : formattedUrl;
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    if (tokenToUse) {
-      headers.Authorization = `Bearer ${tokenToUse}`;
-    }
 
     return fetch(fullUrl, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify(data),
       signal,
     });
   };
 
-  let response = await makeRequest(getToken());
+  let response = await makeRequest();
 
   if (response.status === 401) {
     if (isRefreshing) {
       try {
-        const newToken = await new Promise<string | null>((resolve, reject) => {
+        const ok = await new Promise<boolean>((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         });
-        if (newToken) {
-          response = await makeRequest(newToken);
+        if (ok) {
+          response = await makeRequest();
         } else {
           handleLogout();
           throw new Error("Unauthorized");
@@ -309,18 +275,18 @@ const postStream: PostStream = async (url, data, onChunk, signal) => {
     } else {
       isRefreshing = true;
       try {
-        const newAccessToken = await refreshSession();
-        if (newAccessToken) {
-          processQueue(null, newAccessToken);
-          response = await makeRequest(newAccessToken);
+        const refreshed = await refreshSession();
+        if (refreshed) {
+          processQueue(null, true);
+          response = await makeRequest();
         } else {
           const unauthErr = new Error("Unauthorized");
-          processQueue(unauthErr, null);
+          processQueue(unauthErr, false);
           handleLogout();
           throw unauthErr;
         }
       } catch (refreshErr: any) {
-        processQueue(refreshErr, null);
+        processQueue(refreshErr, false);
         handleLogout();
         throw refreshErr;
       } finally {
@@ -389,7 +355,6 @@ export {
   del,
   request,
   refreshSession,
-  getToken,
   clearSession,
   ensureTrailingSlash,
   postStream,

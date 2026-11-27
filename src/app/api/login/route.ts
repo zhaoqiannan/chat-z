@@ -62,11 +62,9 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       message: "登录成功",
-      accessToken,
       userId: user.id,
       userName: user.name || user.username,
       result: {
-        accessToken,
         userId: user.id,
         userName: user.name || user.username,
       },
@@ -75,7 +73,7 @@ export async function POST(req: NextRequest) {
     response.cookies.set("access_token", accessToken, {
       path: "/",
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: process.env.NODE_ENV === "production" && req.nextUrl.protocol === "https:",
       maxAge,
       sameSite: "lax",
     });

@@ -28,7 +28,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       db.select({ id: factions.id, name: factions.name, scale: factions.scale }).from(factions).where(eq(factions.workId, workId)).all(),
       db.select({ id: items.id, name: items.name, category: items.category, tier: items.tier }).from(items).where(eq(items.workId, workId)).all(),
       db.select({ id: worldRules.id, name: worldRules.name, category: worldRules.category }).from(worldRules).where(eq(worldRules.workId, workId)).all(),
-      db.select({ id: outlines.id, title: outlines.title, type: outlines.type, goal: outlines.goal }).from(outlines).where(eq(outlines.workId, workId)).all(),
+      db.select({ id: outlines.id, title: outlines.title, type: outlines.type, event: outlines.event, summary: outlines.summary, goal: outlines.goal }).from(outlines).where(eq(outlines.workId, workId)).all(),
       db.select({ id: chapters.id, title: chapters.title, chapterNumber: chapters.chapterNumber, isVolume: chapters.isVolume, summary: chapters.summary }).from(chapters).where(eq(chapters.workId, workId)).all(),
       db.select({ id: materials.id, title: materials.title, tags: materials.tags }).from(materials).where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1))).all(),
     ]);
@@ -40,8 +40,8 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     facList.forEach((f) => tags.push({ id: f.id, name: f.name, type: "faction", desc: f.scale || "势力" }));
     itemList.forEach((i) => tags.push({ id: i.id, name: i.name, type: "item", desc: i.tier || i.category || "物品" }));
     ruleList.forEach((r) => tags.push({ id: r.id, name: r.name, type: "rule", desc: r.category || "法则" }));
-    outlineList.forEach((o) => tags.push({ id: o.id, name: o.title, type: "outline", desc: o.goal || "大纲" }));
-    materialList.forEach((m) => tags.push({ id: m.id, name: `素材: ${m.title}`, type: "material", desc: m.tags || "素材资料" }));
+    outlineList.forEach((o) => tags.push({ id: o.id, name: o.title, type: "outline", desc: o.event || o.summary || o.goal || "大纲" }));
+    materialList.forEach((m) => tags.push({ id: m.id, name: m.title, type: "material", desc: m.tags || "素材资料" }));
     chapterList.filter((ch) => !ch.isVolume && ch.id !== currentChapterId).forEach((ch) => tags.push({ id: ch.id, name: `${ch.title || `第${ch.chapterNumber}章`}`, type: "chapter", desc: ch.summary || "章节" }));
 
     return NextResponse.json({ success: true, result: tags });

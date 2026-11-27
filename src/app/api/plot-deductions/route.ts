@@ -75,7 +75,13 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
 
-    const id = Number(req.nextUrl.searchParams.get("id"));
+    let id = Number(req.nextUrl.searchParams.get("id"));
+    if (!id || isNaN(id)) {
+      const parsedBody = await parseJsonBody<{ id?: number | string }>(req);
+      if (parsedBody.ok) {
+        id = Number(parsedBody.data?.id);
+      }
+    }
     if (!id || isNaN(id)) {
       return NextResponse.json({ success: false, message: "缺少待删除记录 ID" }, { status: 400 });
     }

@@ -3,26 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, chapters, outlines, characters, worldRules, items, factions, timelineEvents, characterRelations } from "@/db";
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { eq, and, asc, inArray, gte, lte, sql } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
-
-async function ensureAnalysisTable(envDb: any) {
-  await envDb
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS ai_analysis_reports (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        work_id INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        analysis_type TEXT NOT NULL,
-        scope_label TEXT NOT NULL,
-        scope_params_json TEXT,
-        overall_score INTEGER DEFAULT 0,
-        report_json TEXT NOT NULL,
-        created_at INTEGER NOT NULL
-      )`
-    )
-    .run();
-}
+import { stripHtml } from "@/utils/text";
 
 function serializeMasterTree(node: any, depth = 0): string {
   if (!node || typeof node !== "object") return "";
@@ -103,8 +86,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (!work) {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
-
-    await ensureAnalysisTable(env.DB);
 
     const needCharacters = !validTab || validTab === "audit";
     const needOutlines = !validTab || validTab === "book_overview";
@@ -252,14 +233,43 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    await ensureAnalysisTable(env.DB);
-
-    const allChapters = await db
-      .select()
+    // 仅查询轻量章节元数据，绝不一次性把整本书正文全部读入 Worker 内存
+    const chapterMetaList = await db
+      .select({
+        id: chapters.id,
+        chapterNumber: chapters.chapterNumber,
+        title: chapters.title,
+        wordCount: chapters.wordCount,
+        status: chapters.status,
+        summary: chapters.summary,
+        contentHead: sql<string>`substr(${chapters.content}, 1, 180)`,
+      })
       .from(chapters)
       .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0)))
       .orderBy(asc(chapters.chapterNumber), asc(chapters.createdAt))
       .all();
+
+    const fetchRangeChapters = (startCh: number, endCh: number, limitCount: number) =>
+      db
+        .select({
+          id: chapters.id,
+          chapterNumber: chapters.chapterNumber,
+          title: chapters.title,
+          wordCount: chapters.wordCount,
+          content: chapters.content,
+        })
+        .from(chapters)
+        .where(
+          and(
+            eq(chapters.workId, workId),
+            eq(chapters.isVolume, 0),
+            gte(chapters.chapterNumber, startCh),
+            lte(chapters.chapterNumber, endCh)
+          )
+        )
+        .orderBy(asc(chapters.chapterNumber), asc(chapters.createdAt))
+        .limit(limitCount)
+        .all();
 
     let masterOutlineText = "";
     try {
@@ -295,18 +305,18 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .orderBy(asc(outlines.chapterNumber), asc(outlines.orderIndex))
         .limit(30)
         .all();
-      const totalWords = allChapters.reduce((s, c) => s + (c.wordCount || 0), 0) || work.wordCount || 0;
+      const totalWords = chapterMetaList.reduce((s, c) => s + (c.wordCount || 0), 0) || work.wordCount || 0;
       const expectedWords = work.expectedWords || 500000;
       const expectedChapters = work.expectedChapters || 100;
       const progressPct = expectedWords > 0 ? Math.round((totalWords / expectedWords) * 100) : 0;
 
-      const writtenChapters = allChapters.filter((c) => (c.wordCount || 0) > 0 || (c.content || "").trim().length > 0);
-      const emptyChapterCount = allChapters.length - writtenChapters.length;
+      const writtenChapters = chapterMetaList.filter((c) => (c.wordCount || 0) > 0 || (c.contentHead || "").trim().length > 0);
+      const emptyChapterCount = chapterMetaList.length - writtenChapters.length;
 
       const chapterDigest = writtenChapters
         .slice(0, 45)
         .map((c) => {
-          const brief = (c.summary || (c.content || "").slice(0, 140)).replace(/\s+/g, " ").trim();
+          const brief = (c.summary || (c.contentHead || "").slice(0, 140)).replace(/\s+/g, " ").trim();
           return `第${c.chapterNumber}章《${c.title}》(ID:${c.id}, ${c.wordCount || 0}字, ${c.status || "not_started"}): ${brief || "暂无内容"}`;
         })
         .join("\n");
@@ -365,9 +375,7 @@ ${chapterDigest || "暂无已写章节内容"}
       const endCh = Math.max(startCh, Number(body.endChapter) || startCh);
       const expectedGoal = String(body.expectedGoal || "").trim();
 
-      const targetChapters = allChapters
-        .filter((c) => (c.chapterNumber || 0) >= startCh && (c.chapterNumber || 0) <= endCh)
-        .slice(0, 10);
+      const targetChapters = await fetchRangeChapters(startCh, endCh, 10);
 
       if (targetChapters.length === 0) {
         return NextResponse.json({ success: false, message: `未找到第 ${startCh} 章到第 ${endCh} 章的正文内容` }, { status: 400 });
@@ -430,11 +438,9 @@ ${chaptersText}
     // =========================================================================
     else if (analysisType === "logic_audit") {
       const startCh = Math.max(1, Number(body.startChapter) || 1);
-      const endCh = Math.max(startCh, Number(body.endChapter) || Math.min(startCh + 4, allChapters.length || startCh));
+      const endCh = Math.max(startCh, Number(body.endChapter) || Math.min(startCh + 4, chapterMetaList.length || startCh));
 
-      const targetChapters = allChapters
-        .filter((c) => (c.chapterNumber || 0) >= startCh && (c.chapterNumber || 0) <= endCh)
-        .slice(0, 8);
+      const targetChapters = await fetchRangeChapters(startCh, endCh, 8);
 
       if (targetChapters.length === 0) {
         return NextResponse.json({ success: false, message: "所选区间没有可审查的章节正文" }, { status: 400 });
@@ -452,7 +458,7 @@ ${chaptersText}
 
       let loreText = "";
       if (rulesList.length > 0) {
-        loreText += "【世界观法则与禁忌】：\n" + rulesList.map((r) => `- ${r.name}: 机制[${r.mechanisms || "无"}] 禁忌[${r.taboos || "无"}]`).join("\n") + "\n\n";
+        loreText += "【世界观法则与禁忌】：\n" + rulesList.map((r) => `- ${r.name}: 机制[${stripHtml(r.mechanisms).slice(0, 200) || "无"}] 禁忌[${r.taboos || "无"}]`).join("\n") + "\n\n";
       }
       if (itemsList.length > 0) {
         loreText += "【道具法宝限制】：\n" + itemsList.map((i) => `- ${i.name}: 效果[${i.effects || "无"}] 代价[${i.drawbacks || "无"}]`).join("\n") + "\n\n";
@@ -516,7 +522,7 @@ ${chaptersText}
         ? body.characterIds.map(Number).filter((n: number) => !isNaN(n) && n > 0).slice(0, 3)
         : [];
       const startCh = Math.max(1, Number(body.startChapter) || 1);
-      const endCh = Math.max(startCh, Number(body.endChapter) || Math.min(startCh + 9, allChapters.length || startCh));
+      const endCh = Math.max(startCh, Number(body.endChapter) || Math.min(startCh + 9, chapterMetaList.length || startCh));
 
       const targetChars =
         charIds.length > 0
@@ -527,9 +533,7 @@ ${chaptersText}
         return NextResponse.json({ success: false, message: "请先在「世界/知识库 - 角色」中建立角色档案" }, { status: 400 });
       }
 
-      const targetChapters = allChapters
-        .filter((c) => (c.chapterNumber || 0) >= startCh && (c.chapterNumber || 0) <= endCh)
-        .slice(0, 12);
+      const targetChapters = await fetchRangeChapters(startCh, endCh, 12);
 
       if (targetChapters.length === 0) {
         return NextResponse.json({ success: false, message: "所选区间没有可分析的章节正文" }, { status: 400 });
@@ -621,7 +625,7 @@ ${excerptBlocks || "（上述角色在所选章节正文中几乎未出现）"}
     });
 
     let parsed = parseStructuredJson<any>(rawAi, null);
-    if (!parsed || typeof parsed !== "object") {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       try {
         const retryRaw = await callCloudflareAi(env.AI, messages, {
           taskType: "fast",
@@ -632,11 +636,12 @@ ${excerptBlocks || "（上述角色在所选章节正文中几乎未出现）"}
       } catch {}
     }
 
-    if (!parsed || typeof parsed !== "object") {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return NextResponse.json({ success: false, message: "AI 分析结果解析失败，请重试" }, { status: 500 });
     }
 
-    const overallScore = Math.max(0, Math.min(100, Number(parsed.overallScore) || 0));
+    const rawScoreMatch = String(parsed.overallScore ?? "").match(/\d+/);
+    const overallScore = Math.max(0, Math.min(100, rawScoreMatch ? Number(rawScoreMatch[0]) : 0));
     const now = Date.now();
 
     const insertRes: any = await env.DB.prepare(
@@ -671,7 +676,6 @@ ${excerptBlocks || "（上述角色在所选章节正文中几乎未出现）"}
 export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    await ensureAnalysisTable(env.DB);
 
     const { searchParams } = new URL(req.url);
     let id = Number(searchParams.get("id"));

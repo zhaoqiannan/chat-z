@@ -2,27 +2,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, outlines, chapters, characters, worldRules, characterRelations, memoryFragments } from "@/db";
+import { getDb, works, outlines, chapters, characters, worldRules, characterRelations, memoryFragments, materials } from "@/db";
 import { eq, and, lt, desc } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
+import { stripHtml, countWords } from "@/utils/text";
 
 const MIN_TARGET_WORDS = 3000;
-
-async function ensureSnapshotTable(envDb: any) {
-  await envDb
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS master_node_deduction_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        work_id INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        master_node_id TEXT NOT NULL,
-        snapshot_json TEXT NOT NULL,
-        updated_at INTEGER NOT NULL,
-        UNIQUE(work_id, master_node_id)
-      )`
-    )
-    .run();
-}
 
 function findMasterNode(node: any, targetId: string): any | null {
   if (!node || typeof node !== "object") return null;
@@ -36,10 +21,6 @@ function findMasterNode(node: any, targetId: string): any | null {
   return null;
 }
 
-function countChineseWords(text: string): number {
-  return (text || "").replace(/\s+/g, "").length;
-}
-
 function buildProseExcerpt(raw?: string | null, headLen = 1400, tailLen = 1400): string {
   const clean = (raw || "").trim();
   if (!clean) return "";
@@ -51,7 +32,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureSnapshotTable(env.DB);
 
     const body = await req.json();
     const workId = Number(body.workId);
@@ -92,6 +72,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       fragmentList,
       masterRow,
       existingSnapRow,
+      materialList,
     ] = await Promise.all([
       db
         .select()
@@ -169,6 +150,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .bind(workId, user.userId, nodeId)
         .first()
         .catch(() => null),
+      db
+        .select({ title: materials.title, aiSummary: materials.aiSummary, extractedLore: materials.extractedLore, content: materials.content })
+        .from(materials)
+        .where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1)))
+        .limit(5)
+        .all(),
     ]);
 
     // 提前解析快照，以便在上一章尚未落库章节表时，自动降级衔接快照中刚生成的第 N-1 章正文
@@ -242,7 +229,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           currentExistingOutline ? `已有章节大纲：${currentExistingOutline}` : "",
           !currentExistingOutline && currentExistingSummary ? `已有章节摘要：${currentExistingSummary}` : "",
           currentExistingContent
-            ? `已有正文内容（当前约 ${currentChapterRow?.wordCount || countChineseWords(currentExistingContent)} 字）：\n${buildProseExcerpt(currentExistingContent, 1400, 1400)}`
+            ? `已有正文内容（当前约 ${currentChapterRow?.wordCount || countWords(currentExistingContent)} 字）：\n${buildProseExcerpt(currentExistingContent, 1400, 1400)}`
             : "",
         ]
           .filter(Boolean)
@@ -258,10 +245,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .map((r) => `- ${r.sourceCharName} ➔ ${r.targetCharName}：${r.relationType}${r.description ? `（${r.description.slice(0, 50)}）` : ""}`)
       .join("\n");
     const ruleText = ruleList
-      .map((r) => `- ${r.name}：${(r.mechanisms || "").slice(0, 80)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 40)}）` : ""}`)
+      .map((r) => `- ${r.name}：${stripHtml(r.mechanisms).slice(0, 120)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 60)}）` : ""}`)
       .join("\n");
     const fragmentText = fragmentList
       .map((f) => `- ${f.title}：${(f.content || "").slice(0, 100)}`)
+      .join("\n");
+    const materialText = materialList
+      .map((m) => `- 《${m.title}》：${(m.extractedLore || m.aiSummary || stripHtml(m.content)).slice(0, 160)}`)
       .join("\n");
 
     const systemPrompt = `你是一位功底深厚的长篇小说执笔作家。请严格依据作者选定的【本章剧情走向蓝本】，撰写一章完整、沉浸、连贯且有文学质感的小说正文。
@@ -293,7 +283,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const userPrompt = `【作品】：《${work.title}》（题材：${work.tag || "小说"}）
 ${masterGoalText ? `【所属总纲阶段目标】：${masterGoalText}\n` : ""}
-${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${relationText ? `【角色关系网】：\n${relationText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}${fragmentText ? `【近期伏笔与记忆碎片（自然契合时可呼应，切勿生硬强塞）】：\n${fragmentText}\n\n` : ""}${prevOutlineText ? `【前序章节大纲（前情脉络）】：\n${prevOutlineText}\n\n` : ""}${prevChapterBlock ? `${prevChapterBlock}\n\n` : ""}${currentExistingContextBlock ? `${currentExistingContextBlock}\n\n` : ""}${nextBoundaryText ? `【下一章边界参考（仅作防剧透边界，严禁越界提前写出）】：\n${nextBoundaryText}\n\n` : ""}【当前执笔章节】：第 ${chapterNumber} 章《${chapterTitle}》
+${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${relationText ? `【角色关系网】：\n${relationText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}${materialText ? `【作者设定素材库】：\n${materialText}\n\n` : ""}${fragmentText ? `【近期伏笔与记忆碎片（自然契合时可呼应，切勿生硬强塞）】：\n${fragmentText}\n\n` : ""}${prevOutlineText ? `【前序章节大纲（前情脉络）】：\n${prevOutlineText}\n\n` : ""}${prevChapterBlock ? `${prevChapterBlock}\n\n` : ""}${currentExistingContextBlock ? `${currentExistingContextBlock}\n\n` : ""}${nextBoundaryText ? `【下一章边界参考（仅作防剧透边界，严禁越界提前写出）】：\n${nextBoundaryText}\n\n` : ""}【当前执笔章节】：第 ${chapterNumber} 章《${chapterTitle}》
 【本章剧情走向蓝本（请拆成 3~4 个饱满场景逐一写透）】：
 ${plotText}
 
@@ -314,7 +304,7 @@ ${plotText}
     });
 
     let prose = cleanNovelStoryText(firstRaw);
-    let wordCount = countChineseWords(prose);
+    let wordCount = countWords(prose);
 
     // 若首次生成不足 3000 字，最多进行 2 轮精准补足（携带精简人设与法则防 OOC，严禁越界到下一章）
     for (let attempt = 0; attempt < 2 && prose && wordCount < MIN_TARGET_WORDS; attempt++) {
@@ -343,7 +333,7 @@ ${plotText}
         const contClean = cleanNovelStoryText(contRaw);
         if (contClean && contClean.length > 100) {
           prose = `${prose.trim()}\n\n${contClean.trim()}`;
-          wordCount = countChineseWords(prose);
+          wordCount = countWords(prose);
         } else {
           break;
         }

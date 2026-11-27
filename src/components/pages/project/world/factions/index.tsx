@@ -109,12 +109,16 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
   const handleOpenEdit = (item: FactionItem) => {
     setEditingItem(item);
     setName(item.name || "");
-    const foundChar = characters.find((c) => c.name === item.leader);
+    const foundChar = (item as any).leaderId
+      ? characters.find((c) => Number(c.id) === Number((item as any).leaderId))
+      : characters.find((c) => c.name === item.leader);
     setLeaderId(foundChar ? String(foundChar.id) : null);
     setLeaderName(item.leader || "");
     setScale(item.scale || "p3");
     setAlignment(item.alignment || "neutral");
-    const foundLoc = locations.find((l) => l.name === item.controlledLocations);
+    const foundLoc = (item as any).locationId
+      ? locations.find((l) => Number(l.id) === Number((item as any).locationId))
+      : locations.find((l) => l.name === item.controlledLocations);
     setLocationId(foundLoc ? String(foundLoc.id) : null);
     setControlledLocations(item.controlledLocations || "");
     setTrend(item.trend || "蒸蒸日上");
@@ -131,21 +135,23 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
 
     try {
       setFormLoading(true);
-      const selChar = characters.find((c) => String(c.id) === leaderId);
-      const finalLeader = selChar ? selChar.name : leaderName.trim();
+      const selChar = leaderId ? characters.find((c) => String(c.id) === leaderId) : null;
+      const finalLeader = selChar ? selChar.name : "";
 
-      const selLoc = locations.find((l) => String(l.id) === locationId);
-      const finalLoc = selLoc ? selLoc.name : controlledLocations.trim();
+      const selLoc = locationId ? locations.find((l) => String(l.id) === locationId) : null;
+      const finalLoc = selLoc ? selLoc.name : "";
 
-      const payload = {
+      const payload: any = {
         name: name.trim(),
-        leader: finalLeader || undefined,
-        scale: scale || undefined,
-        alignment: alignment || undefined,
-        controlledLocations: finalLoc || undefined,
-        trend: trend || undefined,
-        doctrine: doctrine.trim() || undefined,
-        description: description.trim() || undefined,
+        leaderId: selChar ? Number(selChar.id) : null,
+        leader: finalLeader || null,
+        scale: scale || "p3",
+        alignment: alignment || "neutral",
+        locationId: selLoc ? Number(selLoc.id) : null,
+        controlledLocations: finalLoc || null,
+        trend: trend || null,
+        doctrine: doctrine.trim() || null,
+        description: description.trim() || null,
       };
 
       if (editingItem) {

@@ -866,6 +866,51 @@ export const uploadedFiles = sqliteTable('uploaded_files', {
 export type UploadedFile = typeof uploadedFiles.$inferSelect;
 export type NewUploadedFile = typeof uploadedFiles.$inferInsert;
 
+// ============================================================================
+// 20. 项目总纲树表 (work_master_outlines)
+// ============================================================================
+export const workMasterOutlines = sqliteTable('work_master_outlines', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull().unique(),
+  userId: text('user_id').notNull(),
+  treeJson: text('tree_json').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type WorkMasterOutline = typeof workMasterOutlines.$inferSelect;
+export type NewWorkMasterOutline = typeof workMasterOutlines.$inferInsert;
+
+// ============================================================================
+// 21. 总纲节点推演快照表 (master_node_deduction_snapshots)
+// ============================================================================
+export const masterNodeDeductionSnapshots = sqliteTable('master_node_deduction_snapshots', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull(),
+  userId: text('user_id').notNull(),
+  masterNodeId: text('master_node_id').notNull(),
+  snapshotJson: text('snapshot_json').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export type MasterNodeDeductionSnapshotRow = typeof masterNodeDeductionSnapshots.$inferSelect;
+
+// ============================================================================
+// 22. AI 深度分析报告表 (ai_analysis_reports)
+// ============================================================================
+export const aiAnalysisReports = sqliteTable('ai_analysis_reports', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  workId: integer('work_id').notNull(),
+  userId: text('user_id').notNull(),
+  analysisType: text('analysis_type').notNull(),
+  scopeLabel: text('scope_label').notNull(),
+  scopeParamsJson: text('scope_params_json'),
+  overallScore: integer('overall_score').default(0),
+  reportJson: text('report_json').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+export type AiAnalysisReportRow = typeof aiAnalysisReports.$inferSelect;
+
 
 
 

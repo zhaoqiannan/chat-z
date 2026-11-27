@@ -32,6 +32,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
   const [name, setName] = useState("");
   const [characterName, setCharacterName] = useState("");
   const [factionName, setFactionName] = useState("");
+  const [taboos, setTaboos] = useState("");
   const [descriptionHtml, setDescriptionHtml] = useState("");
 
   const fetchData = async () => {
@@ -69,6 +70,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
     setName("");
     setCharacterName("");
     setFactionName("");
+    setTaboos("");
     setDescriptionHtml("");
     setModalOpened(true);
   };
@@ -80,6 +82,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
     const facVal = item.factions || (item.extra?.factions as string) || "";
     setCharacterName(charVal);
     setFactionName(facVal);
+    setTaboos((item as any).taboos || "");
     const content = item.description || item.mechanisms || "";
     setDescriptionHtml(content);
     setModalOpened(true);
@@ -130,10 +133,11 @@ export default function RulesTab({ workId }: RulesTabProps) {
 
     try {
       setFormLoading(true);
-      const payload = {
+      const payload: any = {
         name: name.trim(),
-        characters: characterName.trim() || undefined,
-        factions: factionName.trim() || undefined,
+        characters: characterName.trim() || "",
+        factions: factionName.trim() || "",
+        taboos: taboos.trim() || null,
         description: descriptionHtml || undefined,
         mechanisms: descriptionHtml || undefined,
       };
@@ -311,6 +315,13 @@ export default function RulesTab({ workId }: RulesTabProps) {
         {/* 内容区：展开时撑开卡片高度，渲染公共富文本回显 */}
         <Collapse expanded={isExpanded}>
           <Divider my="sm" color="#f1f5f9" />
+          {(item as any).taboos && (
+            <Paper p="xs" mb="sm" radius="sm" bg="#fef2f2" bd="1px solid #fecaca">
+              <Text fz={12} c="#b91c1c" fw={600}>
+                ⚠️ 法则禁忌 / 违背代价：{(item as any).taboos}
+              </Text>
+            </Paper>
+          )}
           <RichTextViewer content={content} emptyText="暂无详细规则内容" />
         </Collapse>
       </Paper>
@@ -434,6 +445,14 @@ export default function RulesTab({ workId }: RulesTabProps) {
               searchable
             />
           </SimpleGrid>
+
+          <TextInput
+            label="法则禁忌 / 不可逾越红线 (选填，将重点注入 AI 逻辑校验与写作约束)"
+            placeholder="例如：凡人不可直视神名、跨阶施法必遭反噬、城内禁绝私斗..."
+            size="xs"
+            value={taboos}
+            onChange={(e) => setTaboos(e.target.value)}
+          />
 
           {/* 公共富文本编辑器 */}
           <Box>

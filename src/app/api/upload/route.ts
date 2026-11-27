@@ -34,6 +34,30 @@ function getSafeMimeType(fileName: string): string | null {
   return ALLOWED_EXT_MIME[ext] || null;
 }
 
+function matchesBinaryMagicBytes(mimeType: string, bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  if (mimeType === "image/png") {
+    return bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  }
+  if (mimeType === "image/jpeg") {
+    return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  }
+  if (mimeType === "image/gif") {
+    return bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38;
+  }
+  if (mimeType === "image/webp") {
+    return (
+      bytes.length >= 12 &&
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+    );
+  }
+  if (mimeType === "application/pdf") {
+    return bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46;
+  }
+  return true;
+}
+
 /**
  * POST: 文件/图片持久化上传（严格白名单防同源 XSS + D1 尺寸安全校验）
  */
@@ -67,6 +91,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       }
 
       const buffer = await file.arrayBuffer();
+      const uint8 = new Uint8Array(buffer);
+      if (!matchesBinaryMagicBytes(safeMimeType, uint8)) {
+        return NextResponse.json(
+          { success: false, message: "文件内容与扩展名不匹配，请上传有效文件" },
+          { status: 400 }
+        );
+      }
       const base64 = Buffer.from(buffer).toString("base64");
       const sizeStr = `${(file.size / 1024).toFixed(1)} KB`;
 

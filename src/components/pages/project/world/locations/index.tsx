@@ -153,9 +153,11 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
       hasMoved: false,
     };
 
+    const dragRect = mapRef.current?.getBoundingClientRect() || null;
+    let rafId: number | null = null;
+
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      if (!mapRef.current || !dragInfoRef.current) return;
-      const rect = mapRef.current.getBoundingClientRect();
+      if (!dragRect || !dragInfoRef.current) return;
 
       const deltaX = moveEvent.clientX - dragInfoRef.current.startX;
       const deltaY = moveEvent.clientY - dragInfoRef.current.startY;
@@ -164,26 +166,33 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
         dragInfoRef.current.hasMoved = true;
       }
 
-      const deltaPercentX = (deltaX / (rect.width * zoom)) * 100;
-      const deltaPercentY = (deltaY / (rect.height * zoom)) * 100;
+      const deltaPercentX = (deltaX / (dragRect.width * zoom)) * 100;
+      const deltaPercentY = (deltaY / (dragRect.height * zoom)) * 100;
 
-      let newX = Math.round(dragInfoRef.current.initialPosX + deltaPercentX);
-      let newY = Math.round(dragInfoRef.current.initialPosY + deltaPercentY);
-
-      newX = Math.max(3, Math.min(97, newX));
-      newY = Math.max(4, Math.min(96, newY));
+      const newX = Math.max(3, Math.min(97, Math.round(dragInfoRef.current.initialPosX + deltaPercentX)));
+      const newY = Math.max(4, Math.min(96, Math.round(dragInfoRef.current.initialPosY + deltaPercentY)));
 
       dragInfoRef.current.currentPosX = newX;
       dragInfoRef.current.currentPosY = newY;
 
-      setList((prev) =>
-        prev.map((item) => (item.id === loc.id ? { ...item, posX: newX, posY: newY } : item))
-      );
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const info = dragInfoRef.current;
+        if (!info) return;
+        setList((prev) =>
+          prev.map((item) => (item.id === loc.id ? { ...item, posX: info.currentPosX, posY: info.currentPosY } : item))
+        );
+      });
     };
 
     const handleMouseUp = async () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
 
       const info = dragInfoRef.current;
       setDraggingId(null);
@@ -301,10 +310,12 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
     list.filter((l) => l.parentId).map((l) => Number(l.parentId))
   );
 
+  const locationByIdMap = new Map(list.map((l) => [l.id, l]));
+
   const activeRelationIds = new Set<number>();
   if (hoveredId) {
     activeRelationIds.add(hoveredId);
-    const targetLoc = list.find((l) => l.id === hoveredId);
+    const targetLoc = locationByIdMap.get(hoveredId);
     if (targetLoc && targetLoc.parentId) {
       activeRelationIds.add(Number(targetLoc.parentId));
     }
@@ -498,7 +509,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
                     {filteredList.map((loc) => {
                       if (!loc.parentId) return null;
-                      const parentLoc = list.find((p) => p.id === loc.parentId);
+                      const parentLoc = locationByIdMap.get(loc.parentId);
                       if (!parentLoc) return null;
 
                       const isHighlighted =

@@ -5,6 +5,7 @@ import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, chapters, outlines, characters, worldRules } from "@/db";
 import { eq, and, asc } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
+import { stripHtml } from "@/utils/text";
 
 function normalizeTreeNode(node: any, pathId: string): any {
   const childrenRaw = Array.isArray(node?.children) ? node.children : [];
@@ -71,7 +72,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       context += `\n【主要角色】：${charList.map((c) => `${c.name}(${c.identity || ""}/${c.personality || ""})`).join("；")}\n`;
     }
     if (ruleList.length > 0) {
-      context += `\n【世界规则】：${ruleList.map((r) => `${r.name}(${(r.mechanisms || "").slice(0, 60)})`).join("；")}\n`;
+      context += `\n【世界规则】：${ruleList.map((r) => `${r.name}(${stripHtml(r.mechanisms).slice(0, 80)})`).join("；")}\n`;
     }
     if (normalChapters.length > 0) {
       const chText = normalChapters

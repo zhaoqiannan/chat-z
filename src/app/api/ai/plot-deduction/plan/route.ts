@@ -2,42 +2,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, outlines, chapters, characters, worldRules } from "@/db";
+import { getDb, works, outlines, chapters, characters, worldRules, materials } from "@/db";
 import { eq, and, asc, desc, gte, lte } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
-
-async function ensureSnapshotTable(envDb: any) {
-  await envDb
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS master_node_deduction_snapshots (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        work_id INTEGER NOT NULL,
-        user_id TEXT NOT NULL,
-        master_node_id TEXT NOT NULL,
-        snapshot_json TEXT NOT NULL,
-        updated_at INTEGER NOT NULL,
-        UNIQUE(work_id, master_node_id)
-      )`
-    )
-    .run();
-}
+import { stripHtml, parseChapterRange } from "@/utils/text";
 
 function buildContentExcerpt(raw?: string | null, headLen = 450, tailLen = 550): string {
   const clean = (raw || "").trim();
   if (!clean) return "";
   if (clean.length <= headLen + tailLen + 60) return clean;
   return `${clean.slice(0, headLen)}\n……（中段略）……\n${clean.slice(-tailLen)}`;
-}
-
-function parseChapterRange(raw?: string | null): { start: number; end: number } | null {
-  if (!raw || !String(raw).trim()) return null;
-  const nums = String(raw).match(/\d+/g);
-  if (!nums || nums.length === 0) return null;
-  const first = Number(nums[0]);
-  const second = nums.length > 1 ? Number(nums[1]) : first;
-  if (isNaN(first) || first <= 0) return null;
-  const end = isNaN(second) || second < first ? first : second;
-  return { start: first, end };
 }
 
 function findMasterNode(node: any, targetId: string): any | null {
@@ -108,7 +82,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureSnapshotTable(env.DB);
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
@@ -339,7 +312,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const db = getDb(env.DB);
-    await ensureSnapshotTable(env.DB);
 
     const body = await req.json();
     const workId = Number(body.workId);
@@ -362,7 +334,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, inRangeChapterContentRows, charList, ruleList, existingSnapRow] = await Promise.all([
+    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, inRangeChapterContentRows, charList, ruleList, existingSnapRow, materialList] = await Promise.all([
       env.DB.prepare("SELECT tree_json FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1")
         .bind(workId, user.userId)
         .first()
@@ -431,6 +403,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .bind(workId, user.userId, nodeId)
         .first()
         .catch(() => null),
+      db
+        .select({ title: materials.title, aiSummary: materials.aiSummary, extractedLore: materials.extractedLore, content: materials.content })
+        .from(materials)
+        .where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1)))
+        .limit(5)
+        .all(),
     ]);
 
     let parsedMasterTree: any = null;
@@ -528,7 +506,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .map((c) => `- ${c.name}（${c.identity || "角色"}）：性格[${c.personality || "未填"}] 能力[${c.abilities || "无"}]`)
       .join("\n");
     const ruleText = ruleList
-      .map((r) => `- ${r.name}：${(r.mechanisms || "").slice(0, 70)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 40)}）` : ""}`)
+      .map((r) => `- ${r.name}：${stripHtml(r.mechanisms).slice(0, 100)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 50)}）` : ""}`)
+      .join("\n");
+    const materialText = materialList
+      .map((m) => `- 《${m.title}》：${(m.extractedLore || m.aiSummary || stripHtml(m.content)).slice(0, 140)}`)
       .join("\n");
 
     const planCountTarget = chapterNumbersToPlan.length <= 2 ? "2~3 套" : "2 套";
@@ -570,7 +551,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 ${subtreeText}${nextAnchorText ? `【下一阶段总纲出口锚点（供最后一章收尾衔接，切勿提前写爆）】：\n${nextAnchorText}\n\n` : ""}【前序已有章节大纲与当前进度】：
 ${recentProgressText || "（前序暂无已提取章节大纲，请优先依据下方上一章正文与总纲展开）"}
 ${prevChapterExcerpt ? `\n【上一章（第${chapterStart - 1}章《${prevChapterContentRow?.title || ""}》）正文与完整结尾（第 ${chapterStart} 章必须紧贴此处结尾场景/时间/人物状态无缝承接）】：\n${prevChapterExcerpt}\n` : ""}${inRangeExistingText ? `\n【本次规划区间内当前章节已有剧情与正文（必须尊重并融合既有剧情脉络，切勿无视已写内容推翻重来）】：\n${inRangeExistingText}\n` : ""}
-${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
+${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}${materialText ? `【作者设定素材库】：\n${materialText}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
 ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
 请直接输出包含 ${planCountTarget} 完整纯文本走向方案的合法 JSON：`;
 

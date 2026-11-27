@@ -82,11 +82,9 @@ export default function ProjectSettingsPage() {
     if (!workId) return;
     try {
       setExportingAction(action);
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") || "" : "";
       const res = await fetch(`/api/project/settings/?workId=${encodeURIComponent(workId)}&action=${action}`, {
         method: "GET",
         credentials: "include",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
       if (!res.ok) {
@@ -242,7 +240,8 @@ export default function ProjectSettingsPage() {
               value={status}
               onChange={(v) => setStatus(v || "draft")}
               data={[
-                { value: "draft", label: "🔥 正在连载构思中" },
+                { value: "ongoing", label: "🔥 连载创作中" },
+                { value: "draft", label: "📝 构思草稿中" },
                 { value: "revising", label: "✍️ 精修打磨中" },
                 { value: "completed", label: "🎉 全本已完结" },
               ]}

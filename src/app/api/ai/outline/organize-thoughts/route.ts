@@ -5,6 +5,7 @@ import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, characters, notes, worldRules } from "@/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
+import { stripHtml } from "@/utils/text";
 
 export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -69,7 +70,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     // 关联基础世界规则
     const rulesList = await db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(4).all();
     const ruleContext = rulesList.length > 0
-      ? rulesList.map((r) => `【${r.name}】: ${(r.mechanisms || r.description || "").slice(0, 100)}`).join("\n")
+      ? rulesList.map((r) => `【${r.name}】: ${stripHtml(r.mechanisms || r.description).slice(0, 120)}`).join("\n")
       : "";
 
     const thoughtListStr = validThoughts

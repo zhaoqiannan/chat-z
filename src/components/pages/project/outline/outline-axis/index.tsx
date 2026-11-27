@@ -50,9 +50,9 @@ export default function OutlineAxis({
 
   const handleJumpToChapter = (chapterId?: number | null) => {
     if (chapterId) {
-      router.push(`/project/${workId}/chapters?chapterId=${chapterId}`);
+      router.push(`/project/${workId}?tab=chapters&chapterId=${chapterId}`);
     } else {
-      router.push(`/project/${workId}/chapters`);
+      router.push(`/project/${workId}?tab=chapters`);
     }
   };
 

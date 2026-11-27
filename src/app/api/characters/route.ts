@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, characters, works } from "@/db";
 import { eq, and, desc } from "drizzle-orm";
-import { assertWorkOwnership } from "@/utils/ownership";
+import { assertWorkOwnership, isSafeUrl } from "@/utils/ownership";
 
 export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
   try {
@@ -80,6 +80,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     if (!name || !name.trim()) {
       return NextResponse.json({ success: false, message: "角色姓名不能为空" }, { status: 400 });
+    }
+    if (avatarUrl && !isSafeUrl(avatarUrl)) {
+      return NextResponse.json({ success: false, message: "非法的头像链接协议" }, { status: 400 });
     }
 
     const finalIntro = personalIntro !== undefined ? personalIntro : (description || null);
@@ -186,6 +189,9 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (faction !== undefined) updateData.faction = faction?.trim() || null;
     if (roleType !== undefined) updateData.roleType = roleType;
     if (appearance !== undefined) updateData.appearance = appearance;
+    if (avatarUrl && !isSafeUrl(avatarUrl)) {
+      return NextResponse.json({ success: false, message: "非法的头像链接协议" }, { status: 400 });
+    }
     if (avatarUrl !== undefined) updateData.avatarUrl = avatarUrl || null;
     if (personality !== undefined) updateData.personality = personality;
     if (personalIntro !== undefined) {
@@ -218,6 +224,17 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (extra !== undefined) updateData.extra = extra;
 
     const updated = await db.update(characters).set(updateData).where(eq(characters.id, id)).returning().get();
+
+    // 角色改名时级联同步关系网、势力领袖与道具持有者，避免名称断链
+    const nextName = updated?.name;
+    if (nextName && existingChar.name && nextName !== existingChar.name) {
+      await env.DB.batch([
+        env.DB.prepare("UPDATE character_relations SET source_char_name = ? WHERE work_id = ? AND source_char_id = ?").bind(nextName, existingChar.workId, id),
+        env.DB.prepare("UPDATE character_relations SET target_char_name = ? WHERE work_id = ? AND target_char_id = ?").bind(nextName, existingChar.workId, id),
+        env.DB.prepare("UPDATE factions SET leader = ? WHERE work_id = ? AND leader_id = ?").bind(nextName, existingChar.workId, id),
+        env.DB.prepare("UPDATE items SET owner_name = ?, current_holder = ? WHERE work_id = ? AND owner_id = ?").bind(nextName, nextName, existingChar.workId, id),
+      ]);
+    }
 
     return NextResponse.json({
       success: true,
@@ -291,7 +308,13 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无权操作该角色" }, { status: 403 });
     }
 
-    await db.delete(characters).where(eq(characters.id, id)).run();
+    // 原子级联清理关联关系边，并置空势力领袖与物品持有者引用
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM character_relations WHERE work_id = ? AND (source_char_id = ? OR target_char_id = ?)").bind(existingChar.workId, id, id),
+      env.DB.prepare("UPDATE factions SET leader_id = NULL WHERE work_id = ? AND leader_id = ?").bind(existingChar.workId, id),
+      env.DB.prepare("UPDATE items SET owner_id = NULL WHERE work_id = ? AND owner_id = ?").bind(existingChar.workId, id),
+      env.DB.prepare("DELETE FROM characters WHERE id = ?").bind(id),
+    ]);
 
     return NextResponse.json({ success: true, message: "角色删除成功" });
   } catch (error: any) {

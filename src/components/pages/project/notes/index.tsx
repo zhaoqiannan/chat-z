@@ -9,7 +9,7 @@ import { NoteData, NoteListResult, getNoteList, createNote, updateNote, deleteNo
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import NoteTreeMenu from "./note-tree-menu";
-import NoteSplitter from "./splitter";
+import PanelSplitter from "@/components/common/splitter";
 import NoteEditor from "./note-editor";
 
 export default function NotesPage() {
@@ -186,7 +186,8 @@ export default function NotesPage() {
       )}
 
       {/* 2. Splitter 拖拽调节器 */}
-      <NoteSplitter
+      <PanelSplitter
+        side="left"
         width={sidebarWidth}
         onResize={setSidebarWidth}
         minWidth={220}
@@ -194,6 +195,8 @@ export default function NotesPage() {
         defaultWidth={280}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        expandTooltip="展开笔记树状菜单"
+        collapseTooltip="收起笔记菜单 (双击恢复默认宽度)"
       />
 
       {/* 3. 右侧沉浸式编辑与多维实体转换区 */}
