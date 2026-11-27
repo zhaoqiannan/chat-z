@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, chapters, characters, locations, factions, items, outlines, notes, materials, timelines, worldRules, characterRelations, chapterVersions, chapterAiChats, memoryFragments, plotDeductions } from "@/db";
+import { getDb, works } from "@/db";
 import { desc, eq, and } from "drizzle-orm";
 import { logUserActivity } from "@/utils/activityLogger";
 import { isSafeUrl } from "@/utils/ownership";
@@ -309,14 +309,13 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
       );
     }
 
-    // 原子级联清理该作品下的全部 21 张子表数据，彻底杜绝孤儿记录
+    // 原子级联清理该作品下的全部 20 张子表数据，彻底杜绝孤儿记录
     const cascadeTables = [
       "chapters", "characters", "locations", "factions", "items", "outlines",
       "notes", "materials", "timelines", "timeline_events", "world_rules",
       "character_relations", "chapter_versions", "chapter_ai_chats",
       "chapter_ai_history", "outline_ai_history", "memory_fragments",
-      "plot_deductions", "work_master_outlines",
-      "master_node_deduction_snapshots", "ai_analysis_reports",
+      "work_master_outlines", "master_node_deduction_snapshots", "ai_analysis_reports",
     ];
     await env.DB.batch([
       ...cascadeTables.map((tbl) => env.DB.prepare(`DELETE FROM ${tbl} WHERE work_id = ?`).bind(workId)),

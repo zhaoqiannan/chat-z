@@ -2,10 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, characters, worldRules } from "@/db";
+import { getDb, works } from "@/db";
 import { eq, and } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
-import { stripHtml } from "@/utils/text";
+import { buildWorldLoreContext } from "@/utils/worldContext";
 
 function serializeSubtree(node: any, depth = 0, indexLabel = ""): string {
   if (!node || typeof node !== "object") return "";
@@ -55,33 +55,21 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    const [charList, ruleList] = await Promise.all([
-      db
-        .select({ name: characters.name, identity: characters.identity, personality: characters.personality })
-        .from(characters)
-        .where(eq(characters.workId, workId))
-        .limit(8)
-        .all(),
-      db
-        .select({ name: worldRules.name, mechanisms: worldRules.mechanisms, taboos: worldRules.taboos })
-        .from(worldRules)
-        .where(eq(worldRules.workId, workId))
-        .limit(5)
-        .all(),
-    ]);
+    const subtreeText = serializeSubtree(targetNode);
+    const worldLore = await buildWorldLoreContext(
+      db,
+      workId,
+      `${subtreeText}\n${rootSummary}`,
+      { includeTimeline: true, includeMaterials: true, maxChars: 2400 }
+    );
 
     let context = `作品：《${work.title}》（题材：${work.tag || "小说"}，全书预计 ${work.expectedWords || 500000} 字 / ${work.expectedChapters || 100} 章）\n简介：${work.description || "暂无简介"}\n`;
     if (rootSummary) {
       context += `项目总纲概览：${rootSummary}\n`;
     }
-    if (charList.length > 0) {
-      context += `【核心角色参考】：${charList.map((c) => `${c.name}(${c.identity || ""}${c.personality ? `/${c.personality}` : ""})`).join("；")}\n`;
+    if (worldLore.text) {
+      context += `\n${worldLore.text}\n`;
     }
-    if (ruleList.length > 0) {
-      context += `【核心世界规则参考】：${ruleList.map((r) => `${r.name}(机制:${stripHtml(r.mechanisms).slice(0, 80)}${r.taboos ? ` 禁忌:${r.taboos.slice(0, 50)}` : ""})`).join("；")}\n`;
-    }
-
-    const subtreeText = serializeSubtree(targetNode);
 
     const systemPrompt = `你是一位极具洞察力的小说总编剧与剧情架构师。请针对作者选定的【项目总纲节点及其下属子节点】，进行深度的大纲剧情发展推演与逻辑梳理，帮助作者理清剧情因果、排查漏洞、规划篇幅节奏，并给出可直接采纳同步到卡片的最终优化逻辑线。
 

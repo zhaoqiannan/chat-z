@@ -28,6 +28,7 @@ export interface ChapterItem {
   status: ChapterStatus;
   summary: string;
   outlineExtracted?: number;
+  worldExtracted?: number;
   createdAt?: string;
   updatedAt?: string;
 }

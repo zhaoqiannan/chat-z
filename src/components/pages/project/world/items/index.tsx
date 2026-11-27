@@ -4,11 +4,12 @@
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Paper, Group, Table } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield, FiPackage } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiBox, FiSearch, FiUser, FiShield, FiPackage, FiCpu } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import { ItemData, getItemList, createItem, updateItem, deleteItem, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 
 interface ItemsTabProps {
   workId: string;
@@ -25,6 +26,7 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
   const [editingItem, setEditingItem] = useState<ItemData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [nameGenOpened, setNameGenOpened] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
@@ -186,9 +188,14 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
           style={{ width: 320 }}
         />
 
-        <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
-          新增物品道具
-        </Button>
+        <Group gap="xs">
+          <Button size="xs" variant="light" color="cyan" leftSection={<FiCpu size={13} />} onClick={() => setWorldSyncOpened(true)}>
+            AI 扫描全文同步
+          </Button>
+          <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
+            新增物品道具
+          </Button>
+        </Group>
       </Flex>
 
       {filteredList.length === 0 && !loading ? (
@@ -398,6 +405,14 @@ export default function ItemsTab({ workId }: ItemsTabProps) {
         onClose={() => setNameGenOpened(false)}
         type="item"
         onSelectName={(genName) => setName(genName)}
+      />
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="items"
+        onApplied={fetchData}
       />
     </Box>
   );

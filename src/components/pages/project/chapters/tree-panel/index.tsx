@@ -2,8 +2,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Box, Flex, Text, ActionIcon, Tooltip, Badge, ScrollArea, Group, Stack, Collapse, UnstyledButton, Progress } from "@mantine/core";
-import { FiFolderPlus, FiFilePlus, FiChevronDown, FiChevronRight, FiTrash2, FiEdit2, FiSidebar, FiChevronLeft, FiArrowLeft, FiArrowRight, FiZap } from "react-icons/fi";
+import { Box, Flex, Text, ActionIcon, Tooltip, Badge, ScrollArea, Group, Stack, Collapse, UnstyledButton, Progress, Menu } from "@mantine/core";
+import { FiFolderPlus, FiFilePlus, FiChevronDown, FiChevronRight, FiTrash2, FiEdit2, FiSidebar, FiArrowLeft, FiArrowRight, FiZap, FiGitBranch } from "react-icons/fi";
 import { ChapterItem } from "@/rest/chapter";
 
 interface TreePanelProps {
@@ -22,6 +22,9 @@ interface TreePanelProps {
   batchExtracting?: boolean;
   batchExtractProgress?: { current: number; total: number; title: string } | null;
   onBatchExtractOutlines?: () => void;
+  onOpenReverseMasterTree?: () => void;
+  reversingChapterId?: number | string | null;
+  onReverseSingleChapter?: (chapter: ChapterItem) => void;
 }
 
 export default function TreePanel({
@@ -40,6 +43,9 @@ export default function TreePanel({
   batchExtracting = false,
   batchExtractProgress = null,
   onBatchExtractOutlines,
+  onOpenReverseMasterTree,
+  reversingChapterId = null,
+  onReverseSingleChapter,
 }: TreePanelProps) {
   const [collapsedVolumeIds, setCollapsedVolumeIds] = useState<Record<string | number, boolean>>({});
 
@@ -95,12 +101,29 @@ export default function TreePanel({
       <Flex justify="space-between" align="center" px="md" py={14} style={{ borderBottom: "1px solid #f8fafc" }}>
         <Text fz={13} fw={700} c="#475569">目录大纲</Text>
         <Group gap={4}>
-          {onBatchExtractOutlines ? (
-            <Tooltip label="一键提取未提取章节的大纲（已提取自动跳过）" position="bottom">
-              <ActionIcon variant="subtle" color="cyan" size="sm" loading={batchExtracting} onClick={onBatchExtractOutlines}>
-                <FiZap size={14} />
-              </ActionIcon>
-            </Tooltip>
+          {(onBatchExtractOutlines || onOpenReverseMasterTree) ? (
+            <Menu position="bottom-end" shadow="md" width={210}>
+              <Menu.Target>
+                <Tooltip label="大纲反推与提取工具" position="bottom">
+                  <ActionIcon variant="subtle" color="cyan" size="sm" loading={batchExtracting}>
+                    <FiZap size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Label>正文 ➔ 大纲闭环反推</Menu.Label>
+                {onOpenReverseMasterTree && (
+                  <Menu.Item leftSection={<FiGitBranch size={13} color="#00c9ff" />} onClick={onOpenReverseMasterTree}>
+                    一键反推项目总纲节点树
+                  </Menu.Item>
+                )}
+                {onBatchExtractOutlines && (
+                  <Menu.Item leftSection={<FiZap size={13} color="#0284c7" />} onClick={onBatchExtractOutlines} disabled={batchExtracting}>
+                    批量提取章节大纲卡片
+                  </Menu.Item>
+                )}
+              </Menu.Dropdown>
+            </Menu>
           ) : null}
           <Tooltip label="新建分卷" position="bottom">
             <ActionIcon variant="subtle" color="gray" size="sm" onClick={onOpenCreateVolume}>
@@ -222,9 +245,27 @@ export default function TreePanel({
                             </Text>
                           </Group>
 
-                          <Text fz={11} c="#94a3b8" style={{ flexShrink: 0, marginLeft: 6 }}>
-                            {(ch.wordCount || 0).toLocaleString()}
-                          </Text>
+                          <Group gap={4} style={{ flexShrink: 0, marginLeft: 4 }}>
+                            {onReverseSingleChapter && (
+                              <Tooltip label="反推本章至项目总纲节点树" position="right">
+                                <ActionIcon
+                                  size="xs"
+                                  variant="subtle"
+                                  color="cyan"
+                                  loading={String(reversingChapterId) === String(ch.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReverseSingleChapter(ch);
+                                  }}
+                                >
+                                  <FiGitBranch size={11} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            <Text fz={11} c="#94a3b8">
+                              {(ch.wordCount || 0).toLocaleString()}
+                            </Text>
+                          </Group>
                         </UnstyledButton>
                       );
                     })}
@@ -274,9 +315,27 @@ export default function TreePanel({
                           {ch.title || `第${ch.chapterNumber}章`}{ch.subtitle ? `  ${ch.subtitle}` : ""}
                         </Text>
                       </Group>
-                      <Text fz={11} c="#94a3b8" style={{ flexShrink: 0, marginLeft: 6 }}>
-                        {(ch.wordCount || 0).toLocaleString()}
-                      </Text>
+                      <Group gap={4} style={{ flexShrink: 0, marginLeft: 4 }}>
+                        {onReverseSingleChapter && (
+                          <Tooltip label="反推本章至项目总纲节点树" position="right">
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              color="cyan"
+                              loading={String(reversingChapterId) === String(ch.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onReverseSingleChapter(ch);
+                              }}
+                            >
+                              <FiGitBranch size={11} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        <Text fz={11} c="#94a3b8">
+                          {(ch.wordCount || 0).toLocaleString()}
+                        </Text>
+                      </Group>
                     </UnstyledButton>
                   );
                 })}

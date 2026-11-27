@@ -63,6 +63,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const enrichedList = list.map((ch) => ({
       ...ch,
       outlineExtracted: ch.outlineExtracted === 1 ? 1 : 0,
+      worldExtracted: ch.worldExtracted === 1 ? 1 : 0,
     }));
 
     return NextResponse.json({
@@ -250,6 +251,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const volumeId = rawVolumeId !== undefined ? (rawVolumeId ? Number(rawVolumeId) : null) : chapter.volumeId;
     const shouldResetOutline = !chapter.isVolume && content !== undefined;
     const nextOutlineExtracted = shouldResetOutline ? 0 : (chapter.outlineExtracted ?? 0);
+    const nextWorldExtracted = shouldResetOutline ? 0 : (chapter.worldExtracted ?? 0);
 
     const updatedData = {
       title: title !== undefined ? title.trim() : chapter.title,
@@ -261,6 +263,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       volumeId,
       chapterNumber: chapterNumber !== undefined ? Number(chapterNumber) : chapter.chapterNumber,
       outlineExtracted: nextOutlineExtracted,
+      worldExtracted: nextWorldExtracted,
       updatedAt: new Date(),
     };
 

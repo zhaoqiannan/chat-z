@@ -4,10 +4,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Box, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, Paper, Timeline, ThemeIcon, Group, Card, ScrollArea } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiPlus, FiEdit, FiTrash2, FiClock, FiMapPin, FiUsers, FiCalendar, FiStar } from "react-icons/fi";
+import { FiPlus, FiEdit, FiTrash2, FiClock, FiMapPin, FiUsers, FiCalendar, FiStar, FiCpu } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import { TimelineData, TimelineEventData, getTimelineFullData, createTimeline, createTimelineEvent, updateTimeline, updateTimelineEvent, deleteTimeline, deleteTimelineEvent } from "@/rest/project-extensions";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 
 export default function TimelinePage() {
   const params = useParams();
@@ -34,6 +35,7 @@ export default function TimelinePage() {
   const [description, setDescription] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [formLoading, setFormLoading] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const reqIdRef = useRef(0);
 
@@ -259,9 +261,14 @@ export default function TimelinePage() {
             </Button>
           </Group>
 
-          <Button leftSection={<FiPlus size={14} />} onClick={handleOpenCreateEvent} disabled={!activeTimelineId}>
-            添加时间节点
-          </Button>
+          <Group gap="xs">
+            <Button variant="light" color="cyan" leftSection={<FiCpu size={14} />} onClick={() => setWorldSyncOpened(true)}>
+              AI 扫描全文提取事件
+            </Button>
+            <Button leftSection={<FiPlus size={14} />} onClick={handleOpenCreateEvent} disabled={!activeTimelineId}>
+              添加时间节点
+            </Button>
+          </Group>
         </Group>
 
         <Box pos="relative" style={{ minHeight: 300 }}>
@@ -453,6 +460,14 @@ export default function TimelinePage() {
           </Group>
         </Stack>
       </Modal>
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="timeline"
+        onApplied={() => fetchData(activeTimelineId)}
+      />
     </Box>
   );
 }

@@ -18,7 +18,6 @@ import {
   materials,
   memoryFragments,
   chapterVersions,
-  plotDeductions,
 } from "@/db";
 import { eq, and, asc } from "drizzle-orm";
 import { isSafeUrl, parseJsonBody } from "@/utils/ownership";
@@ -111,7 +110,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         materialList,
         fragmentList,
         versionList,
-        deductionList,
         masterOutlineRow,
         analysisRows,
       ] = await Promise.all([
@@ -128,7 +126,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         db.select().from(materials).where(eq(materials.workId, workId)).all(),
         db.select().from(memoryFragments).where(and(eq(memoryFragments.workId, workId), eq(memoryFragments.userId, user.userId))).all(),
         db.select().from(chapterVersions).where(and(eq(chapterVersions.workId, workId), eq(chapterVersions.userId, user.userId))).all(),
-        db.select().from(plotDeductions).where(and(eq(plotDeductions.workId, workId), eq(plotDeductions.userId, user.userId))).all(),
         env.DB.prepare("SELECT * FROM work_master_outlines WHERE work_id = ? LIMIT 1").bind(workId).first().catch(() => null),
         env.DB.prepare("SELECT * FROM ai_analysis_reports WHERE work_id = ? AND user_id = ?").bind(workId, user.userId).all().then((r: any) => r?.results || []).catch(() => []),
       ]);
@@ -153,7 +150,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
             notes: noteList,
             materials: materialList,
             memoryFragments: fragmentList,
-            plotDeductions: deductionList,
             aiAnalysisReports: analysisRows,
           },
           null,

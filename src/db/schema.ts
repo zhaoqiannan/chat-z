@@ -92,6 +92,8 @@ export const chapters = sqliteTable('chapters', {
   summary: text('summary'),
   /** 是否已提取过章节大纲 (1=已提取, 0=未提取) */
   outlineExtracted: integer('outline_extracted').default(0),
+  /** 是否已扫描提取过本章新世界观设定 (1=已扫描, 0=未扫描) */
+  worldExtracted: integer('world_extracted').default(0),
   /** 创建时间 */
   createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
   /** 最后修改时间 */
@@ -115,7 +117,7 @@ export const outlines = sqliteTable('outlines', {
   chapterId: integer('chapter_id'),
   /** 对应章节序号（如第 1 章、第 2 章） */
   chapterNumber: integer('chapter_number'),
-  /** 节点分类: 'chapter'(章节大纲) | 'deduction'(剧情推演) | 'memo'(随手卡片) */
+  /** 节点分类: 'chapter'(章节大纲) | 'memo'(随手卡片) */
   category: text('category').notNull().default('chapter'),
   /** 节点类型: 'scene'(情节点) | 'volume'(卷) | 'act'(幕) | 'branch'(支线) | 'bridge'(推演桥) | 'story'(故事主线) */
   type: text('type').notNull().default('scene'),
@@ -137,20 +139,6 @@ export const outlines = sqliteTable('outlines', {
   location: text('location'),
   /** 同级排序索引 */
   orderIndex: integer('order_index').default(0),
-
-  // --- 剧情推演溯源信息 (针对 category='deduction') ---
-  /** 关联推演记录 ID */
-  deductionId: integer('deduction_id'),
-  /** 推演母题/依据说明 (如: 从「第1章 开端」➔「第5章 决战」· 方案二 (戏剧冲突流) 第2阶段) */
-  deductionOrigin: text('deduction_origin'),
-  /** 推演起点 A 描述 */
-  deductionPremise: text('deduction_premise'),
-  /** 推演终点 B 描述 */
-  deductionTarget: text('deduction_target'),
-  /** 采纳的推演方案名称 (如: 稳健因果流 / 惊天反转流) */
-  deductionPathTitle: text('deduction_path_title'),
-  /** 推演阶段序号 (如: 第 1 步 / 第 2 步) */
-  deductionStepIndex: integer('deduction_step_index'),
 
   // --- 大纲内容与结构要素 (灵活支持自由文本与结构化要点) ---
   /** 核心事件经过 / 主要内容 */
@@ -689,26 +677,7 @@ export const memoryFragments = sqliteTable('memory_fragments', {
 });
 
 // ============================================================================
-// 19. 剧情推演记录表 (plot_deductions)
-// ============================================================================
-export const plotDeductions = sqliteTable('plot_deductions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  workId: integer('work_id').notNull(),
-  userId: text('user_id').notNull(),
-  startPoint: text('start_point').notNull(),
-  targetPoint: text('target_point').notNull(),
-  involvedCharacters: text('involved_characters'),
-  pacePreference: text('pace_preference').default('standard'),
-  stepCount: integer('step_count').default(3),
-  generatedPaths: text('generated_paths', { mode: 'json' }).$type<{ id: number; title: string; summary: string; steps: { title: string; content: string; keyConflict?: string; characterAction?: string }[] }[]>(),
-  selectedPathIndex: integer('selected_path_index'),
-  status: text('status').default('completed'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).$defaultFn(() => new Date()),
-});
-
-// ============================================================================
-// 21. 操作与活动动态日志表 (activity_logs)
+// 19. 操作与活动动态日志表 (activity_logs)
 // ============================================================================
 export const activityLogs = sqliteTable('activity_logs', {
   /** 日志自增 ID */
@@ -830,10 +799,6 @@ export type NewChapterVersion = typeof chapterVersions.$inferInsert;
 /** 记忆碎片类型 */
 export type MemoryFragment = typeof memoryFragments.$inferSelect;
 export type NewMemoryFragment = typeof memoryFragments.$inferInsert;
-
-/** 剧情推演记录类型 */
-export type PlotDeduction = typeof plotDeductions.$inferSelect;
-export type NewPlotDeduction = typeof plotDeductions.$inferInsert;
 
 /** 活动动态日志类型 */
 export type ActivityLog = typeof activityLogs.$inferSelect;

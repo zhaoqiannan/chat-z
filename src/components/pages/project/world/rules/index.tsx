@@ -4,11 +4,12 @@
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Select, Stack, SimpleGrid, Paper, Group, Tooltip, Collapse, Divider } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiSliders, FiChevronDown, FiChevronUp, FiBookmark } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiSearch, FiSliders, FiChevronDown, FiChevronUp, FiBookmark, FiCpu } from "react-icons/fi";
 import { WorldRuleItem, getWorldRuleList, createWorldRule, updateWorldRule, deleteWorldRule, getCharacterList, CharacterItem, getFactionList, FactionItem } from "@/rest/world";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import { RichTextEditor, RichTextViewer } from "@/components/common/rich-text";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 
 interface RulesTabProps {
   workId: string;
@@ -28,6 +29,7 @@ export default function RulesTab({ workId }: RulesTabProps) {
   const [modalOpened, setModalOpened] = useState(false);
   const [editingItem, setEditingItem] = useState<WorldRuleItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const [name, setName] = useState("");
   const [characterName, setCharacterName] = useState("");
@@ -353,6 +355,10 @@ export default function RulesTab({ workId }: RulesTabProps) {
             {isAllExpanded ? "全部收起" : "全部展开"}
           </Button>
 
+          <Button size="xs" variant="light" color="cyan" leftSection={<FiCpu size={13} />} onClick={() => setWorldSyncOpened(true)}>
+            AI 扫描全文同步
+          </Button>
+
           <Button size="xs" leftSection={<FiPlus size={14} />} onClick={handleOpenCreate}>
             新建世界规则
           </Button>
@@ -479,6 +485,14 @@ export default function RulesTab({ workId }: RulesTabProps) {
           </Flex>
         </Stack>
       </Modal>
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="rules"
+        onApplied={fetchData}
+      />
     </Box>
   );
 }

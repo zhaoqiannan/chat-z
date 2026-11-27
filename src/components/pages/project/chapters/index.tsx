@@ -6,7 +6,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Box, Modal, Button, Group, Stack, Text } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
 import { getChapterList, createChapter, updateChapter, deleteChapter, ChapterItem, CreateChapterPayload, UpdateChapterPayload, ActiveAiTask, ChapterAiApplyMode, HIGHLIGHT_COLORS } from "@/rest/chapter";
-import { extractChapterOutline } from "@/rest/outline";
+import { extractChapterOutline, reverseMasterOutlineFromChapters } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import TreePanel from "./tree-panel";
@@ -16,6 +16,8 @@ import PanelSplitter from "@/components/common/splitter";
 import ModalChapterDetail from "./modal-chapter-detail";
 import ModalCreateVolume from "./modal-create-volume";
 import ModalCreateChapter from "./modal-create-chapter";
+import ModalReverseMasterOutline from "./modal-reverse-master-outline";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 
 export default function ChaptersPage() {
   const params = useParams();
@@ -62,6 +64,10 @@ export default function ChaptersPage() {
   const [createChapterVolumeId, setCreateChapterVolumeId] = useState<number | string | null>(null);
   const [batchExtracting, setBatchExtracting] = useState(false);
   const [batchExtractProgress, setBatchExtractProgress] = useState<{ current: number; total: number; title: string } | null>(null);
+  const [reverseTreeModalOpened, setReverseTreeModalOpened] = useState(false);
+  const [reversingChapterId, setReversingChapterId] = useState<number | string | null>(null);
+  const [worldSyncModalOpened, setWorldSyncModalOpened] = useState(false);
+  const [worldSyncPresetChapterIds, setWorldSyncPresetChapterIds] = useState<number[] | undefined>(undefined);
 
   const activeChapterRef = useRef<ChapterItem | null>(null);
   activeChapterRef.current = activeChapter;
@@ -365,6 +371,52 @@ export default function ChaptersPage() {
     }
   };
 
+  const handleReverseSingleChapter = async (ch: ChapterItem) => {
+    if (!workId || reversingChapterId) return;
+    const isCurrent = activeChapter && String(activeChapter.id) === String(ch.id);
+    const effectiveContent = isCurrent ? liveContent : ch.content || "";
+    const effectiveWords = isCurrent ? effectiveContent.replace(/\s+/g, "").length : ch.wordCount || effectiveContent.replace(/\s+/g, "").length;
+    if (effectiveWords < 20) {
+      useAlert.warning("该章节正文内容过短，请先写满一段正文后再反推大纲节点");
+      return;
+    }
+
+    if (isCurrent && isChapterDirty && saveEditorRef.current) {
+      const saved = await saveEditorRef.current();
+      if (!saved) return;
+    }
+
+    try {
+      setReversingChapterId(ch.id);
+      useAlert.info(`正在将第 ${ch.chapterNumber} 章反推同步至总纲树，请稍候...`, { autoClose: 4500 });
+      const res = await reverseMasterOutlineFromChapters({
+        workId,
+        mode: "single",
+        chapterId: ch.id,
+        autoSave: true,
+      });
+      if (res && res.success) {
+        handleMarkChapterExtracted(ch.id);
+        useAlert.success(res.message || `已将第 ${ch.chapterNumber} 章反推同步至总纲树`, { autoClose: 4000 });
+      } else {
+        useAlert.error(res?.message || "单章反推总纲节点失败");
+      }
+    } catch (e: any) {
+      useAlert.error("反推总纲节点异常: " + (e?.message || "网络错误"));
+    } finally {
+      setReversingChapterId(null);
+    }
+  };
+
+  const handleOpenWorldSyncForChapter = (chapterId: number | string) => {
+    setWorldSyncPresetChapterIds([Number(chapterId)]);
+    setWorldSyncModalOpened(true);
+  };
+
+  const writtenChapterCount = chaptersList.filter(
+    (c) => (c.wordCount || 0) >= 20 || (c.content || "").trim().length >= 20
+  ).length;
+
   return (
     <Box
       pos="relative"
@@ -395,6 +447,9 @@ export default function ChaptersPage() {
         batchExtracting={batchExtracting}
         batchExtractProgress={batchExtractProgress}
         onBatchExtractOutlines={handleBatchExtractOutlines}
+        onOpenReverseMasterTree={() => setReverseTreeModalOpened(true)}
+        reversingChapterId={reversingChapterId}
+        onReverseSingleChapter={handleReverseSingleChapter}
       />
 
       <EditorArea
@@ -415,6 +470,9 @@ export default function ChaptersPage() {
         onDirtyChange={setIsChapterDirty}
         onDeleteChapter={handleDelete}
         onOutlineExtracted={handleMarkChapterExtracted}
+        onReverseSingleChapter={handleReverseSingleChapter}
+        reversingOutline={Boolean(reversingChapterId && activeChapter && String(reversingChapterId) === String(activeChapter.id))}
+        onOpenWorldSync={handleOpenWorldSyncForChapter}
         saveRef={saveEditorRef}
       />
 
@@ -475,6 +533,22 @@ export default function ChaptersPage() {
         defaultVolumeId={createChapterVolumeId}
         nextChapterNum={nextChapterNum}
         onSubmit={handleCreateChapter}
+      />
+
+      <ModalReverseMasterOutline
+        opened={reverseTreeModalOpened}
+        onClose={() => setReverseTreeModalOpened(false)}
+        workId={workId}
+        writtenChapterCount={writtenChapterCount}
+      />
+
+      <WorldSyncScannerModal
+        opened={worldSyncModalOpened}
+        onClose={() => setWorldSyncModalOpened(false)}
+        workId={workId}
+        defaultFocusScope="all"
+        presetChapterIds={worldSyncPresetChapterIds}
+        onApplied={() => fetchChapters()}
       />
 
       {/* 未保存修改的阻拦提示弹窗 */}

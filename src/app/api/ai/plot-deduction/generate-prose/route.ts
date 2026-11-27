@@ -2,10 +2,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, outlines, chapters, characters, worldRules, characterRelations, memoryFragments, materials } from "@/db";
+import { getDb, works, outlines, chapters, memoryFragments } from "@/db";
 import { eq, and, lt, desc } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, cleanNovelStoryText } from "@/utils/ai";
-import { stripHtml, countWords } from "@/utils/text";
+import { countWords } from "@/utils/text";
+import { buildWorldLoreContext } from "@/utils/worldContext";
 
 const MIN_TARGET_WORDS = 3000;
 
@@ -66,13 +67,9 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       exactPrevChapterRow,
       currentChapterRow,
       currentOutlineRow,
-      charList,
-      ruleList,
-      relationList,
       fragmentList,
       masterRow,
       existingSnapRow,
-      materialList,
     ] = await Promise.all([
       db
         .select()
@@ -111,29 +108,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .limit(1)
         .get(),
       db
-        .select({ name: characters.name, identity: characters.identity, personality: characters.personality, abilities: characters.abilities })
-        .from(characters)
-        .where(eq(characters.workId, workId))
-        .limit(10)
-        .all(),
-      db
-        .select({ name: worldRules.name, mechanisms: worldRules.mechanisms, taboos: worldRules.taboos })
-        .from(worldRules)
-        .where(eq(worldRules.workId, workId))
-        .limit(5)
-        .all(),
-      db
-        .select({
-          sourceCharName: characterRelations.sourceCharName,
-          targetCharName: characterRelations.targetCharName,
-          relationType: characterRelations.relationType,
-          description: characterRelations.description,
-        })
-        .from(characterRelations)
-        .where(eq(characterRelations.workId, workId))
-        .limit(10)
-        .all(),
-      db
         .select({ title: memoryFragments.title, content: memoryFragments.content })
         .from(memoryFragments)
         .where(and(eq(memoryFragments.workId, workId), eq(memoryFragments.userId, user.userId)))
@@ -150,12 +124,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .bind(workId, user.userId, nodeId)
         .first()
         .catch(() => null),
-      db
-        .select({ title: materials.title, aiSummary: materials.aiSummary, extractedLore: materials.extractedLore, content: materials.content })
-        .from(materials)
-        .where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1)))
-        .limit(5)
-        .all(),
     ]);
 
     // 提前解析快照，以便在上一章尚未落库章节表时，自动降级衔接快照中刚生成的第 N-1 章正文
@@ -238,20 +206,16 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     // 拆分“上一章走向参考”与“下一章边界防剧透参考”
     const nextBoundaryText = nextPlanContext || (!prevPlanContext ? siblingContext : "");
-    const charText = charList
-      .map((c) => `- ${c.name}（${c.identity || "角色"}）：性格[${c.personality || "未知"}] 能力[${c.abilities || "无"}]`)
-      .join("\n");
-    const relationText = relationList
-      .map((r) => `- ${r.sourceCharName} ➔ ${r.targetCharName}：${r.relationType}${r.description ? `（${r.description.slice(0, 50)}）` : ""}`)
-      .join("\n");
-    const ruleText = ruleList
-      .map((r) => `- ${r.name}：${stripHtml(r.mechanisms).slice(0, 120)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 60)}）` : ""}`)
-      .join("\n");
+    const worldLore = await buildWorldLoreContext(
+      db,
+      workId,
+      [plotText, masterGoalText, prevChapterExcerpt, currentExistingContent, extraInstruction].join("\n"),
+      { includeTimeline: true, includeMaterials: true, maxChars: 3400 }
+    );
+    const charText = worldLore.charText;
+    const ruleText = worldLore.ruleText;
     const fragmentText = fragmentList
       .map((f) => `- ${f.title}：${(f.content || "").slice(0, 100)}`)
-      .join("\n");
-    const materialText = materialList
-      .map((m) => `- 《${m.title}》：${(m.extractedLore || m.aiSummary || stripHtml(m.content)).slice(0, 160)}`)
       .join("\n");
 
     const systemPrompt = `你是一位功底深厚的长篇小说执笔作家。请严格依据作者选定的【本章剧情走向蓝本】，撰写一章完整、沉浸、连贯且有文学质感的小说正文。
@@ -283,7 +247,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const userPrompt = `【作品】：《${work.title}》（题材：${work.tag || "小说"}）
 ${masterGoalText ? `【所属总纲阶段目标】：${masterGoalText}\n` : ""}
-${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${relationText ? `【角色关系网】：\n${relationText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}${materialText ? `【作者设定素材库】：\n${materialText}\n\n` : ""}${fragmentText ? `【近期伏笔与记忆碎片（自然契合时可呼应，切勿生硬强塞）】：\n${fragmentText}\n\n` : ""}${prevOutlineText ? `【前序章节大纲（前情脉络）】：\n${prevOutlineText}\n\n` : ""}${prevChapterBlock ? `${prevChapterBlock}\n\n` : ""}${currentExistingContextBlock ? `${currentExistingContextBlock}\n\n` : ""}${nextBoundaryText ? `【下一章边界参考（仅作防剧透边界，严禁越界提前写出）】：\n${nextBoundaryText}\n\n` : ""}【当前执笔章节】：第 ${chapterNumber} 章《${chapterTitle}》
+${worldLore.text ? `${worldLore.text}\n\n` : ""}${fragmentText ? `【近期伏笔与记忆碎片（自然契合时可呼应，切勿生硬强塞）】：\n${fragmentText}\n\n` : ""}${prevOutlineText ? `【前序章节大纲（前情脉络）】：\n${prevOutlineText}\n\n` : ""}${prevChapterBlock ? `${prevChapterBlock}\n\n` : ""}${currentExistingContextBlock ? `${currentExistingContextBlock}\n\n` : ""}${nextBoundaryText ? `【下一章边界参考（仅作防剧透边界，严禁越界提前写出）】：\n${nextBoundaryText}\n\n` : ""}【当前执笔章节】：第 ${chapterNumber} 章《${chapterTitle}》
 【本章剧情走向蓝本（请拆成 3~4 个饱满场景逐一写透）】：
 ${plotText}
 

@@ -245,3 +245,125 @@ export const uploadImageFile = async (
     return { success: false, message: `上传失败 (${res.status})` };
   }
 };
+
+// ============================================================================
+// 6. 全文智能扫描沉淀世界观设定 API（单次 AI 调用覆盖 7 大模块）
+// ============================================================================
+export type WorldSyncScope =
+  | "all"
+  | "characters"
+  | "locations"
+  | "factions"
+  | "items"
+  | "rules"
+  | "relations"
+  | "timeline";
+
+export interface WorldSyncCandidateBase {
+  tempId: string;
+  status: "new" | "update";
+  existingId?: number;
+  existingSummary?: string;
+  sourceChapter?: string;
+}
+
+export interface WorldSyncCharacterCandidate extends WorldSyncCandidateBase {
+  name: string;
+  alias?: string;
+  gender?: string;
+  identity?: string;
+  roleType?: string;
+  faction?: string;
+  personality?: string;
+  abilities?: string;
+  appearance?: string;
+  description?: string;
+}
+
+export interface WorldSyncLocationCandidate extends WorldSyncCandidateBase {
+  name: string;
+  region?: string;
+  type?: string;
+  geography?: string;
+  features?: string;
+  governingFaction?: string;
+  description?: string;
+}
+
+export interface WorldSyncFactionCandidate extends WorldSyncCandidateBase {
+  name: string;
+  leader?: string;
+  alignment?: string;
+  scale?: string;
+  doctrine?: string;
+  controlledLocations?: string;
+  description?: string;
+}
+
+export interface WorldSyncItemCandidate extends WorldSyncCandidateBase {
+  name: string;
+  category?: string;
+  tier?: string;
+  ownerName?: string;
+  effects: string;
+  drawbacks?: string;
+  description?: string;
+}
+
+export interface WorldSyncRuleCandidate extends WorldSyncCandidateBase {
+  name: string;
+  category?: string;
+  mechanisms?: string;
+  drawbacks?: string;
+  taboos?: string;
+  description?: string;
+}
+
+export interface WorldSyncRelationCandidate extends WorldSyncCandidateBase {
+  sourceCharName: string;
+  targetCharName: string;
+  relationType: string;
+  relationTag?: string;
+  description?: string;
+}
+
+export interface WorldSyncTimelineCandidate extends WorldSyncCandidateBase {
+  timePoint: string;
+  title: string;
+  location?: string;
+  characters?: string;
+  impactLevel?: string;
+  description?: string;
+}
+
+export interface WorldSyncCandidatesBundle {
+  characters: WorldSyncCharacterCandidate[];
+  locations: WorldSyncLocationCandidate[];
+  factions: WorldSyncFactionCandidate[];
+  items: WorldSyncItemCandidate[];
+  rules: WorldSyncRuleCandidate[];
+  relations: WorldSyncRelationCandidate[];
+  timelineEvents: WorldSyncTimelineCandidate[];
+}
+
+export interface ExtractWorldFromChaptersResult {
+  scannedChapters: Array<{ id: number; chapterNumber: number; title: string; wordCount: number }>;
+  candidates: WorldSyncCandidatesBundle;
+  totalCount: number;
+}
+
+export const extractWorldFromChapters = async (data: {
+  workId: number | string;
+  chapterIds?: Array<number | string>;
+  onlyUnscanned?: boolean;
+}) => {
+  return post("/api/ai/world/extract-from-chapters", data);
+};
+
+export const applyExtractedWorldEntities = async (data: {
+  workId: number | string;
+  scannedChapterIds?: Array<number | string>;
+  selected: Partial<WorldSyncCandidatesBundle>;
+}) => {
+  return post("/api/ai/world/apply-extracted", data);
+};

@@ -2,10 +2,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, works, outlines, chapters, characters, worldRules, materials } from "@/db";
+import { getDb, works, outlines, chapters } from "@/db";
 import { eq, and, asc, desc, gte, lte } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
-import { stripHtml, parseChapterRange } from "@/utils/text";
+import { parseChapterRange } from "@/utils/text";
+import { assertWorkOwnership, parseJsonBody } from "@/utils/ownership";
+import { buildWorldLoreContext } from "@/utils/worldContext";
 
 function buildContentExcerpt(raw?: string | null, headLen = 450, tailLen = 550): string {
   const clean = (raw || "").trim();
@@ -334,7 +336,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, inRangeChapterContentRows, charList, ruleList, existingSnapRow, materialList] = await Promise.all([
+    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, inRangeChapterContentRows, existingSnapRow] = await Promise.all([
       env.DB.prepare("SELECT tree_json FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1")
         .bind(workId, user.userId)
         .first()
@@ -385,30 +387,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         )
         .orderBy(asc(chapters.chapterNumber))
         .all(),
-      db
-        .select({ name: characters.name, identity: characters.identity, personality: characters.personality, abilities: characters.abilities })
-        .from(characters)
-        .where(eq(characters.workId, workId))
-        .limit(10)
-        .all(),
-      db
-        .select({ name: worldRules.name, mechanisms: worldRules.mechanisms, taboos: worldRules.taboos })
-        .from(worldRules)
-        .where(eq(worldRules.workId, workId))
-        .limit(5)
-        .all(),
       env.DB.prepare(
         "SELECT snapshot_json FROM master_node_deduction_snapshots WHERE work_id = ? AND user_id = ? AND master_node_id = ? LIMIT 1"
       )
         .bind(workId, user.userId, nodeId)
         .first()
         .catch(() => null),
-      db
-        .select({ title: materials.title, aiSummary: materials.aiSummary, extractedLore: materials.extractedLore, content: materials.content })
-        .from(materials)
-        .where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1)))
-        .limit(5)
-        .all(),
     ]);
 
     let parsedMasterTree: any = null;
@@ -502,15 +486,12 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     const subtreeText = serializeSubtree(targetNode);
-    const charText = charList
-      .map((c) => `- ${c.name}（${c.identity || "角色"}）：性格[${c.personality || "未填"}] 能力[${c.abilities || "无"}]`)
-      .join("\n");
-    const ruleText = ruleList
-      .map((r) => `- ${r.name}：${stripHtml(r.mechanisms).slice(0, 100)}${r.taboos ? `（禁忌：${r.taboos.slice(0, 50)}）` : ""}`)
-      .join("\n");
-    const materialText = materialList
-      .map((m) => `- 《${m.title}》：${(m.extractedLore || m.aiSummary || stripHtml(m.content)).slice(0, 140)}`)
-      .join("\n");
+    const worldLore = await buildWorldLoreContext(
+      db,
+      workId,
+      [subtreeText, recentProgressText, prevChapterExcerpt, inRangeExistingText, preference].join("\n"),
+      { includeTimeline: true, includeMaterials: true, maxChars: 2800 }
+    );
 
     const planCountTarget = chapterNumbersToPlan.length <= 2 ? "2~3 套" : "2 套";
     const wordsRangePerChapter = chapterNumbersToPlan.length <= 3 ? "320~460 字" : "240~340 字";
@@ -551,7 +532,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 ${subtreeText}${nextAnchorText ? `【下一阶段总纲出口锚点（供最后一章收尾衔接，切勿提前写爆）】：\n${nextAnchorText}\n\n` : ""}【前序已有章节大纲与当前进度】：
 ${recentProgressText || "（前序暂无已提取章节大纲，请优先依据下方上一章正文与总纲展开）"}
 ${prevChapterExcerpt ? `\n【上一章（第${chapterStart - 1}章《${prevChapterContentRow?.title || ""}》）正文与完整结尾（第 ${chapterStart} 章必须紧贴此处结尾场景/时间/人物状态无缝承接）】：\n${prevChapterExcerpt}\n` : ""}${inRangeExistingText ? `\n【本次规划区间内当前章节已有剧情与正文（必须尊重并融合既有剧情脉络，切勿无视已写内容推翻重来）】：\n${inRangeExistingText}\n` : ""}
-${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}${materialText ? `【作者设定素材库】：\n${materialText}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
+${worldLore.text ? `${worldLore.text}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
 ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
 请直接输出包含 ${planCountTarget} 完整纯文本走向方案的合法 JSON：`;
 
@@ -665,5 +646,109 @@ ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
   } catch (error: any) {
     console.error("[API /api/ai/plot-deduction/plan POST] Error:", error);
     return NextResponse.json({ success: false, message: error?.message || "章节走向推演异常" }, { status: 500 });
+  }
+});
+
+/**
+ * PUT /api/ai/plot-deduction/plan
+ * 持久化保存作者微调后的章节走向文本与选定方案（原子保留既有正文草稿 latestDrafts）
+ */
+export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const db = getDb(env.DB);
+
+    const parsedBody = await parseJsonBody<{
+      workId?: number | string;
+      nodeId?: string;
+      selectedPlanId?: string;
+      plans?: Array<{
+        id?: string;
+        name?: string;
+        style?: string;
+        overview?: string;
+        chapters?: Array<{ chapterNumber?: number | string; title?: string; plotText?: string }>;
+      }>;
+    }>(req);
+    if (!parsedBody.ok) return parsedBody.response;
+
+    const workId = Number(parsedBody.data.workId);
+    const nodeId = String(parsedBody.data.nodeId || "").trim();
+    const rawPlans = parsedBody.data.plans;
+    const rawSelectedPlanId = String(parsedBody.data.selectedPlanId || "").trim();
+
+    if (!workId || isNaN(workId) || !nodeId) {
+      return NextResponse.json({ success: false, message: "缺少有效的 workId 或 nodeId" }, { status: 400 });
+    }
+
+    const work = await assertWorkOwnership(db, workId, user.userId);
+    if (!work) {
+      return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 403 });
+    }
+
+    const existingRow: any = await env.DB.prepare(
+      "SELECT snapshot_json FROM master_node_deduction_snapshots WHERE work_id = ? AND user_id = ? AND master_node_id = ? LIMIT 1"
+    )
+      .bind(workId, user.userId, nodeId)
+      .first();
+
+    if (!existingRow?.snapshot_json) {
+      return NextResponse.json({ success: false, message: "未找到当前节点的规划快照，请先生成走向方案" }, { status: 404 });
+    }
+
+    let existingSnapshot: any = {};
+    try {
+      existingSnapshot = JSON.parse(existingRow.snapshot_json);
+    } catch {
+      existingSnapshot = {};
+    }
+
+    let nextPlans = Array.isArray(existingSnapshot.plans) ? existingSnapshot.plans : [];
+    if (Array.isArray(rawPlans) && rawPlans.length > 0) {
+      nextPlans = rawPlans.slice(0, 5).map((p, idx) => ({
+        id: String(p?.id || `plan-${idx + 1}`),
+        name: String(p?.name || `方案${idx + 1}`).trim(),
+        style: String(p?.style || "剧情走向").trim(),
+        overview: String(p?.overview || "").trim(),
+        chapters: Array.isArray(p?.chapters)
+          ? p.chapters.map((ch) => ({
+              chapterNumber: Number(ch?.chapterNumber) || 1,
+              title: String(ch?.title || "").trim(),
+              plotText: String(ch?.plotText || "").trim(),
+            }))
+          : [],
+      }));
+    }
+
+    const nextSelectedPlanId =
+      rawSelectedPlanId && nextPlans.some((p: any) => p.id === rawSelectedPlanId)
+        ? rawSelectedPlanId
+        : existingSnapshot.selectedPlanId || nextPlans[0]?.id || "plan-1";
+
+    const now = Date.now();
+    const updatedSnapshot = {
+      ...existingSnapshot,
+      nodeId,
+      plans: nextPlans,
+      selectedPlanId: nextSelectedPlanId,
+      updatedAt: now,
+    };
+
+    await env.DB.prepare(
+      `UPDATE master_node_deduction_snapshots
+       SET snapshot_json = ?, updated_at = ?
+       WHERE work_id = ? AND user_id = ? AND master_node_id = ?`
+    )
+      .bind(JSON.stringify(updatedSnapshot), now, workId, user.userId, nodeId)
+      .run();
+
+    return NextResponse.json({
+      success: true,
+      result: updatedSnapshot,
+      message: "已保存微调后的章节走向方案",
+    });
+  } catch (error: any) {
+    console.error("[API /api/ai/plot-deduction/plan PUT] Error:", error);
+    return NextResponse.json({ success: false, message: error?.message || "保存微调失败" }, { status: 500 });
   }
 });

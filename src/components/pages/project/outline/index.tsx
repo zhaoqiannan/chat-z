@@ -1,4 +1,4 @@
-// 组件：故事大纲工作台（局部 OutlineContext 协调多 Tab，按需请求各 Tab 最新数据）
+// 组件：故事大纲工作台（局部 OutlineContext 协调 4 大创作 Tab，按需请求最新数据）
 "use client";
 
 import React from "react";
@@ -13,8 +13,6 @@ import { OutlineProvider, OutlineTabKey, useOutlineContext } from "./context/Out
 
 const MasterOutlineWorkspace = dynamic(() => import("./master-outline"), { ssr: false });
 const PlotDeductionWorkspace = dynamic(() => import("./plot-deduction-workspace"), { ssr: false });
-const DrawerPlotDeduction = dynamic(() => import("./drawer-plot-deduction"), { ssr: false });
-const DrawerPlotDeductionHistory = dynamic(() => import("./drawer-plot-deduction/drawer-plot-deduction-history"), { ssr: false });
 const DrawerThoughtOrganizer = dynamic(() => import("./drawer-thought-organizer"), { ssr: false });
 
 function StoryOutlineContent() {
@@ -22,32 +20,22 @@ function StoryOutlineContent() {
     workId,
     activeTab,
     setActiveTab,
-    showLegacyDeductionList,
-    setShowLegacyDeductionList,
     deductionTargetMasterNodeId,
     jumpToPlotDeduction,
     jumpToQualityAudit,
     tabCounts,
-    activeCategoryNodes,
     triggerRefresh,
     editorModalOpened,
     editingNode,
     parentForNewChild,
     editorCategory,
     closeEditorModal,
-    deductionDrawerOpened,
-    loadedDeductionRecord,
-    openDeductionDrawer,
-    closeDeductionDrawer,
-    historyDrawerOpened,
-    closeHistoryDrawer,
     thoughtDrawerOpened,
     closeThoughtDrawer,
   } = useOutlineContext();
 
   return (
     <Flex direction="column" h="calc(100vh - 64px)" bg="#ffffff" pos="relative" style={{ overflow: "hidden" }}>
-      {/* 四大 Tab 切换栏（切入对应 Tab 时由子面板独立拉取最新数据） */}
       <Box px="md" pt={0} style={{ borderBottom: "1px solid #f1f5f9" }}>
         <Tabs
           value={activeTab}
@@ -79,27 +67,20 @@ function StoryOutlineContent() {
         </Box>
       ) : null}
 
-      {activeTab === "deduction" && !showLegacyDeductionList ? (
+      {activeTab === "deduction" ? (
         <Box flex={1} mih={0} style={{ overflow: "hidden" }}>
           <PlotDeductionWorkspace
             workId={workId}
             initialNodeId={deductionTargetMasterNodeId}
-            legacyCardCount={tabCounts.deduction ?? 0}
-            onShowLegacyCards={() => setShowLegacyDeductionList(true)}
             onJumpToQualityAudit={jumpToQualityAudit}
           />
         </Box>
-      ) : null}
-
-      {activeTab === "deduction" && showLegacyDeductionList ? (
-        <OutlineCategoryPanel key="deduction" category="deduction" />
       ) : null}
 
       {activeTab === "chapter" ? <OutlineCategoryPanel key="chapter" category="chapter" /> : null}
 
       {activeTab === "memo" ? <OutlineCategoryPanel key="memo" category="memo" /> : null}
 
-      {/* 大纲卡片编辑/创建弹窗 */}
       <ModalNodeEditor
         opened={editorModalOpened}
         onClose={closeEditorModal}
@@ -120,26 +101,6 @@ function StoryOutlineContent() {
         onSubmitUpdate={updateOutlineNode}
       />
 
-      {/* A➔B 跨度推演工作台抽屉 */}
-      <DrawerPlotDeduction
-        opened={deductionDrawerOpened}
-        onClose={closeDeductionDrawer}
-        workId={workId}
-        outlineNodes={activeCategoryNodes}
-        onOutlineUpdated={triggerRefresh}
-        loadedRecord={loadedDeductionRecord}
-      />
-
-      {/* 独立剧情推演历史抽屉 */}
-      <DrawerPlotDeductionHistory
-        opened={historyDrawerOpened}
-        onClose={closeHistoryDrawer}
-        workId={workId}
-        onOutlineUpdated={triggerRefresh}
-        onLoadToDeduct={(rec) => openDeductionDrawer(rec)}
-      />
-
-      {/* AI 思路整理抽屉 */}
       <DrawerThoughtOrganizer
         opened={thoughtDrawerOpened}
         onClose={closeThoughtDrawer}

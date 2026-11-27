@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Modal, TextInput, Textarea, NumberInput, Button, Group, Stack, Text, Badge, MultiSelect, Paper, Box, Flex, ActionIcon } from "@mantine/core";
-import { FiSave, FiUser, FiFileText, FiBookOpen, FiZap, FiEdit3, FiPlus, FiTrash2, FiCornerDownRight } from "react-icons/fi";
+import { FiSave, FiUser, FiFileText, FiPlus, FiTrash2 } from "react-icons/fi";
 import { OutlineNode, CreateOutlinePayload, UpdateOutlinePayload } from "@/rest/outline";
 import { CharacterItem, getCharacterList } from "@/rest/world";
 import { NoteData, NoteListResult, getNoteList } from "@/rest/project-extensions";
@@ -13,7 +13,7 @@ interface ModalNodeEditorProps {
   opened: boolean;
   onClose: () => void;
   workId: string;
-  category: "chapter" | "deduction" | "memo";
+  category: "chapter" | "memo";
   editingNode: OutlineNode | null;
   onSaved: () => Promise<void>;
   onSubmitCreate: (data: CreateOutlinePayload) => Promise<any>;
@@ -53,12 +53,6 @@ export default function ModalNodeEditor({
     { id?: number | string; title: string; content: string; timeframe?: string; location?: string }[]
   >([]);
 
-  // 剧情推演专属字段
-  const [deductionOrigin, setDeductionOrigin] = useState("");
-  const [deductionPremise, setDeductionPremise] = useState("");
-  const [deductionTarget, setDeductionTarget] = useState("");
-  const [deductionStepIndex, setDeductionStepIndex] = useState<number | string>(1);
-
   useEffect(() => {
     if (opened && workId) {
       getCharacterList(workId).then((res) => {
@@ -84,10 +78,6 @@ export default function ModalNodeEditor({
         setNextGoal(editingNode.nextGoal || "");
         setSuspense(editingNode.suspense || "");
         setWordCountEstimate(editingNode.wordCountEstimate || 3000);
-        setDeductionOrigin(editingNode.deductionOrigin || "");
-        setDeductionPremise(editingNode.deductionPremise || "");
-        setDeductionTarget(editingNode.deductionTarget || "");
-        setDeductionStepIndex(editingNode.deductionStepIndex ?? 1);
         setSelectedCharIds(
           Array.isArray(editingNode.linkedCharacterIds)
             ? editingNode.linkedCharacterIds.map(String)
@@ -123,10 +113,6 @@ export default function ModalNodeEditor({
         setNextGoal("");
         setSuspense("");
         setWordCountEstimate(3000);
-        setDeductionOrigin("");
-        setDeductionPremise("");
-        setDeductionTarget("");
-        setDeductionStepIndex(1);
         setSelectedCharIds([]);
         setSelectedNoteIds([]);
         setSubScenes([]);
@@ -189,15 +175,8 @@ export default function ModalNodeEditor({
         linkedNoteIds: noteIdsNum,
       };
 
-      if (category === "chapter") {
-        if (chapterNumber !== "") {
-          payload.chapterNumber = Number(chapterNumber);
-        }
-      } else if (category === "deduction") {
-        payload.deductionOrigin = deductionOrigin.trim();
-        payload.deductionPremise = deductionPremise.trim();
-        payload.deductionTarget = deductionTarget.trim();
-        payload.deductionStepIndex = Number(deductionStepIndex) || 1;
+      if (category === "chapter" && chapterNumber !== "") {
+        payload.chapterNumber = Number(chapterNumber);
       }
 
       if (editingNode) {
@@ -275,18 +254,10 @@ export default function ModalNodeEditor({
     chapter: {
       title: editingNode ? "编辑章节大纲" : "新建章节大纲",
       badge: "📖 章节大纲",
-      color: "teal",
+      color: "cyan",
       titlePlaceholder: "例如：第一卷 · 建材对峙与专利反击",
       contentLabel: "章节核心剧情脉络 / 正文梗概",
       contentPlaceholder: "清晰写明本章节发生的主要事件经过、人物行为与发展结局...",
-    },
-    deduction: {
-      title: editingNode ? "编辑推演方案" : "新建推演节点",
-      badge: "🔮 剧情推演",
-      color: "blue",
-      titlePlaceholder: "例如：推演：暗中搜集证据➔打破商会僵局",
-      contentLabel: "推演方案整体逻辑说明",
-      contentPlaceholder: "概括本推演方案的递进思路与关键突破口...",
     },
     memo: {
       title: editingNode ? "编辑思路卡片" : "新建随手卡片",
@@ -359,25 +330,6 @@ export default function ModalNodeEditor({
             onChange={setChapterNumber}
             min={1}
           />
-        )}
-
-        {category === "deduction" && (
-          <Paper p="sm" withBorder radius="md" bg="gray.0">
-            <Stack gap="xs">
-              <TextInput
-                label="起点剧情 A"
-                placeholder="现状或起始情节"
-                value={deductionPremise}
-                onChange={(e) => setDeductionPremise(e.currentTarget.value)}
-              />
-              <TextInput
-                label="终点剧情 B"
-                placeholder="预期达到的结果"
-                value={deductionTarget}
-                onChange={(e) => setDeductionTarget(e.currentTarget.value)}
-              />
-            </Stack>
-          </Paper>
         )}
 
         {/* 核心内容叙述 */}

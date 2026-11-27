@@ -40,7 +40,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "无效的 workId" }, { status: 400 });
     }
 
-    const categoryParam = req.nextUrl.searchParams.get("category"); // 'chapter' | 'deduction' | 'memo' | null
+    const categoryParam = req.nextUrl.searchParams.get("category"); // 'chapter' | 'memo' | null
 
     const isOwner = Boolean(await assertWorkOwnership(db, workId, user.userId));
     if (!isOwner) {
@@ -49,7 +49,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     // 查询大纲列表（支持分类过滤）
     let query = db.select().from(outlines).where(eq(outlines.workId, workId));
-    if (categoryParam && ["chapter", "deduction", "memo"].includes(categoryParam)) {
+    if (categoryParam && ["chapter", "memo"].includes(categoryParam)) {
       query = db.select().from(outlines).where(and(eq(outlines.workId, workId), eq(outlines.category, categoryParam)));
     }
 
@@ -122,8 +122,6 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         summary: item.summary || "",
         timeframe: item.timeframe || "",
         location: item.location || "",
-        deductionId: item.deductionId ? Number(item.deductionId) : null,
-        deductionStepIndex: item.deductionStepIndex ? Number(item.deductionStepIndex) : null,
         linkedCharacterIds: charIds,
         linkedNoteIds: noteIds,
         linkedCharacters: enrichedChars,
@@ -211,12 +209,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
           summary: nodeData.summary?.trim() || null,
           timeframe: nodeData.timeframe?.trim() || null,
           location: nodeData.location?.trim() || null,
-          deductionId: nodeData.deductionId ? Number(nodeData.deductionId) : null,
-          deductionOrigin: nodeData.deductionOrigin?.trim() || null,
-          deductionPremise: nodeData.deductionPremise?.trim() || null,
-          deductionTarget: nodeData.deductionTarget?.trim() || null,
-          deductionPathTitle: nodeData.deductionPathTitle?.trim() || null,
-          deductionStepIndex: typeof nodeData.deductionStepIndex === "number" ? nodeData.deductionStepIndex : null,
           event: nodeData.event?.trim() || nodeData.content?.trim() || "",
           twist: nodeData.twist?.trim() || "",
           nextGoal: nodeData.nextGoal?.trim() || "",
@@ -269,12 +261,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       summary,
       timeframe,
       location,
-      deductionId,
-      deductionOrigin,
-      deductionPremise,
-      deductionTarget,
-      deductionPathTitle,
-      deductionStepIndex,
       event,
       twist,
       nextGoal,
@@ -325,12 +311,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       summary: summary?.trim() || null,
       timeframe: timeframe?.trim() || null,
       location: location?.trim() || null,
-      deductionId: deductionId ? Number(deductionId) : null,
-      deductionOrigin: deductionOrigin?.trim() || null,
-      deductionPremise: deductionPremise?.trim() || null,
-      deductionTarget: deductionTarget?.trim() || null,
-      deductionPathTitle: deductionPathTitle?.trim() || null,
-      deductionStepIndex: typeof deductionStepIndex === "number" ? deductionStepIndex : null,
       event: event?.trim() || content?.trim() || "",
       twist: twist?.trim() || "",
       nextGoal: nextGoal?.trim() || "",
@@ -407,13 +387,6 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     if (body.chapterNumber !== undefined) updateData.chapterNumber = body.chapterNumber ? Number(body.chapterNumber) : null;
     if (body.orderIndex !== undefined) updateData.orderIndex = Number(body.orderIndex);
     if (body.wordCountEstimate !== undefined) updateData.wordCountEstimate = Number(body.wordCountEstimate);
-
-    if (body.deductionId !== undefined) updateData.deductionId = body.deductionId ? Number(body.deductionId) : null;
-    if (body.deductionOrigin !== undefined) updateData.deductionOrigin = body.deductionOrigin?.trim() || null;
-    if (body.deductionPremise !== undefined) updateData.deductionPremise = body.deductionPremise?.trim() || null;
-    if (body.deductionTarget !== undefined) updateData.deductionTarget = body.deductionTarget?.trim() || null;
-    if (body.deductionPathTitle !== undefined) updateData.deductionPathTitle = body.deductionPathTitle?.trim() || null;
-    if (body.deductionStepIndex !== undefined) updateData.deductionStepIndex = typeof body.deductionStepIndex === "number" ? body.deductionStepIndex : null;
 
     if (body.linkedCharacterIds !== undefined) {
       updateData.linkedCharacterIds = parseNumberArray(body.linkedCharacterIds);

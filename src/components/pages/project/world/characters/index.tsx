@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Box, Flex, Text, Button, TextInput, Stack, SimpleGrid, Group, Modal, Badge, Collapse, Paper } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiChevronRight } from "react-icons/fi";
+import { FiChevronRight, FiCpu } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { CharacterItem, getCharacterList, deleteCharacter, togglePinCharacter } from "@/rest/world";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 import CharacterCard from "./character-card";
 import ModalCharacterForm from "./modal-character-form";
 import ModalCharacterDetail from "./modal-character-detail";
@@ -39,6 +40,7 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
   const [deleteModalOpened, setDeleteModalOpened] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<CharacterItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const fetchList = async () => {
     if (!workId) return;
@@ -288,6 +290,17 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
               },
             }}
           />
+
+          <Button
+            size="xs"
+            radius="md"
+            variant="light"
+            color="cyan"
+            leftSection={<FiCpu size={13} />}
+            onClick={() => setWorldSyncOpened(true)}
+          >
+            AI 扫描全文同步
+          </Button>
 
           <Button
             size="xs"
@@ -775,6 +788,14 @@ export default function CharactersTab({ workId }: CharactersTabProps) {
           </Group>
         </Stack>
       </Modal>
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="characters"
+        onApplied={fetchList}
+      />
     </Box>
   );
 }

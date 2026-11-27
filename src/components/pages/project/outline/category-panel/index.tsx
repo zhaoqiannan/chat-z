@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Checkbox, Flex, Group, Paper, ScrollArea, Text } from "@mantine/core";
-import { FiClock, FiCpu, FiMaximize2, FiMinimize2, FiPlus, FiTrash2, FiZap } from "react-icons/fi";
+import { FiCpu, FiMaximize2, FiMinimize2, FiPlus, FiTrash2 } from "react-icons/fi";
 import { OutlineNode, batchDeleteOutlineNodes, deleteOutlineNode, getOutlineList, updateOutlineNode } from "@/rest/outline";
 import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
@@ -21,12 +21,9 @@ export default function OutlineCategoryPanel({ category }: OutlineCategoryPanelP
     refreshVersion,
     setTabCount,
     setActiveCategoryNodes,
-    setShowLegacyDeductionList,
     openCreateNode,
     openAddChildNode,
     openEditNode,
-    openDeductionDrawer,
-    openHistoryDrawer,
     openThoughtDrawer,
   } = useOutlineContext();
 
@@ -253,20 +250,6 @@ export default function OutlineCategoryPanel({ category }: OutlineCategoryPanelP
             </Button>
           ) : null}
 
-          {category === "deduction" ? (
-            <Group gap="xs">
-              <Button variant="light" onClick={() => setShowLegacyDeductionList(false)}>
-                返回章节走向推演工作台
-              </Button>
-              <Button variant="filled" leftSection={<FiZap size={15} />} onClick={() => openDeductionDrawer(null)}>
-                A➔B 剧情推演
-              </Button>
-              <Button variant="default" leftSection={<FiClock size={15} />} onClick={openHistoryDrawer}>
-                推演历史
-              </Button>
-            </Group>
-          ) : null}
-
           {category === "memo" ? (
             <Group gap="xs">
               <Button variant="light" leftSection={<FiCpu size={15} />} onClick={openThoughtDrawer}>
@@ -307,7 +290,6 @@ export default function OutlineCategoryPanel({ category }: OutlineCategoryPanelP
               onDeleteNode={handleDeleteNode}
               onMoveNode={handleMoveNode}
               onAddChildNode={(parent) => openAddChildNode(parent, category)}
-              onTriggerDeduction={() => openDeductionDrawer(null)}
               onTriggerCreate={() => openCreateNode(category)}
               collapsedParents={collapsedParents}
               onToggleParentCollapse={handleToggleParentCollapse}

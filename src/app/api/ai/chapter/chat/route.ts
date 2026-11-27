@@ -7,14 +7,7 @@ import {
   works,
   chapters,
   chapterAiChats,
-  characters,
-  characterRelations,
-  locations,
-  factions,
-  items,
-  worldRules,
   outlines,
-  materials,
   memoryFragments,
 } from "@/db";
 import { eq, and, desc, asc, inArray, lt } from "drizzle-orm";
@@ -26,7 +19,7 @@ import {
   cleanAnalysisText,
 } from "@/utils/ai";
 import { parseJsonBody } from "@/utils/ownership";
-import { stripHtml } from "@/utils/text";
+import { buildWorldLoreContext } from "@/utils/worldContext";
 
 export type ChapterAiApplyMode =
   | "replace_selection"
@@ -171,37 +164,24 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const otherChapterIds = contextTags.filter((t) => t.type === "chapter").map((t) => Number(t.id)).filter(Boolean);
     const materialIds = contextTags.filter((t) => t.type === "material").map((t) => Number(t.id)).filter(Boolean);
 
-    // 一次并行查全自动上下文 + 手动关联标签（全部强制绑定 workId）
+    const matchTargetText = `${selectedText}\n${currentContent}\n${userPrompt}`;
+
+    // 一次并行查全自动设定上下文 + 手动关联标签（全部强制绑定 workId）
     const [
-      charsData,
-      allLocs,
-      allFacs,
-      allItems,
-      rulesData,
+      worldLore,
       outlinesData,
       chapterOutlines,
       otherChaptersData,
-      materialsData,
-      relationsData,
       fragmentsData,
       prevChapter,
       recentHistory,
     ] = await Promise.all([
-      charIds.length > 0
-        ? db.select().from(characters).where(and(eq(characters.workId, workId), inArray(characters.id, charIds))).all()
-        : db.select().from(characters).where(eq(characters.workId, workId)).limit(12).all(),
-      locIds.length > 0
-        ? db.select().from(locations).where(and(eq(locations.workId, workId), inArray(locations.id, locIds))).all()
-        : db.select().from(locations).where(eq(locations.workId, workId)).limit(25).all(),
-      facIds.length > 0
-        ? db.select().from(factions).where(and(eq(factions.workId, workId), inArray(factions.id, facIds))).all()
-        : db.select().from(factions).where(eq(factions.workId, workId)).limit(20).all(),
-      itemIds.length > 0
-        ? db.select().from(items).where(and(eq(items.workId, workId), inArray(items.id, itemIds))).all()
-        : db.select().from(items).where(eq(items.workId, workId)).limit(25).all(),
-      ruleIds.length > 0
-        ? db.select().from(worldRules).where(and(eq(worldRules.workId, workId), inArray(worldRules.id, ruleIds))).all()
-        : db.select().from(worldRules).where(eq(worldRules.workId, workId)).limit(6).all(),
+      buildWorldLoreContext(db, workId, matchTargetText, {
+        includeTimeline: true,
+        includeMaterials: true,
+        maxChars: 3400,
+        explicitIds: { charIds, locIds, facIds, itemIds, ruleIds, materialIds },
+      }),
       outlineIds.length > 0
         ? db.select().from(outlines).where(and(eq(outlines.workId, workId), inArray(outlines.id, outlineIds))).all()
         : Promise.resolve([]),
@@ -213,10 +193,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
             .where(and(eq(chapters.workId, workId), inArray(chapters.id, otherChapterIds)))
             .all()
         : Promise.resolve([]),
-      materialIds.length > 0
-        ? db.select().from(materials).where(and(eq(materials.workId, workId), inArray(materials.id, materialIds))).all()
-        : db.select().from(materials).where(and(eq(materials.workId, workId), eq(materials.includeInAiContext, 1))).limit(6).all(),
-      db.select().from(characterRelations).where(eq(characterRelations.workId, workId)).limit(15).all(),
       db
         .select()
         .from(memoryFragments)
@@ -248,71 +224,14 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .all(),
     ]);
 
-    // 未手动选中的实体：按当前正文/选中片段中出现的名字自动精准匹配注入
-    const matchTargetText = `${selectedText}\n${currentContent}\n${userPrompt}`;
-    const locsData = locIds.length > 0 ? allLocs : allLocs.filter((l) => l.name && matchTargetText.includes(l.name)).slice(0, 4);
-    const facsData = facIds.length > 0 ? allFacs : allFacs.filter((f) => f.name && matchTargetText.includes(f.name)).slice(0, 4);
-    const itemsData = itemIds.length > 0 ? allItems : allItems.filter((i) => i.name && matchTargetText.includes(i.name)).slice(0, 4);
-
     // 合并本章大纲 + 手动关联大纲（去重）
     const mergedOutlineMap = new Map<number, (typeof chapterOutlines)[number]>();
     chapterOutlines.forEach((o) => mergedOutlineMap.set(o.id, o));
     outlinesData.forEach((o) => mergedOutlineMap.set(o.id, o));
     const mergedOutlines = Array.from(mergedOutlineMap.values());
 
-    let structuredLoreContext = "";
+    let structuredLoreContext = worldLore.text ? `${worldLore.text}\n\n` : "";
 
-    if (charsData.length > 0) {
-      structuredLoreContext +=
-        "【核心角色档案库（人物动作与台词需贴合性格与身份，严防 OOC）】：\n" +
-        charsData
-          .map(
-            (c) =>
-              `- ${c.name} (${c.identity || c.roleType || "角色"}): 性格[${c.personality || "未知"}], 能力[${c.abilities || "无"}], 特征与经历[${(c.description || c.experiences || "无").slice(0, 120)}]`
-          )
-          .join("\n") +
-        "\n\n";
-    }
-    if (relationsData.length > 0) {
-      structuredLoreContext +=
-        "【人物关系网】：\n" +
-        relationsData
-          .map((r) => `- ${r.sourceCharName} → ${r.targetCharName}: ${r.relationType}${r.description ? `（${r.description.slice(0, 60)}）` : ""}`)
-          .join("\n") +
-        "\n\n";
-    }
-    if (locsData.length > 0) {
-      structuredLoreContext +=
-        "【关联地点设定】：\n" +
-        locsData
-          .map((l) => `- ${l.name} (${l.region || "区域"}): 类型[${l.type}], 特征[${(l.features || l.climate || l.terrain || "无").slice(0, 120)}], 剧情关联[${(l.plotPoints || "无").slice(0, 80)}]`)
-          .join("\n") +
-        "\n\n";
-    }
-    if (facsData.length > 0) {
-      structuredLoreContext +=
-        "【关联势力阵营】：\n" +
-        facsData
-          .map((f) => `- ${f.name}: 领袖[${f.leader || "未知"}], 立场[${f.alignment || "中立"}], 宗旨信条[${(f.doctrine || "无").slice(0, 100)}]`)
-          .join("\n") +
-        "\n\n";
-    }
-    if (itemsData.length > 0) {
-      structuredLoreContext +=
-        "【关联法宝道具】：\n" +
-        itemsData
-          .map((i) => `- ${i.name} (${i.tier || "物品"}): 效果[${(i.effects || "无").slice(0, 100)}], 代价/限制[${(i.drawbacks || "无").slice(0, 100)}]`)
-          .join("\n") +
-        "\n\n";
-    }
-    if (rulesData.length > 0) {
-      structuredLoreContext +=
-        "【世界法则与禁忌】：\n" +
-        rulesData
-          .map((r) => `- ${r.name}: 机制[${stripHtml(r.mechanisms).slice(0, 200) || "无"}], 禁忌[${(r.taboos || "无").slice(0, 120)}]`)
-          .join("\n") +
-        "\n\n";
-    }
     if (mergedOutlines.length > 0) {
       structuredLoreContext +=
         "【本章及关联剧情大纲】：\n" +
@@ -332,18 +251,6 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         "【其他关联章节提要】：\n" +
         otherChaptersData
           .map((ch) => `- ${ch.title || `第${ch.chapterNumber}章`}${ch.subtitle ? ` (${ch.subtitle})` : ""}: 提要[${ch.summary || "无"}]`)
-          .join("\n") +
-        "\n\n";
-    }
-    if (materialsData.length > 0) {
-      structuredLoreContext +=
-        "【关联素材与设定笔记】：\n" +
-        materialsData
-          .map((m) => {
-            const noteText = stripHtml(m.content).slice(0, 260);
-            const loreText = (m.extractedLore || m.aiSummary || "").slice(0, 220);
-            return `- 《${m.title}》: ${loreText ? `[设定要点: ${loreText}] ` : ""}${noteText ? `[笔记: ${noteText}]` : ""}`;
-          })
           .join("\n") +
         "\n\n";
     }

@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Tooltip, TextInput, Textarea, Group, ScrollArea, Badge, Menu, Paper } from "@mantine/core";
-import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy, FiMinimize2, FiRotateCcw, FiChevronDown } from "react-icons/fi";
+import { FiSave, FiZap, FiFileText, FiMoreHorizontal, FiSidebar, FiBookmark, FiClock, FiAlignLeft, FiLayers, FiTrash2, FiCopy, FiMinimize2, FiRotateCcw, FiChevronDown, FiGitBranch, FiCompass } from "react-icons/fi";
 import { ChapterItem, createChapterVersion, ActiveAiTask, ChapterAiApplyMode, HIGHLIGHT_COLORS } from "@/rest/chapter";
 import { extractChapterOutline } from "@/rest/outline";
 import { useAlert } from "@/hooks/useAlert";
@@ -31,6 +31,9 @@ interface EditorAreaProps {
   onDirtyChange?: (isDirty: boolean) => void;
   onDeleteChapter?: (chapterId: number | string) => void;
   onOutlineExtracted?: (chapterId: number | string) => void;
+  onReverseSingleChapter?: (chapter: ChapterItem) => void;
+  reversingOutline?: boolean;
+  onOpenWorldSync?: (chapterId: number | string) => void;
   saveRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
@@ -79,6 +82,9 @@ export default function EditorArea({
   onDirtyChange,
   onDeleteChapter,
   onOutlineExtracted,
+  onReverseSingleChapter,
+  reversingOutline = false,
+  onOpenWorldSync,
   saveRef,
 }: EditorAreaProps) {
   const [title, setTitle] = useState("");
@@ -704,6 +710,20 @@ export default function EditorArea({
               <Menu.Item leftSection={<FiLayers size={13} color="#16a34a" />} onClick={handleExtractToOutline} disabled={extractingOutline}>
                 {extractingOutline ? "提取大纲中..." : "提取剧情到大纲"}
               </Menu.Item>
+              {onReverseSingleChapter && (
+                <Menu.Item
+                  leftSection={<FiGitBranch size={13} color="#0284c7" />}
+                  onClick={() => onReverseSingleChapter(chapter)}
+                  disabled={reversingOutline}
+                >
+                  {reversingOutline ? "反推同步总纲中..." : "反推同步至总纲树"}
+                </Menu.Item>
+              )}
+              {onOpenWorldSync && (
+                <Menu.Item leftSection={<FiCompass size={13} color="#8b5cf6" />} onClick={() => onOpenWorldSync(chapter.id)}>
+                  沉淀本章世界观设定
+                </Menu.Item>
+              )}
               <Menu.Item leftSection={<FiBookmark size={13} color="#06b6d4" />} onClick={() => setFragmentDrawerOpened(true)}>
                 记忆碎片灵感库
               </Menu.Item>

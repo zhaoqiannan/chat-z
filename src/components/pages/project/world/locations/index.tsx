@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Flex, Text, Button, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Tabs, Paper, Group, Card, Tooltip, Badge, Switch } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiPlus, FiMinus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2, FiRotateCcw } from "react-icons/fi";
+import { FiPlus, FiMinus, FiEdit, FiTrash2, FiMapPin, FiSearch, FiCompass, FiLayers, FiZap, FiMove, FiEye, FiEyeOff, FiCheck, FiShare2, FiRotateCcw, FiCpu } from "react-icons/fi";
 import { LocationRecord, getLocationList, createLocation, updateLocation, deleteLocation } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 
@@ -41,6 +42,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
   const [editingItem, setEditingItem] = useState<LocationRecord | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [nameGenOpened, setNameGenOpened] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const [name, setName] = useState("");
   const [alias, setAlias] = useState("");
@@ -388,6 +390,10 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
                 </Button>
               </>
             )}
+
+            <Button size="xs" variant="light" color="cyan" leftSection={<FiCpu size={13} />} onClick={() => setWorldSyncOpened(true)}>
+              AI 扫描全文同步
+            </Button>
 
             <Button size="xs" leftSection={<FiPlus size={13} />} onClick={() => handleOpenCreate()}>
               新建地点
@@ -964,6 +970,14 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
         onClose={() => setNameGenOpened(false)}
         onSelectName={(val) => setName(val)}
         type="location"
+      />
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="locations"
+        onApplied={fetchList}
       />
     </Box>
   );

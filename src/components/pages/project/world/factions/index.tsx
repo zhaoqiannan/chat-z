@@ -4,9 +4,10 @@
 import React, { useState, useEffect } from "react";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Group, Paper, Table } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp } from "react-icons/fi";
+import { FiPlus, FiEdit2, FiTrash2, FiShield, FiSearch, FiUser, FiMapPin, FiTrendingUp, FiCpu } from "react-icons/fi";
 import { FactionItem, getFactionList, createFaction, updateFaction, deleteFaction, getCharacterList, CharacterItem, getLocationList, LocationRecord } from "@/rest/world";
 import NameGeneratorModal from "@/components/common/name-generator";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 
@@ -49,6 +50,7 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
   const [editingItem, setEditingItem] = useState<FactionItem | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [nameGenOpened, setNameGenOpened] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const [name, setName] = useState("");
   const [leaderId, setLeaderId] = useState<string | null>(null);
@@ -234,9 +236,14 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
           onChange={(e) => setSearchKey(e.target.value)}
           style={{ width: 320 }}
         />
-        <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
-          新增势力阵营
-        </Button>
+        <Group gap="xs">
+          <Button size="xs" variant="light" color="cyan" leftSection={<FiCpu size={13} />} onClick={() => setWorldSyncOpened(true)}>
+            AI 扫描全文同步
+          </Button>
+          <Button size="xs" leftSection={<FiPlus size={13} />} onClick={handleOpenCreate}>
+            新增势力阵营
+          </Button>
+        </Group>
       </Flex>
 
       {filteredList.length === 0 && !loading ? (
@@ -467,6 +474,14 @@ export default function FactionsTab({ workId }: FactionsTabProps) {
         onClose={() => setNameGenOpened(false)}
         type="faction"
         onSelectName={(genName) => setName(genName)}
+      />
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="factions"
+        onApplied={fetchData}
       />
     </Box>
   );

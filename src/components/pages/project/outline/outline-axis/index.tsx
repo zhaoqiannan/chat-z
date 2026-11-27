@@ -3,13 +3,13 @@
 
 import React, { useState, useMemo } from "react";
 import { Box, Flex, Text, Badge, ActionIcon, Stack, Paper, Group, Button, Tooltip, Checkbox, Collapse } from "@mantine/core";
-import { FiEdit2, FiTrash2, FiArrowUp, FiArrowDown, FiFileText, FiChevronDown, FiChevronUp, FiBookOpen, FiExternalLink, FiZap, FiEdit3, FiCornerDownRight, FiPlus, FiClock, FiMapPin } from "react-icons/fi";
+import { FiEdit2, FiTrash2, FiArrowUp, FiArrowDown, FiChevronDown, FiChevronUp, FiBookOpen, FiExternalLink, FiEdit3, FiCornerDownRight, FiPlus, FiClock, FiMapPin, FiFileText } from "react-icons/fi";
 import { OutlineNode } from "@/rest/outline";
 import { useRouter } from "next/navigation";
 
 interface OutlineAxisProps {
   workId: string;
-  category: "chapter" | "deduction" | "memo";
+  category: "chapter" | "memo";
   nodes: OutlineNode[];
   selectedNodeIds: (number | string)[];
   onToggleSelectNode: (id: number | string) => void;
@@ -17,7 +17,6 @@ interface OutlineAxisProps {
   onDeleteNode: (id: number | string, e: React.MouseEvent) => void;
   onMoveNode: (node: OutlineNode, direction: "up" | "down") => void;
   onAddChildNode?: (parentNode: OutlineNode) => void;
-  onTriggerDeduction?: () => void;
   onTriggerCreate?: () => void;
   collapsedParents: Record<string, boolean>;
   onToggleParentCollapse: (id: number | string) => void;
@@ -33,7 +32,6 @@ export default function OutlineAxis({
   onDeleteNode,
   onMoveNode,
   onAddChildNode,
-  onTriggerDeduction,
   onTriggerCreate,
   collapsedParents,
   onToggleParentCollapse,
@@ -81,30 +79,14 @@ export default function OutlineAxis({
     return (
       <Paper p="xl" withBorder radius="md" ta="center" bg="gray.0" my="md">
         <Text fz={16} fw={600} c="dimmed">
-          {category === "chapter"
-            ? "暂无章节大纲"
-            : category === "deduction"
-            ? "暂无剧情推演记录"
-            : "暂无随手灵感卡片"}
+          {category === "chapter" ? "暂无章节大纲" : "暂无随手灵感卡片"}
         </Text>
         <Text fz={13} c="dimmed" mt={4} mb="md">
           {category === "chapter"
             ? "在正文编辑区点击【提取剧情到大纲】即可一键同步章节大纲，或手动添加分卷规划。"
-            : category === "deduction"
-            ? "点击【A➔B 剧情推演】设定起点与终点，智能生成并采纳树级推演方案。"
             : "点击【新建随手卡片】或【AI 思路整理】快速重构你的灵感时空脉络。"}
         </Text>
         <Group justify="center">
-          {category === "deduction" && onTriggerDeduction && (
-            <Button
-              variant="filled"
-              color="blue"
-              leftSection={<FiZap size={15} />}
-              onClick={onTriggerDeduction}
-            >
-              开始 A➔B 剧情推演
-            </Button>
-          )}
           {onTriggerCreate && (
             <Button
               variant="default"
@@ -149,11 +131,7 @@ export default function OutlineAxis({
               aria-label={`选择 ${childNode.title}`}
             />
             <Badge variant="light" color="indigo" size="sm">
-              {childNode.chapterNumber
-                ? `第 ${childNode.chapterNumber} 章`
-                : childNode.deductionStepIndex
-                ? `阶段 ${childNode.deductionStepIndex}`
-                : `情节 ${siblingIndex + 1}`}
+              {childNode.chapterNumber ? `第 ${childNode.chapterNumber} 章` : `情节 ${siblingIndex + 1}`}
             </Badge>
             <Text fw={700} fz={15} c="#0f172a">
               {childNode.title}
@@ -288,12 +266,6 @@ export default function OutlineAxis({
                   </Badge>
                 )}
 
-                {nodeCategory === "deduction" && (
-                  <Badge variant="filled" color="blue" size="md" leftSection={<FiZap size={12} />}>
-                    剧情推演方案
-                  </Badge>
-                )}
-
                 {nodeCategory === "memo" && (
                   <Badge variant="filled" color="indigo" size="md" leftSection={<FiEdit3 size={12} />}>
                     AI 思路整理 / 主纲
@@ -387,25 +359,6 @@ export default function OutlineAxis({
                 </Tooltip>
               </Group>
             </Flex>
-
-            {/* 剧情推演专属：起点 ➔ 终点 */}
-            {nodeCategory === "deduction" && (rootNode.deductionOrigin || rootNode.deductionPremise || rootNode.deductionTarget) && (
-              <Paper p="xs" withBorder radius="sm" bg="blue.0" mb="xs" style={{ borderColor: "#bfdbfe" }}>
-                <Flex align="center" gap={6} wrap="wrap">
-                  <Badge variant="filled" color="blue" size="xs">
-                    推演脉络
-                  </Badge>
-                  <Text fz={13} fw={600} c="blue.9">
-                    {rootNode.deductionOrigin || `从「${rootNode.deductionPremise || "起点"}」➔「${rootNode.deductionTarget || "终点"}」`}
-                  </Text>
-                  {rootNode.deductionPathTitle && (
-                    <Badge variant="outline" color="blue" size="xs">
-                      {rootNode.deductionPathTitle}
-                    </Badge>
-                  )}
-                </Flex>
-              </Paper>
-            )}
 
             {/* 核心总述 Summary / 脉络叙述 */}
             {(rootNode.summary || rootNode.content || rootNode.event) && (

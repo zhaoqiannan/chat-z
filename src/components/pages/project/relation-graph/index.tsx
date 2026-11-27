@@ -5,10 +5,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Box, Flex, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, SimpleGrid, Table, Paper, Tabs, Avatar, Group, ScrollArea, Tooltip } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
-import { FiPlus, FiMinus, FiEdit, FiTrash2, FiShare2, FiUsers, FiSearch, FiRefreshCw, FiEye } from "react-icons/fi";
+import { FiPlus, FiMinus, FiEdit, FiTrash2, FiShare2, FiUsers, FiSearch, FiRefreshCw, FiEye, FiCpu } from "react-icons/fi";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 import { CharacterRelationData, RelationGraphCharNode, getRelationGraphData, createCharacterRelation, updateCharacterRelation, deleteCharacterRelation } from "@/rest/project-extensions";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 
 export default function RelationGraphPage() {
   const params = useParams();
@@ -30,6 +31,7 @@ export default function RelationGraphPage() {
   const [relationTag, setRelationTag] = useState("friendly");
   const [description, setDescription] = useState("");
   const [formLoading, setFormLoading] = useState(false);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   // 拓扑图节点绝对坐标 (百分比: 0~100)
   const [nodePositions, setNodePositions] = useState<Record<string | number, { x: number; y: number }>>({});
@@ -363,6 +365,16 @@ export default function RelationGraphPage() {
                   </Button>
                 </>
               )}
+
+              <Button
+                size="xs"
+                variant="light"
+                color="cyan"
+                leftSection={<FiCpu size={13} />}
+                onClick={() => setWorldSyncOpened(true)}
+              >
+                AI 扫描全文关系
+              </Button>
 
               <Button
                 size="xs"
@@ -828,6 +840,14 @@ export default function RelationGraphPage() {
           </Flex>
         </Stack>
       </Modal>
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="relations"
+        onApplied={fetchData}
+      />
     </Box>
   );
 }

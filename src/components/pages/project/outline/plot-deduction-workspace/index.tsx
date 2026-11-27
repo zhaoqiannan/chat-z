@@ -1,21 +1,20 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import { Badge, Box, Button, Divider, Flex, Group, Modal, NumberInput, Paper, ScrollArea, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { FiBookOpen, FiCheck, FiCopy, FiEdit2, FiExternalLink, FiFeather, FiFileText, FiGitBranch, FiLayers, FiRefreshCw, FiSave, FiShield, FiZap } from "react-icons/fi";
-import { GeneratedProseDraft, MasterChapterPlanItem, MasterChapterPlanOption, MasterNodeDeductionContextResult, MasterNodeDeductionSnapshot, extractChapterOutline, generateMasterChapterPlans, generateProseFromPlan, getMasterNodeDeductionContext } from "@/rest/outline";
+import { FiBookOpen, FiCheck, FiCompass, FiCopy, FiEdit2, FiExternalLink, FiFeather, FiFileText, FiGitBranch, FiLayers, FiRefreshCw, FiSave, FiShield, FiX, FiZap } from "react-icons/fi";
+import { GeneratedProseDraft, MasterChapterPlanItem, MasterChapterPlanOption, MasterNodeDeductionContextResult, MasterNodeDeductionSnapshot, extractChapterOutline, generateMasterChapterPlans, generateProseFromPlan, getMasterNodeDeductionContext, saveMasterChapterPlansSnapshot } from "@/rest/outline";
 import { createChapter, updateChapter } from "@/rest/chapter";
 import LoadingMask from "@/components/common/loading-mask";
+import WorldSyncScannerModal from "@/components/common/world-sync-scanner";
 import { useAlert } from "@/hooks/useAlert";
 import { showConfirm } from "@/hooks/useConfirm";
 
 interface PlotDeductionWorkspaceProps {
   workId: string;
   initialNodeId?: string | null;
-  legacyCardCount?: number;
-  onShowLegacyCards?: () => void;
   onJumpToQualityAudit?: (chapterRange: string, nodeTitle: string) => void;
 }
 
@@ -30,8 +29,6 @@ const WRITING_STYLES = [
 export default function PlotDeductionWorkspace({
   workId,
   initialNodeId,
-  legacyCardCount = 0,
-  onShowLegacyCards,
   onJumpToQualityAudit,
 }: PlotDeductionWorkspaceProps) {
   const router = useRouter();
@@ -48,6 +45,8 @@ export default function PlotDeductionWorkspace({
   const [snapshot, setSnapshot] = useState<MasterNodeDeductionSnapshot | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [isEditingPlan, setIsEditingPlan] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const editingBackupRef = useRef<MasterChapterPlanOption[] | null>(null);
 
   // 正文生成弹窗状态（仅保留上一次生成，重新生成覆盖）
   const [proseModalOpened, setProseModalOpened] = useState(false);
@@ -62,6 +61,7 @@ export default function PlotDeductionWorkspace({
   const [extractingSavedOutline, setExtractingSavedOutline] = useState(false);
   const [targetVolumeId, setTargetVolumeId] = useState<string>("");
   const [lastSavedChapterId, setLastSavedChapterId] = useState<number | string | null>(null);
+  const [worldSyncOpened, setWorldSyncOpened] = useState(false);
 
   const loadContext = useCallback(
     async (nodeId?: string) => {
@@ -178,6 +178,60 @@ export default function PlotDeductionWorkspace({
       useAlert.error("推演异常: " + (e?.message || "网络错误"));
     } finally {
       setPlanning(false);
+    }
+  };
+
+  const handleStartEditPlan = () => {
+    if (!snapshot) return;
+    editingBackupRef.current = JSON.parse(JSON.stringify(snapshot.plans));
+    setIsEditingPlan(true);
+  };
+
+  const handleCancelEditPlan = () => {
+    if (editingBackupRef.current) {
+      const backup = editingBackupRef.current;
+      setSnapshot((prev) => (prev ? { ...prev, plans: backup } : prev));
+      editingBackupRef.current = null;
+    }
+    setIsEditingPlan(false);
+  };
+
+  const handleSaveEditedPlan = async () => {
+    if (!workId || !selectedNodeId || !snapshot || savingPlan) return;
+    try {
+      setSavingPlan(true);
+      const res = await saveMasterChapterPlansSnapshot({
+        workId,
+        nodeId: selectedNodeId,
+        selectedPlanId: selectedPlan?.id || selectedPlanId,
+        plans: snapshot.plans,
+      });
+      if (res && res.success && res.result) {
+        setSnapshot(res.result);
+        setSelectedPlanId(res.result.selectedPlanId || selectedPlanId);
+        editingBackupRef.current = null;
+        setIsEditingPlan(false);
+        useAlert.success("已覆盖保存微调后的走向方案！");
+      } else {
+        useAlert.error(res?.message || "保存微调失败，请重试");
+      }
+    } catch (e: any) {
+      useAlert.error("保存微调异常: " + (e?.message || "网络错误"));
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const handleSwitchPlan = (planId: string) => {
+    setSelectedPlanId(planId);
+    setIsEditingPlan(false);
+    editingBackupRef.current = null;
+    if (workId && selectedNodeId && snapshot) {
+      saveMasterChapterPlansSnapshot({
+        workId,
+        nodeId: selectedNodeId,
+        selectedPlanId: planId,
+      }).catch(() => {});
     }
   };
 
@@ -415,11 +469,6 @@ export default function PlotDeductionWorkspace({
               ③ 章节质检此阶段
             </Button>
           ) : null}
-          {onShowLegacyCards ? (
-            <Button size="xs" variant="subtle" color="gray" onClick={onShowLegacyCards}>
-              旧推演卡片{legacyCardCount > 0 ? ` (${legacyCardCount})` : ""}
-            </Button>
-          ) : null}
           <Button size="xs" variant="default" leftSection={<FiRefreshCw size={12} />} loading={loadingContext} onClick={() => loadContext(selectedNodeId)}>
             刷新进度
           </Button>
@@ -607,10 +656,8 @@ export default function PlotDeductionWorkspace({
                           key={p.id}
                           size="xs"
                           variant={active ? "filled" : "default"}
-                          onClick={() => {
-                            setSelectedPlanId(p.id);
-                            setIsEditingPlan(false);
-                          }}
+                          disabled={isEditingPlan}
+                          onClick={() => handleSwitchPlan(p.id)}
                         >
                           {p.name || `方案 ${idx + 1}`}
                         </Button>
@@ -619,14 +666,20 @@ export default function PlotDeductionWorkspace({
                   </Group>
 
                   <Group gap={8}>
-                    <Button
-                      size="xs"
-                      variant={isEditingPlan ? "light" : "default"}
-                      leftSection={<FiEdit2 size={12} />}
-                      onClick={() => setIsEditingPlan((v) => !v)}
-                    >
-                      {isEditingPlan ? "完成微调" : "微调走向文本"}
-                    </Button>
+                    {isEditingPlan ? (
+                      <>
+                        <Button size="xs" variant="default" leftSection={<FiX size={12} />} disabled={savingPlan} onClick={handleCancelEditPlan}>
+                          取消微调
+                        </Button>
+                        <Button size="xs" leftSection={<FiSave size={12} />} loading={savingPlan} onClick={handleSaveEditedPlan}>
+                          保存微调
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="xs" variant="default" leftSection={<FiEdit2 size={12} />} onClick={handleStartEditPlan}>
+                        微调走向文本
+                      </Button>
+                    )}
                     <Button size="xs" variant="default" leftSection={<FiCopy size={12} />} onClick={handleCopyCurrentPlan}>
                       复制本方案
                     </Button>
@@ -884,6 +937,15 @@ export default function PlotDeductionWorkspace({
                     <Button
                       size="xs"
                       variant="light"
+                      color="violet"
+                      leftSection={<FiCompass size={13} />}
+                      onClick={() => setWorldSyncOpened(true)}
+                    >
+                      沉淀本章设定
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="light"
                       color="green"
                       leftSection={<FiExternalLink size={13} />}
                       onClick={() => router.push(`/project/${workId}?tab=chapters&chapterId=${lastSavedChapterId}`)}
@@ -908,6 +970,14 @@ export default function PlotDeductionWorkspace({
           </Stack>
         </Box>
       </Modal>
+
+      <WorldSyncScannerModal
+        opened={worldSyncOpened}
+        onClose={() => setWorldSyncOpened(false)}
+        workId={workId}
+        defaultFocusScope="all"
+        presetChapterIds={lastSavedChapterId ? [Number(lastSavedChapterId)] : undefined}
+      />
     </Flex>
   );
 }
