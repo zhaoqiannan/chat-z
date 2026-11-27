@@ -116,8 +116,25 @@ CREATE TABLE IF NOT EXISTS world_rules (
   updated_at INTEGER
 );
 
+-- 重建早期不兼容且为空表的 character_relations（对齐 src/db/schema.ts 正式字段）
+DROP TABLE IF EXISTS character_relations;
+CREATE TABLE character_relations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  work_id INTEGER NOT NULL,
+  source_char_id INTEGER NOT NULL,
+  source_char_name TEXT NOT NULL,
+  target_char_id INTEGER NOT NULL,
+  target_char_name TEXT NOT NULL,
+  relation_type TEXT NOT NULL,
+  relation_tag TEXT DEFAULT 'friendly',
+  description TEXT,
+  created_at INTEGER,
+  updated_at INTEGER
+);
+
 -- 高频查询复合索引（优化章节列表排序、工作台最近编辑、AI 素材注入与人物关系级联）
 CREATE INDEX IF NOT EXISTS idx_chapters_work_vol_num ON chapters(work_id, is_volume, chapter_number);
 CREATE INDEX IF NOT EXISTS idx_chapters_user_vol_updated ON chapters(user_id, is_volume, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_materials_work_ai ON materials(work_id, include_in_ai_context);
+CREATE INDEX IF NOT EXISTS idx_character_relations_work ON character_relations(work_id);
 CREATE INDEX IF NOT EXISTS idx_character_relations_chars ON character_relations(work_id, source_char_id, target_char_id);
