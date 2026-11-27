@@ -236,8 +236,11 @@ export interface PlotDeductionRecord {
   updatedAt: string | number;
 }
 
-export const getOutlineList = async (workId: number | string): Promise<{ success: boolean; result?: OutlineNode[]; flatList?: OutlineNode[]; message?: string }> => {
-  return get(OutlineApi.list, { workId });
+export const getOutlineList = async (
+  workId: number | string,
+  category?: "chapter" | "deduction" | "memo"
+): Promise<{ success: boolean; result?: OutlineNode[]; flatList?: OutlineNode[]; message?: string }> => {
+  return get(OutlineApi.list, category ? { workId, category } : { workId });
 };
 
 export const createOutlineNode = async (data: CreateOutlinePayload) => {
@@ -458,6 +461,8 @@ export const generateProseFromPlan = async (payload: {
   chapterNumber: number;
   chapterTitle: string;
   plotText: string;
+  prevPlanContext?: string;
+  nextPlanContext?: string;
   siblingContext?: string;
   writingStyle?: string;
   extraInstruction?: string;

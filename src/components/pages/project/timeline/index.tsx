@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Box, Text, Button, Badge, ActionIcon, Modal, TextInput, Textarea, Select, Stack, Paper, Timeline, ThemeIcon, Group, Card, ScrollArea } from "@mantine/core";
 import LoadingMask from "@/components/common/loading-mask";
@@ -35,29 +35,49 @@ export default function TimelinePage() {
   const [sortOrder, setSortOrder] = useState(0);
   const [formLoading, setFormLoading] = useState(false);
 
-  const fetchData = async () => {
+  const reqIdRef = useRef(0);
+
+  const fetchData = async (targetTimelineId?: string) => {
     if (!workId) return;
+    const reqId = ++reqIdRef.current;
+    const effectiveTimelineId = targetTimelineId !== undefined ? targetTimelineId : activeTimelineId;
     try {
       setLoading(true);
-      const res = await getTimelineFullData(workId);
+      const res = await getTimelineFullData(workId, effectiveTimelineId || undefined);
+      if (reqId !== reqIdRef.current) return;
       if (res && res.success && res.result) {
         const tls = res.result.timelines || [];
         setTimelines(tls);
         setEvents(res.result.events || []);
-        if (tls.length > 0 && !activeTimelineId) {
-          setActiveTimelineId(String(tls[0].id));
+        const resolvedId = res.result.activeTimelineId
+          ? String(res.result.activeTimelineId)
+          : tls.length > 0
+          ? String(tls[0].id)
+          : "";
+        if (resolvedId && resolvedId !== activeTimelineId) {
+          setActiveTimelineId(resolvedId);
         }
       }
     } catch (e) {
-      console.error("获取时间线数据失败:", e);
+      if (reqId === reqIdRef.current) {
+        console.error("获取时间线数据失败:", e);
+      }
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchData();
+    setActiveTimelineId("");
+    fetchData("");
   }, [workId]);
+
+  const handleSelectTimeline = (nextTimelineId: string) => {
+    setActiveTimelineId(nextTimelineId);
+    fetchData(nextTimelineId);
+  };
 
   const handleCreateTimeline = async () => {
     if (!newTimelineTitle.trim()) {
@@ -75,7 +95,9 @@ export default function TimelinePage() {
         setTimelineModalOpened(false);
         setNewTimelineTitle("");
         setNewTimelineDesc("");
-        await fetchData();
+        const createdId = res.result?.id ? String(res.result.id) : activeTimelineId;
+        if (createdId) setActiveTimelineId(createdId);
+        await fetchData(createdId);
       }
     } catch (e: any) {
       useAlert.error("创建失败: " + (e?.message || "网络异常"));
@@ -220,7 +242,7 @@ export default function TimelinePage() {
                 variant={activeTimelineId === String(tl.id) ? "filled" : "default"}
 
                 leftSection={<FiClock size={13} />}
-                onClick={() => setActiveTimelineId(String(tl.id))}
+                onClick={() => handleSelectTimeline(String(tl.id))}
               >
                 {tl.title}
               </Button>

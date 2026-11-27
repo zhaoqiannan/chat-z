@@ -745,3 +745,86 @@
     background-color: #ffffff;
   }
 }
+
+.nodeFlowBar {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background-color: #ffffff;
+  border: 1px solid rgba(0, 201, 255, 0.35);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+  z-index: 30;
+  white-space: nowrap;
+}
+
+.nodeFlowBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 999px;
+  background-color: #f8fafc;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+
+  &:hover:not(:disabled) {
+    background-color: rgba(0, 201, 255, 0.14);
+    color: #0099c4;
+  }
+}
+
+.nodeFlowBtnPrimary {
+  background-color: #eff6ff;
+  color: #2563eb;
+
+  &:hover:not(:disabled) {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+  }
+}
+
+.nodeFlowBtnDone {
+  background-color: #ecfdf5;
+  color: #059669;
+
+  &:hover:not(:disabled) {
+    background-color: #d1fae5;
+    color: #047857;
+  }
+}
+
+.nodeFlowBtnDisabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  background-color: #f1f5f9;
+  color: #94a3b8;
+}
+
+.nodeFlowDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #10b981;
+  flex-shrink: 0;
+}
+
+.contextMenuItemDisabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+
+  &:hover {
+    background-color: transparent;
+    color: inherit;
+  }
+}

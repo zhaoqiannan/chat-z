@@ -1,189 +1,67 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import React from "react";
+import { useParams } from "next/navigation";
 import { ActionIcon, Badge, Box, Button, Center, Flex, Group, MultiSelect, NumberInput, Paper, ScrollArea, SegmentedControl, Select, SimpleGrid, Stack, Tabs, Text, TextInput, Tooltip } from "@mantine/core";
 import { FiBook, FiClock, FiCpu, FiLayers, FiPlay, FiShield, FiTrash2, FiUserCheck } from "react-icons/fi";
-import { AiAnalysisType, AnalysisReportRecord, AnalysisWorkMetrics, deleteAnalysisReport, getAnalysisOverview, runAiAnalysis } from "@/rest/analysis";
+import { AiAnalysisTabKey, AiAnalysisType } from "@/rest/analysis";
 import LoadingMask from "@/components/common/loading-mask";
-import { useAlert } from "@/hooks/useAlert";
 import ReportViewer from "./report-viewer";
+import { AiAnalysisProvider, useAiAnalysisContext } from "./context/AiAnalysisContext";
 import styles from "./style.module.scss";
 
 const TYPE_LABEL: Record<AiAnalysisType, string> = {
   book_overview: "全书总览",
-  chapter_range: "区间模块",
-  logic_audit: "逻辑审查",
-  character_audit: "人物分析",
+  chapter_range: "章节质检",
+  logic_audit: "设定冲突",
+  character_audit: "人物 OOC",
 };
 
-export default function AiAnalysisPage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const workId = String(params?.id || "");
-
-  const [loading, setLoading] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [metrics, setMetrics] = useState<AnalysisWorkMetrics | null>(null);
-  const [history, setHistory] = useState<AnalysisReportRecord[]>([]);
-  const [activeReport, setActiveReport] = useState<AnalysisReportRecord | null>(null);
-
-  const [activeTab, setActiveTab] = useState<string>("book_overview");
-  const [auditSubMode, setAuditSubMode] = useState<"logic_audit" | "character_audit">("logic_audit");
-
-  // 区间与审计参数
-  const [startChapter, setStartChapter] = useState<number>(1);
-  const [endChapter, setEndChapter] = useState<number>(5);
-  const [expectedGoal, setExpectedGoal] = useState<string>("");
-  const [selectedCharIds, setSelectedCharIds] = useState<string[]>([]);
-
-  const fetchOverview = useCallback(async () => {
-    if (!workId) return;
-    try {
-      setLoading(true);
-      const res = await getAnalysisOverview(workId);
-      if (res && res.success && res.result) {
-        setMetrics(res.result.metrics);
-        const list = res.result.history || [];
-        setHistory(list);
-        if (list.length > 0 && !activeReport) {
-          setActiveReport(list[0]);
-        }
-        const maxCh = res.result.metrics.chapters.length;
-        if (maxCh > 0) {
-          setEndChapter((prev) => (prev > maxCh ? maxCh : prev));
-        }
-      }
-    } catch (e: any) {
-      useAlert.error("加载分析数据失败: " + (e?.message || "网络异常"));
-    } finally {
-      setLoading(false);
-    }
-  }, [workId]);
-
-  useEffect(() => {
-    fetchOverview();
-  }, [fetchOverview]);
-
-  // 响应从「项目总纲」跳转携带的区间参数
-  useEffect(() => {
-    const modeParam = searchParams.get("mode");
-    const rangeParam = searchParams.get("range");
-    const goalParam = searchParams.get("goal");
-    if (modeParam === "range") {
-      setActiveTab("chapter_range");
-      if (rangeParam) {
-        const nums = rangeParam.match(/\d+/g);
-        if (nums && nums.length >= 1) {
-          const s = Number(nums[0]);
-          const e = nums.length >= 2 ? Number(nums[1]) : s;
-          if (!isNaN(s)) setStartChapter(s);
-          if (!isNaN(e)) setEndChapter(Math.max(s, e));
-        }
-      }
-      if (goalParam) setExpectedGoal(goalParam);
-    }
-  }, [searchParams]);
-
-  const currentAnalysisType: AiAnalysisType =
-    activeTab === "book_overview"
-      ? "book_overview"
-      : activeTab === "chapter_range"
-        ? "chapter_range"
-        : auditSubMode;
-
-  const handleRunAnalysis = async () => {
-    if (!workId) return;
-    if (currentAnalysisType === "character_audit" && selectedCharIds.length === 0) {
-      useAlert.warning("请至少选择 1 位需要分析的角色");
-      return;
-    }
-
-    try {
-      setRunning(true);
-      const res = await runAiAnalysis({
-        workId,
-        analysisType: currentAnalysisType,
-        startChapter,
-        endChapter: Math.max(startChapter, endChapter),
-        expectedGoal: expectedGoal.trim() || undefined,
-        characterIds: selectedCharIds.map(Number).filter((n) => !isNaN(n)),
-      });
-
-      if (res && res.success && res.result) {
-        setActiveReport(res.result);
-        setHistory((prev) => [res.result!, ...prev.filter((r) => r.id !== res.result!.id)]);
-        useAlert.success("AI 深度分析完成！");
-      } else {
-        useAlert.error(res?.message || "AI 分析失败");
-      }
-    } catch (e: any) {
-      useAlert.error("AI 分析异常: " + (e?.message || "网络异常"));
-    } finally {
-      setRunning(false);
-    }
-  };
-
-  const handleDeleteReport = async (id: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const res = await deleteAnalysisReport(id);
-      if (res && res.success) {
-        setHistory((prev) => prev.filter((item) => item.id !== id));
-        if (activeReport?.id === id) {
-          setActiveReport(null);
-        }
-        useAlert.success("已删除历史报告");
-      }
-    } catch (err: any) {
-      useAlert.error("删除失败: " + (err?.message || "网络异常"));
-    }
-  };
-
-  const handlePickVolume = (volId: string | null) => {
-    if (!volId || !metrics) return;
-    const chs = metrics.chapters.filter((c) => String(c.volumeId) === volId);
-    if (chs.length > 0) {
-      setStartChapter(chs[0].chapterNumber);
-      setEndChapter(chs[chs.length - 1].chapterNumber);
-    }
-  };
-
-  const handlePickMasterNode = (nodeId: string | null) => {
-    if (!nodeId || !metrics) return;
-    const node = metrics.masterNodes.find((n) => n.id === nodeId);
-    if (!node) return;
-    const nums = node.chapterRange.match(/\d+/g);
-    if (nums && nums.length >= 1) {
-      const s = Number(nums[0]);
-      const e = nums.length >= 2 ? Number(nums[1]) : s;
-      setStartChapter(s);
-      setEndChapter(Math.max(s, e));
-    }
-    setExpectedGoal(node.title);
-  };
-
-  const maxChapterNum = useMemo(() => {
-    if (!metrics || metrics.chapters.length === 0) return 100;
-    return Math.max(...metrics.chapters.map((c) => c.chapterNumber));
-  }, [metrics]);
+function AiAnalysisContent() {
+  const {
+    workId,
+    activeTab,
+    setActiveTab,
+    auditSubMode,
+    setAuditSubMode,
+    loading,
+    running,
+    metrics,
+    history,
+    activeReport,
+    setActiveReport,
+    startChapter,
+    setStartChapter,
+    endChapter,
+    setEndChapter,
+    expectedGoal,
+    setExpectedGoal,
+    sourceNodeGoal,
+    selectedCharIds,
+    setSelectedCharIds,
+    maxChapterNum,
+    handleRunAnalysis,
+    handleDeleteReport,
+    handlePickVolume,
+    handlePickMasterNode,
+  } = useAiAnalysisContext();
 
   return (
     <Box className={styles.page}>
-      <LoadingMask visible={loading && !metrics} label="正在加载作品数据..." />
+      <LoadingMask visible={loading} label="正在加载当前模块最新数据..." />
 
-      {/* 顶部 Tab 导航 */}
+      {/* 顶部 Tab 导航（切换即按当前 Tab 请求最新指标与历史报告） */}
       <Box px="md" pt={6} className={styles.headerBar}>
-        <Tabs value={activeTab} onChange={(v) => setActiveTab(v || "book_overview")}>
+        <Tabs value={activeTab} onChange={(v) => setActiveTab((v as AiAnalysisTabKey) || "book_overview")}>
           <Tabs.List>
             <Tabs.Tab value="book_overview" leftSection={<FiBook size={14} color="#00c9ff" />}>
-              全书宏观分析
+              全书总览诊断
             </Tabs.Tab>
             <Tabs.Tab value="chapter_range" leftSection={<FiLayers size={14} color="#00c9ff" />}>
-              区间 / 节点模块分析
+              ③ 节点 / 区间章节质检
             </Tabs.Tab>
             <Tabs.Tab value="audit" leftSection={<FiShield size={14} color="#00c9ff" />}>
-              逻辑与人物审计
+              设定冲突与人物 OOC 审计
             </Tabs.Tab>
           </Tabs.List>
         </Tabs>
@@ -232,7 +110,7 @@ export default function AiAnalysisPage() {
                     </Text>
                   </Box>
                   <Button size="xs" leftSection={<FiPlay size={13} />} loading={running} onClick={handleRunAnalysis}>
-                    开始全书分析
+                    开始全书诊断
                   </Button>
                 </Flex>
               ) : null}
@@ -240,7 +118,14 @@ export default function AiAnalysisPage() {
               {activeTab === "chapter_range" ? (
                 <Stack gap={10}>
                   <Flex align="center" justify="space-between" wrap="wrap" gap={8}>
-                    <Text fz={13} fw={700} c="#0f172a">选择待评估的剧情区间（建议 1~10 章）</Text>
+                    <Group gap={8}>
+                      <Text fz={13} fw={700} c="#0f172a">选择待质检的节点 / 章节区间（建议 1~10 章）</Text>
+                      {sourceNodeGoal ? (
+                        <Badge size="xs" variant="light" color="cyan">
+                          当前质检节点：{sourceNodeGoal}
+                        </Badge>
+                      ) : null}
+                    </Group>
                     <Group gap={8}>
                       {metrics && metrics.volumes.length > 0 ? (
                         <Select
@@ -294,7 +179,7 @@ export default function AiAnalysisPage() {
                       onChange={(e) => setExpectedGoal(e.target.value)}
                     />
                     <Button size="xs" leftSection={<FiPlay size={13} />} loading={running} onClick={handleRunAnalysis}>
-                      开始模块分析
+                      开始章节质检
                     </Button>
                   </Flex>
                 </Stack>
@@ -388,7 +273,7 @@ export default function AiAnalysisPage() {
                 <Center mih={240} bg="#fafbfc" bdrs={8} bd="1px dashed #e2e8f0">
                   <Stack align="center" gap={6}>
                     <FiCpu size={24} color="#94a3b8" />
-                    <Text fz={13} c="#64748b">点击上方「开始分析」生成你的首份 AI 诊断报告</Text>
+                    <Text fz={13} c="#64748b">点击上方「开始分析」生成当前模块的首份 AI 诊断报告</Text>
                   </Stack>
                 </Center>
               )}
@@ -396,12 +281,12 @@ export default function AiAnalysisPage() {
           </Stack>
         </ScrollArea>
 
-        {/* 右侧极简历史报告栏 */}
+        {/* 右侧极简历史报告栏（仅展示当前 Tab 分类报告） */}
         <Box w={260} p={14} bg="#fafbfc" style={{ borderLeft: "1px solid #f1f5f9", flexShrink: 0, overflowY: "auto" }}>
           <Flex align="center" justify="space-between" mb={10}>
             <Group gap={6}>
               <FiClock size={14} color="#64748b" />
-              <Text fz={13} fw={700} c="#0f172a">历史报告</Text>
+              <Text fz={13} fw={700} c="#0f172a">当前模块历史报告</Text>
             </Group>
             <Badge size="xs" variant="light" color="gray">{history.length}</Badge>
           </Flex>
@@ -439,5 +324,16 @@ export default function AiAnalysisPage() {
         </Box>
       </Flex>
     </Box>
+  );
+}
+
+export default function AiAnalysisPage() {
+  const params = useParams();
+  const workId = String(params?.id || "");
+
+  return (
+    <AiAnalysisProvider workId={workId}>
+      <AiAnalysisContent />
+    </AiAnalysisProvider>
   );
 }

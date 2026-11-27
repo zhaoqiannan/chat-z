@@ -49,7 +49,7 @@ export interface MasterOutlineNode {
 
 export const getMasterOutline = async (workId: number | string): Promise<{
   success: boolean;
-  result?: { tree: MasterOutlineNode; updatedAt?: number | null; isDefault?: boolean };
+  result?: { tree: MasterOutlineNode; updatedAt?: number | null; isDefault?: boolean; writtenChapterNumbers?: number[] };
   message?: string;
 }> => {
   return get(`/api/outlines/master?workId=${workId}`);

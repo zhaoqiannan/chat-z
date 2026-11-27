@@ -577,6 +577,11 @@ export default function EditorArea({
       return;
     }
 
+    if (isDirty) {
+      const saved = await handleManualSave();
+      if (!saved) return;
+    }
+
     try {
       setExtractingOutline(true);
       useAlert.info("正在提取本章剧情到大纲，请不要跳转页面...", { autoClose: 5000 });

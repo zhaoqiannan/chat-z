@@ -201,7 +201,7 @@ export default function ChaptersPage() {
       id: targetId,
       title: data.title !== undefined ? data.title : targetItem.title,
       subtitle: data.subtitle !== undefined ? data.subtitle : targetItem.subtitle,
-      content: data.content !== undefined ? data.content : targetItem.content,
+      ...(data.content !== undefined ? { content: data.content } : {}),
       status: data.status !== undefined ? data.status : targetItem.status,
       summary: data.summary !== undefined ? data.summary : targetItem.summary,
       ...(data.volumeId !== undefined ? { volumeId: data.volumeId } : {}),

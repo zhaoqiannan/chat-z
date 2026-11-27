@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, chapters, works, outlines } from "@/db";
+import { getDb, chapters, works } from "@/db";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { logUserActivity } from "@/utils/activityLogger";
 import { trackDailyWords } from "@/utils/wordStatsLogger";
@@ -73,32 +73,15 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     await ensureChapterOutlineExtractedColumn(env.DB);
 
-    const [list, extractedOutlines] = await Promise.all([
-      db
-        .select()
-        .from(chapters)
-        .where(eq(chapters.workId, workId))
-        .orderBy(desc(chapters.isVolume), asc(chapters.chapterNumber), asc(chapters.createdAt)),
-      db
-        .select({ chapterId: outlines.chapterId, event: outlines.event, content: outlines.content })
-        .from(outlines)
-        .where(and(eq(outlines.workId, workId), eq(outlines.category, "chapter")))
-        .all(),
-    ]);
-
-    // 自动识别历史已成功提取（且非旧版占位废话）的章节，补齐 outlineExtracted 状态
-    const validExtractedChapterIds = new Set<number>();
-    for (const ol of extractedOutlines) {
-      const cid = Number(ol.chapterId || 0);
-      const text = String(ol.event || ol.content || "").trim();
-      if (cid > 0 && text.length >= 15 && !text.includes("剧情稳步推进，角色展开行动")) {
-        validExtractedChapterIds.add(cid);
-      }
-    }
+    const list = await db
+      .select()
+      .from(chapters)
+      .where(eq(chapters.workId, workId))
+      .orderBy(desc(chapters.isVolume), asc(chapters.chapterNumber), asc(chapters.createdAt));
 
     const enrichedList = list.map((ch) => ({
       ...ch,
-      outlineExtracted: ch.outlineExtracted === 1 || validExtractedChapterIds.has(ch.id) ? 1 : 0,
+      outlineExtracted: ch.outlineExtracted === 1 ? 1 : 0,
     }));
 
     return NextResponse.json({
@@ -284,6 +267,8 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const textContent = content !== undefined ? content : chapter.content;
     const wordCount = chapter.isVolume ? 0 : (textContent || "").replace(/\s+/g, "").length;
     const volumeId = rawVolumeId !== undefined ? (rawVolumeId ? Number(rawVolumeId) : null) : chapter.volumeId;
+    const shouldResetOutline = !chapter.isVolume && content !== undefined;
+    const nextOutlineExtracted = shouldResetOutline ? 0 : (chapter.outlineExtracted ?? 0);
 
     const updatedData = {
       title: title !== undefined ? title.trim() : chapter.title,
@@ -294,6 +279,7 @@ export const PUT = withAuth(async (req: NextRequest, user: CurrentUser) => {
       summary: summary !== undefined ? summary.trim() : chapter.summary,
       volumeId,
       chapterNumber: chapterNumber !== undefined ? Number(chapterNumber) : chapter.chapterNumber,
+      outlineExtracted: nextOutlineExtracted,
       updatedAt: new Date(),
     };
 

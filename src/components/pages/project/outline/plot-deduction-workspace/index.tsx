@@ -4,8 +4,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import { Badge, Box, Button, Divider, Flex, Group, Modal, NumberInput, Paper, ScrollArea, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { FiBookOpen, FiCheck, FiCopy, FiEdit2, FiExternalLink, FiFeather, FiFileText, FiGitBranch, FiRefreshCw, FiSave, FiZap } from "react-icons/fi";
-import { GeneratedProseDraft, MasterChapterPlanItem, MasterChapterPlanOption, MasterNodeDeductionContextResult, MasterNodeDeductionSnapshot, generateMasterChapterPlans, generateProseFromPlan, getMasterNodeDeductionContext } from "@/rest/outline";
+import { FiBookOpen, FiCheck, FiCopy, FiEdit2, FiExternalLink, FiFeather, FiFileText, FiGitBranch, FiLayers, FiRefreshCw, FiSave, FiShield, FiZap } from "react-icons/fi";
+import { GeneratedProseDraft, MasterChapterPlanItem, MasterChapterPlanOption, MasterNodeDeductionContextResult, MasterNodeDeductionSnapshot, extractChapterOutline, generateMasterChapterPlans, generateProseFromPlan, getMasterNodeDeductionContext } from "@/rest/outline";
 import { createChapter, updateChapter } from "@/rest/chapter";
 import LoadingMask from "@/components/common/loading-mask";
 import { useAlert } from "@/hooks/useAlert";
@@ -16,6 +16,7 @@ interface PlotDeductionWorkspaceProps {
   initialNodeId?: string | null;
   legacyCardCount?: number;
   onShowLegacyCards?: () => void;
+  onJumpToQualityAudit?: (chapterRange: string, nodeTitle: string) => void;
 }
 
 const WRITING_STYLES = [
@@ -31,6 +32,7 @@ export default function PlotDeductionWorkspace({
   initialNodeId,
   legacyCardCount = 0,
   onShowLegacyCards,
+  onJumpToQualityAudit,
 }: PlotDeductionWorkspaceProps) {
   const router = useRouter();
 
@@ -57,6 +59,7 @@ export default function PlotDeductionWorkspace({
   const [extraInstruction, setExtraInstruction] = useState<string>("");
   const [generatingProse, setGeneratingProse] = useState(false);
   const [savingToChapter, setSavingToChapter] = useState(false);
+  const [extractingSavedOutline, setExtractingSavedOutline] = useState(false);
   const [targetVolumeId, setTargetVolumeId] = useState<string>("");
   const [lastSavedChapterId, setLastSavedChapterId] = useState<number | string | null>(null);
 
@@ -218,11 +221,15 @@ export default function PlotDeductionWorkspace({
       setLastSavedChapterId(null);
       useAlert.info(`正在为第 ${chapterPlan.chapterNumber} 章生成不少于 3000 字的正文，请不要跳转页面...`, { autoClose: 6000 });
 
-      // 组织前后相邻章节走向作为边界参考，避免提前剧透下一章
-      const siblingContext = plan.chapters
-        .filter((c) => Math.abs(c.chapterNumber - chapterPlan.chapterNumber) === 1)
-        .map((c) => `第${c.chapterNumber}章《${c.title}》：${c.plotText.slice(0, 180)}`)
-        .join("\n");
+      // 拆分“上一章走向承接”与“下一章边界防剧透”，避免混在一起导致语义冲突
+      const prevPlanItem = plan.chapters.find((c) => c.chapterNumber === chapterPlan.chapterNumber - 1);
+      const nextPlanItem = plan.chapters.find((c) => c.chapterNumber === chapterPlan.chapterNumber + 1);
+      const prevPlanContext = prevPlanItem
+        ? `第${prevPlanItem.chapterNumber}章《${prevPlanItem.title}》：${prevPlanItem.plotText.slice(0, 450)}`
+        : "";
+      const nextPlanContext = nextPlanItem
+        ? `第${nextPlanItem.chapterNumber}章《${nextPlanItem.title}》：${nextPlanItem.plotText.slice(0, 260)}`
+        : "";
 
       const res = await generateProseFromPlan({
         workId,
@@ -232,7 +239,8 @@ export default function PlotDeductionWorkspace({
         chapterNumber: chapterPlan.chapterNumber,
         chapterTitle: chapterPlan.title,
         plotText: chapterPlan.plotText,
-        siblingContext,
+        prevPlanContext,
+        nextPlanContext,
         writingStyle,
         extraInstruction: extraInstruction.trim() || undefined,
       });
@@ -336,12 +344,35 @@ export default function PlotDeductionWorkspace({
       }
 
       setLastSavedChapterId(savedId);
-      useAlert.success(`已将第 ${activeChapterPlan.chapterNumber} 章正文写入章节库！`);
+      useAlert.success(`已将第 ${activeChapterPlan.chapterNumber} 章正文写入章节库！可直接提取本章大纲或前往精修`);
       loadContext(selectedNodeId);
     } catch (e: any) {
       useAlert.error("写入章节库失败: " + (e?.message || "网络异常"));
     } finally {
       setSavingToChapter(false);
+    }
+  };
+
+  const handleExtractSavedChapterOutline = async () => {
+    if (!lastSavedChapterId || !draftEditorText.trim() || extractingSavedOutline) return;
+    try {
+      setExtractingSavedOutline(true);
+      const res = await extractChapterOutline({
+        chapterId: lastSavedChapterId,
+        workId,
+        content: draftEditorText.trim(),
+        title: (draftTitleInput.trim() || activeChapterPlan?.title || "").trim(),
+      });
+      if (res && res.success) {
+        useAlert.success("已将本章剧情沉淀到「3. 章节大纲」，后续推演将自动衔接！");
+        loadContext(selectedNodeId);
+      } else {
+        useAlert.error(res?.message || "提取本章大纲失败");
+      }
+    } catch (e: any) {
+      useAlert.error("提取本章大纲异常: " + (e?.message || "网络异常"));
+    } finally {
+      setExtractingSavedOutline(false);
     }
   };
 
@@ -352,18 +383,35 @@ export default function PlotDeductionWorkspace({
       {/* 顶部极简说明与旧数据兼容入口 */}
       <Flex align="center" justify="space-between" px="md" py={8} bg="#fafafa" style={{ borderBottom: "1px solid #f1f5f9" }}>
         <Group gap={10}>
-          <Badge variant="light" color="cyan" size="sm" leftSection={<FiZap size={11} />}>
-            大纲 ➔ 章节走向 ➔ 正文闭环
+          <Badge variant="light" color="blue" size="sm" leftSection={<FiZap size={11} />}>
+            ② 规划并写章
           </Badge>
           <Text fz={12} c="#64748b">
-            自动读取「项目总纲节点及下级大纲」+「章节大纲已有进度」，规划未写章节纯文本走向并一键生成 ≥3000 字正文
+            自动读取「1. 项目总纲」+「3. 章节大纲」进度，规划待写章节走向并一键生成 ≥3000 字正文
           </Text>
         </Group>
 
         <Group gap={8}>
-          {legacyCardCount > 0 && onShowLegacyCards ? (
+          {selectedNodeMeta?.chapterRange?.trim() && onJumpToQualityAudit ? (
+            <Button
+              size="xs"
+              variant="light"
+              color="grape"
+              leftSection={<FiShield size={12} />}
+              disabled={selectedNodeMeta.writtenCount <= 0}
+              title={
+                selectedNodeMeta.writtenCount > 0
+                  ? `前往质量诊断检查「${selectedNodeMeta.title}」（第${selectedNodeMeta.chapterRange}章）`
+                  : "当前节点暂无已写正文，写入章节后即可质检"
+              }
+              onClick={() => onJumpToQualityAudit(selectedNodeMeta.chapterRange || "", selectedNodeMeta.title)}
+            >
+              ③ 章节质检此阶段
+            </Button>
+          ) : null}
+          {onShowLegacyCards ? (
             <Button size="xs" variant="subtle" color="gray" onClick={onShowLegacyCards}>
-              旧推演卡片 ({legacyCardCount})
+              旧推演卡片{legacyCardCount > 0 ? ` (${legacyCardCount})` : ""}
             </Button>
           ) : null}
           <Button size="xs" variant="default" leftSection={<FiRefreshCw size={12} />} loading={loadingContext} onClick={() => loadContext(selectedNodeId)}>
@@ -438,7 +486,7 @@ export default function PlotDeductionWorkspace({
                 <Flex align="center" justify="space-between" mb={6}>
                   <Group gap={6}>
                     <FiBookOpen size={13} color="#00a8d6" />
-                    <Text fz={12} fw={700} c="#0f172a">已有章节大纲进度（来自 Tab 2）</Text>
+                    <Text fz={12} fw={700} c="#0f172a">已有章节大纲进度（来自「3. 章节大纲」）</Text>
                   </Group>
                   {selectedNodeMeta?.parsedRange ? (
                     <Badge size="xs" variant="light" color={selectedNodeMeta.missingChapters.length > 0 ? "orange" : "green"}>
@@ -517,7 +565,7 @@ export default function PlotDeductionWorkspace({
                 loading={planning}
                 onClick={handleGeneratePlans}
               >
-                {snapshot?.plans?.length ? "重新推演章节走向（覆盖上次方案）" : "开始 AI 推演章节走向"}
+                {snapshot?.plans?.length ? "重新规划章节走向（覆盖上次方案）" : "开始规划章节走向"}
               </Button>
             </Stack>
           </ScrollArea>
@@ -816,15 +864,27 @@ export default function PlotDeductionWorkspace({
 
               <Group gap={8}>
                 {lastSavedChapterId ? (
-                  <Button
-                    size="xs"
-                    variant="light"
-                    color="green"
-                    leftSection={<FiExternalLink size={13} />}
-                    onClick={() => router.push(`/project/${workId}?tab=chapters&chapterId=${lastSavedChapterId}`)}
-                  >
-                    前往章节页精修
-                  </Button>
+                  <>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="cyan"
+                      leftSection={<FiLayers size={13} />}
+                      loading={extractingSavedOutline}
+                      onClick={handleExtractSavedChapterOutline}
+                    >
+                      提取本章大纲
+                    </Button>
+                    <Button
+                      size="xs"
+                      variant="light"
+                      color="green"
+                      leftSection={<FiExternalLink size={13} />}
+                      onClick={() => router.push(`/project/${workId}?tab=chapters&chapterId=${lastSavedChapterId}`)}
+                    >
+                      前往章节页精修
+                    </Button>
+                  </>
                 ) : null}
                 <Button
                   size="xs"

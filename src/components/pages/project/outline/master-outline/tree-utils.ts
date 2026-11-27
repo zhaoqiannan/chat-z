@@ -180,3 +180,32 @@ export function flattenVisibleTree(
   }
   return rows;
 }
+
+export interface ChapterRangeProgress {
+  start: number;
+  end: number;
+  total: number;
+  writtenCount: number;
+  hasWritten: boolean;
+}
+
+export function getChapterRangeProgress(
+  chapterRange: string | undefined,
+  writtenChapterSet?: Set<number>
+): ChapterRangeProgress | null {
+  const raw = (chapterRange || "").trim();
+  if (!raw) return null;
+  const nums = raw.match(/\d+/g);
+  if (!nums || nums.length === 0) return null;
+  const start = Number(nums[0]);
+  const end = nums.length >= 2 ? Math.max(start, Number(nums[1])) : start;
+  if (!Number.isFinite(start) || start <= 0) return null;
+  const total = end - start + 1;
+  let writtenCount = 0;
+  if (writtenChapterSet && writtenChapterSet.size > 0) {
+    for (let ch = start; ch <= end; ch++) {
+      if (writtenChapterSet.has(ch)) writtenCount += 1;
+    }
+  }
+  return { start, end, total, writtenCount, hasWritten: writtenCount > 0 };
+}

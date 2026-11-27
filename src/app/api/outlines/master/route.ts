@@ -78,18 +78,33 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     await ensureMasterOutlineTable(db);
 
-    const row: any = await env.DB.prepare(
-      "SELECT tree_json, updated_at FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1"
-    )
-      .bind(workId, user.userId)
-      .first();
+    const [row, writtenChaptersRes]: any[] = await Promise.all([
+      env.DB.prepare(
+        "SELECT tree_json, updated_at FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1"
+      )
+        .bind(workId, user.userId)
+        .first(),
+      env.DB.prepare(
+        "SELECT chapter_number FROM chapters WHERE work_id = ? AND is_volume = 0 AND COALESCE(word_count, 0) > 0 ORDER BY chapter_number ASC"
+      )
+        .bind(workId)
+        .all(),
+    ]);
+
+    const writtenChapterNumbers: number[] = Array.from(
+      new Set(
+        (writtenChaptersRes?.results || [])
+          .map((r: any) => Number(r.chapter_number))
+          .filter((n: number) => Number.isFinite(n) && n > 0)
+      )
+    );
 
     if (row && row.tree_json) {
       try {
         const tree = JSON.parse(row.tree_json);
         return NextResponse.json({
           success: true,
-          result: { tree, updatedAt: row.updated_at, isDefault: false },
+          result: { tree, updatedAt: row.updated_at, isDefault: false, writtenChapterNumbers },
         });
       } catch {}
     }
@@ -100,6 +115,7 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         tree: buildDefaultTree(work.title, work.description),
         updatedAt: null,
         isDefault: true,
+        writtenChapterNumbers,
       },
     });
   } catch (error: any) {

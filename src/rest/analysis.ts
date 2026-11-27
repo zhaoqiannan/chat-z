@@ -59,12 +59,18 @@ export interface AnalysisReportRecord {
   createdAt: number;
 }
 
-export const getAnalysisOverview = async (workId: number | string): Promise<{
+export type AiAnalysisTabKey = "book_overview" | "chapter_range" | "audit";
+
+export const getAnalysisOverview = async (
+  workId: number | string,
+  tab?: AiAnalysisTabKey
+): Promise<{
   success: boolean;
   result?: { metrics: AnalysisWorkMetrics; history: AnalysisReportRecord[] };
   message?: string;
 }> => {
-  return get(`/api/ai/analysis?workId=${workId}`);
+  const query = tab ? `workId=${workId}&tab=${encodeURIComponent(tab)}` : `workId=${workId}`;
+  return get(`/api/ai/analysis?${query}`);
 };
 
 export const runAiAnalysis = async (payload: {

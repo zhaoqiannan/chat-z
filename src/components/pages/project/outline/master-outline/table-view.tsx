@@ -2,9 +2,9 @@
 
 import React, { useEffect, useMemo, useRef } from "react";
 import { ActionIcon, Box, Flex, Group, ScrollArea, Select, Table, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiCpu, FiGitMerge, FiPlus, FiTrash2, FiZap } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiChevronDown, FiChevronRight, FiGitMerge, FiPlus, FiShield, FiTrash2, FiZap } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineStatus } from "@/rest/master-outline";
-import { flattenVisibleTree, TAG_PRESETS } from "./tree-utils";
+import { flattenVisibleTree, getChapterRangeProgress, TAG_PRESETS } from "./tree-utils";
 import styles from "./style.module.scss";
 
 function AutoWrapNoteInput({
@@ -59,6 +59,7 @@ interface TableViewProps {
   onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
   onOpenLogicDeduction: (nodeId: string) => void;
   onJumpToPlotDeduction?: (nodeId: string) => void;
+  writtenChapterSet?: Set<number>;
 }
 
 export default function TableView({
@@ -72,6 +73,7 @@ export default function TableView({
   onJumpToAiAnalysis,
   onOpenLogicDeduction,
   onJumpToPlotDeduction,
+  writtenChapterSet,
 }: TableViewProps) {
   const rows = useMemo(() => {
     const all = flattenVisibleTree(tree);
@@ -182,29 +184,51 @@ export default function TableView({
                         </>
                       ) : null}
 
-                      {!isRoot && node.chapterRange?.trim() && onJumpToPlotDeduction ? (
-                        <Tooltip label="章节走向推演（前往剧情推演规划未写章节并生成正文）">
-                          <ActionIcon variant="subtle" color="blue" size={24} onClick={() => onJumpToPlotDeduction(node.id)}>
-                            <FiZap size={13} />
-                          </ActionIcon>
-                        </Tooltip>
-                      ) : null}
-
                       {hasChildren ? (
-                        <Tooltip label={node.logicDeduction ? "AI 脉络推算（查看上次结果 / 重新推算）" : "AI 脉络推算（梳理当前节点与子节点逻辑）"}>
-                          <ActionIcon variant={node.logicDeduction ? "light" : "subtle"} color="indigo" size={24} onClick={() => onOpenLogicDeduction(node.id)}>
+                        <Tooltip label={node.logicDeduction ? "① 逻辑校验（已校验 · 查看或重新校验）" : "① 逻辑校验（检查当前节点与子节点逻辑脉络）"}>
+                          <ActionIcon variant={node.logicDeduction ? "light" : "subtle"} color={node.logicDeduction ? "green" : "cyan"} size={24} onClick={() => onOpenLogicDeduction(node.id)}>
                             <FiGitMerge size={13} />
                           </ActionIcon>
                         </Tooltip>
                       ) : null}
 
-                      {node.chapterRange?.trim() ? (
-                        <Tooltip label="跳转 AI 区间诊断">
-                          <ActionIcon variant="subtle" color="cyan" size={24} onClick={() => onJumpToAiAnalysis(node.chapterRange || "", node.title)}>
-                            <FiCpu size={13} />
-                          </ActionIcon>
-                        </Tooltip>
-                      ) : null}
+                      {!isRoot && node.chapterRange?.trim() && onJumpToPlotDeduction ? (() => {
+                        const rangeProg = getChapterRangeProgress(node.chapterRange, writtenChapterSet);
+                        const progressHint = rangeProg ? `（已写 ${rangeProg.writtenCount}/${rangeProg.total} 章）` : "";
+                        return (
+                          <Tooltip label={`② 规划并写章${progressHint}：前往章节规划与起草生成正文`}>
+                            <ActionIcon variant="subtle" color="blue" size={24} onClick={() => onJumpToPlotDeduction(node.id)}>
+                              <FiZap size={13} />
+                            </ActionIcon>
+                          </Tooltip>
+                        );
+                      })() : null}
+
+                      {!isRoot && node.chapterRange?.trim() ? (() => {
+                        const rangeProg = getChapterRangeProgress(node.chapterRange, writtenChapterSet);
+                        const hasWritten = Boolean(rangeProg?.hasWritten);
+                        return (
+                          <Tooltip
+                            label={
+                              hasWritten
+                                ? `③ 章节质检（已写 ${rangeProg!.writtenCount}/${rangeProg!.total} 章 · 诊断本阶段正文质量）`
+                                : "③ 章节质检（该区间暂无已写正文，请先完成②规划并写章后再质检）"
+                            }
+                          >
+                            <span>
+                              <ActionIcon
+                                variant="subtle"
+                                color="grape"
+                                size={24}
+                                disabled={!hasWritten}
+                                onClick={() => hasWritten && onJumpToAiAnalysis(node.chapterRange || "", node.title)}
+                              >
+                                <FiShield size={13} />
+                              </ActionIcon>
+                            </span>
+                          </Tooltip>
+                        );
+                      })() : null}
 
                       {!isRoot ? (
                         <Tooltip label="删除节点及子项">

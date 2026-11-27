@@ -129,8 +129,9 @@ export interface TimelineEventData {
   createdAt?: string | number;
 }
 
-export const getTimelineFullData = async (workId: number | string) => {
-  return get(`/api/timelines?workId=${workId}`);
+export const getTimelineFullData = async (workId: number | string, timelineId?: number | string | null) => {
+  const query = timelineId ? `workId=${workId}&timelineId=${encodeURIComponent(String(timelineId))}` : `workId=${workId}`;
+  return get(`/api/timelines?${query}`);
 };
 
 export const createTimeline = async (data: { workId: number; title: string; description?: string; color?: string; isMain?: boolean }) => {

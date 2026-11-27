@@ -55,24 +55,32 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
   const [detailModalOpened, setDetailModalOpened] = useState(false);
   const [detailItem, setDetailItem] = useState<LocationRecord | null>(null);
 
+  const reqIdRef = useRef(0);
+
   const fetchList = async () => {
     if (!workId) return;
+    const reqId = ++reqIdRef.current;
     try {
       setLoading(true);
       const res = await getLocationList(workId);
+      if (reqId !== reqIdRef.current) return;
       if (res && res.success && Array.isArray(res.result)) {
         setList(res.result);
       }
     } catch (e) {
-      console.error("获取地点列表失败:", e);
+      if (reqId === reqIdRef.current) {
+        console.error("获取地点列表失败:", e);
+      }
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     fetchList();
-  }, [workId]);
+  }, [workId, viewMode]);
 
   const handleOpenCreate = (coords?: { x: number; y: number }) => {
     setEditingItem(null);
@@ -309,7 +317,7 @@ export default function LocationsTab({ workId }: LocationsTabProps) {
 
   return (
     <Box>
-      <Tabs value={viewMode} onChange={(v) => setViewMode((v as "map" | "list") || "map")} radius="sm">
+      <Tabs value={viewMode} onChange={(v) => setViewMode((v as "map" | "list") || "map")} keepMounted={false} radius="sm">
         <Flex justify="space-between" align="center" mb="md" wrap="wrap" gap="sm" style={{ borderBottom: '1px solid #eee' }}>
           <Tabs.List>
             <Tabs.Tab value="map" leftSection={<FiMapPin size={13} />}>

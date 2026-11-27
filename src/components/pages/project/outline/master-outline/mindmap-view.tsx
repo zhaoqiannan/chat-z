@@ -2,9 +2,9 @@
 
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ActionIcon, Box, Flex, Text, Tooltip } from "@mantine/core";
-import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiCpu, FiEdit2, FiFileText, FiGitMerge, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiTrash2, FiZap, FiZoomIn, FiZoomOut } from "react-icons/fi";
+import { FiArrowDown, FiArrowUp, FiCornerDownLeft, FiCornerDownRight, FiEdit2, FiFileText, FiGitMerge, FiMaximize2, FiMinimize2, FiPlus, FiRefreshCw, FiShield, FiTrash2, FiZap, FiZoomIn, FiZoomOut } from "react-icons/fi";
 import { MasterOutlineNode, MasterOutlineSide, MasterOutlineStatus } from "@/rest/master-outline";
-import { ChildInsertPosition, STATUS_CONFIG, SiblingInsertPosition, TAG_PRESETS, findNode, findSiblingMeta } from "./tree-utils";
+import { ChildInsertPosition, STATUS_CONFIG, SiblingInsertPosition, TAG_PRESETS, findNode, findSiblingMeta, getChapterRangeProgress } from "./tree-utils";
 import styles from "./style.module.scss";
 
 type LayoutSide = "center" | "left" | "right";
@@ -286,6 +286,7 @@ interface MindMapViewProps {
   onJumpToAiAnalysis: (chapterRange: string, title: string) => void;
   onOpenLogicDeduction: (nodeId: string) => void;
   onJumpToPlotDeduction?: (nodeId: string) => void;
+  writtenChapterSet?: Set<number>;
 }
 
 const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function MindMapView(
@@ -308,6 +309,7 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
     onJumpToAiAnalysis,
     onOpenLogicDeduction,
     onJumpToPlotDeduction,
+    writtenChapterSet,
   },
   ref
 ) {
@@ -871,24 +873,14 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
                           startEditing(item.node.id, "chapterRange", item.node.chapterRange || "");
                         }}
                       >
-                        {item.node.chapterRange ? `第${item.node.chapterRange}章` : "+ 章节"}
+                        {item.node.chapterRange
+                          ? (() => {
+                              const prog = getChapterRangeProgress(item.node.chapterRange, writtenChapterSet);
+                              return prog ? `第${item.node.chapterRange}章 · ${prog.writtenCount}/${prog.total}` : `第${item.node.chapterRange}章`;
+                            })()
+                          : "+ 章节"}
                       </button>
                     )
-                  ) : null}
-
-                  {!isRoot && item.node.chapterRange?.trim() ? (
-                    <button
-                      type="button"
-                      title={`AI 诊断此阶段 (第${item.node.chapterRange}章)`}
-                      className={styles.cardAiBtn}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onJumpToAiAnalysis(item.node.chapterRange || "", item.node.title);
-                      }}
-                    >
-                      <FiCpu size={11} />
-                    </button>
                   ) : null}
                 </Flex>
 
@@ -1016,6 +1008,64 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
                 </div>
               ) : null}
 
+              {isSelected && (hasChildren || (!isRoot && Boolean(item.node.chapterRange?.trim()))) ? (() => {
+                const rangeProg = !isRoot ? getChapterRangeProgress(item.node.chapterRange, writtenChapterSet) : null;
+                const hasWritten = Boolean(rangeProg?.hasWritten);
+                return (
+                  <div
+                    className={styles.nodeFlowBar}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        className={`${styles.nodeFlowBtn} ${item.node.logicDeduction ? styles.nodeFlowBtnDone : ""}`}
+                        title={item.node.logicDeduction ? "① 逻辑校验（已校验 · 点击查看或重新校验）" : "① 逻辑校验（检查当前节点与子节点逻辑是否合理）"}
+                        onClick={() => onOpenLogicDeduction(item.node.id)}
+                      >
+                        <FiGitMerge size={11} />
+                        <span>① 逻辑校验</span>
+                        {item.node.logicDeduction ? <span className={styles.nodeFlowDot} /> : null}
+                      </button>
+                    ) : null}
+
+                    {!isRoot && item.node.chapterRange?.trim() && onJumpToPlotDeduction ? (
+                      <button
+                        type="button"
+                        className={`${styles.nodeFlowBtn} ${styles.nodeFlowBtnPrimary}`}
+                        title={
+                          rangeProg
+                            ? `② 规划并写章（已写 ${rangeProg.writtenCount}/${rangeProg.total} 章 · 前往规划走向并生成正文）`
+                            : "② 规划并写章（前往章节规划与起草生成正文）"
+                        }
+                        onClick={() => onJumpToPlotDeduction(item.node.id)}
+                      >
+                        <FiZap size={11} />
+                        <span>② 规划并写章</span>
+                      </button>
+                    ) : null}
+
+                    {!isRoot && item.node.chapterRange?.trim() ? (
+                      <button
+                        type="button"
+                        disabled={!hasWritten}
+                        className={`${styles.nodeFlowBtn} ${!hasWritten ? styles.nodeFlowBtnDisabled : ""}`}
+                        title={
+                          hasWritten
+                            ? `③ 章节质检（已写 ${rangeProg!.writtenCount}/${rangeProg!.total} 章 · 诊断本阶段正文质量）`
+                            : "该区间暂无已写正文，请先完成②规划并写章后再质检"
+                        }
+                        onClick={() => hasWritten && onJumpToAiAnalysis(item.node.chapterRange || "", item.node.title)}
+                      >
+                        <FiShield size={11} />
+                        <span>③ 章节质检</span>
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })() : null}
+
               {/* 拖拽调整节点卡片宽高度手柄 */}
               <div
                 data-mindmap-resize="true"
@@ -1130,20 +1180,7 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
       {/* 节点右键上下文菜单（渲染在画布视口内，全屏下同样可用） */}
       {contextMenu && contextNode ? (
         <Box data-mindmap-menu="true" className={styles.contextMenu} style={{ left: contextMenu.x, top: contextMenu.y }}>
-          {/* 1. 最常用：AI 推演 / 逻辑推算 / 区间诊断置顶 */}
-          {contextNode.id !== "root" && contextNode.chapterRange?.trim() && onJumpToPlotDeduction ? (
-            <button
-              type="button"
-              className={styles.contextMenuItem}
-              onClick={() => {
-                onJumpToPlotDeduction(contextNode.id);
-                setContextMenu(null);
-              }}
-            >
-              <Flex align="center" gap={8}><FiZap size={13} color="#2563eb" /><span>AI 章节走向推演</span></Flex>
-            </button>
-          ) : null}
-
+          {/* 1. 核心三步创作流程：固定顺序 ① 逻辑校验 -> ② 规划并写章 -> ③ 章节质检 */}
           {contextNode.children.length > 0 ? (
             <button
               type="button"
@@ -1153,23 +1190,48 @@ const MindMapView = forwardRef<MindMapViewHandle, MindMapViewProps>(function Min
                 setContextMenu(null);
               }}
             >
-              <Flex align="center" gap={8}><FiGitMerge size={13} color="#00a8d6" /><span>AI 逻辑推算</span></Flex>
-              {contextNode.logicDeduction ? <span className={styles.contextMenuShortcut}>已推算</span> : null}
+              <Flex align="center" gap={8}><FiGitMerge size={13} color="#00a8d6" /><span>① 逻辑校验</span></Flex>
+              {contextNode.logicDeduction ? <span className={styles.contextMenuShortcut}>已校验</span> : null}
             </button>
           ) : null}
 
-          {contextNode.id !== "root" && contextNode.chapterRange?.trim() ? (
-            <button
-              type="button"
-              className={styles.contextMenuItem}
-              onClick={() => {
-                onJumpToAiAnalysis(contextNode.chapterRange || "", contextNode.title);
-                setContextMenu(null);
-              }}
-            >
-              <Flex align="center" gap={8}><FiCpu size={13} color="#00a8d6" /><span>AI 诊断此阶段</span></Flex>
-            </button>
-          ) : null}
+          {contextNode.id !== "root" && contextNode.chapterRange?.trim() && onJumpToPlotDeduction ? (() => {
+            const prog = getChapterRangeProgress(contextNode.chapterRange, writtenChapterSet);
+            return (
+              <button
+                type="button"
+                className={styles.contextMenuItem}
+                onClick={() => {
+                  onJumpToPlotDeduction(contextNode.id);
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiZap size={13} color="#2563eb" /><span>② 规划并写章</span></Flex>
+                {prog ? <span className={styles.contextMenuShortcut}>{prog.writtenCount}/{prog.total}章</span> : null}
+              </button>
+            );
+          })() : null}
+
+          {contextNode.id !== "root" && contextNode.chapterRange?.trim() ? (() => {
+            const prog = getChapterRangeProgress(contextNode.chapterRange, writtenChapterSet);
+            const hasWritten = Boolean(prog?.hasWritten);
+            return (
+              <button
+                type="button"
+                disabled={!hasWritten}
+                title={hasWritten ? "诊断本阶段已写章节内容质量" : "该区间暂无已写正文，请先完成②规划并写章后再质检"}
+                className={`${styles.contextMenuItem} ${!hasWritten ? styles.contextMenuItemDisabled : ""}`}
+                onClick={() => {
+                  if (!hasWritten) return;
+                  onJumpToAiAnalysis(contextNode.chapterRange || "", contextNode.title);
+                  setContextMenu(null);
+                }}
+              >
+                <Flex align="center" gap={8}><FiShield size={13} color={hasWritten ? "#7c3aed" : "#94a3b8"} /><span>③ 章节质检</span></Flex>
+                {!hasWritten ? <span className={styles.contextMenuShortcut}>暂无正文</span> : null}
+              </button>
+            );
+          })() : null}
 
           {(contextNode.children.length > 0 || (contextNode.id !== "root" && contextNode.chapterRange?.trim())) ? (
             <div className={styles.contextMenuDivider} />

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
 import { getDb, works, outlines, chapters, characters, worldRules } from "@/db";
-import { eq, and, asc, desc } from "drizzle-orm";
+import { eq, and, asc, desc, gte, lte } from "drizzle-orm";
 import { callCloudflareAi, ChatMessage, parseStructuredJson } from "@/utils/ai";
 
 async function ensureSnapshotTable(envDb: any) {
@@ -20,6 +20,13 @@ async function ensureSnapshotTable(envDb: any) {
       )`
     )
     .run();
+}
+
+function buildContentExcerpt(raw?: string | null, headLen = 450, tailLen = 550): string {
+  const clean = (raw || "").trim();
+  if (!clean) return "";
+  if (clean.length <= headLen + tailLen + 60) return clean;
+  return `${clean.slice(0, headLen)}\n……（中段略）……\n${clean.slice(-tailLen)}`;
 }
 
 function parseChapterRange(raw?: string | null): { start: number; end: number } | null {
@@ -355,7 +362,7 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       return NextResponse.json({ success: false, message: "作品不存在或无权限" }, { status: 404 });
     }
 
-    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, charList, ruleList, existingSnapRow] = await Promise.all([
+    const [masterRow, chapterOutlineRows, chapterRows, prevChapterContentRow, inRangeChapterContentRows, charList, ruleList, existingSnapRow] = await Promise.all([
       env.DB.prepare("SELECT tree_json FROM work_master_outlines WHERE work_id = ? AND user_id = ? LIMIT 1")
         .bind(workId, user.userId)
         .first()
@@ -380,12 +387,32 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .all(),
       chapterStart > 1
         ? db
-          .select({ content: chapters.content })
+          .select({ chapterNumber: chapters.chapterNumber, title: chapters.title, summary: chapters.summary, content: chapters.content })
           .from(chapters)
           .where(and(eq(chapters.workId, workId), eq(chapters.isVolume, 0), eq(chapters.chapterNumber, chapterStart - 1)))
           .limit(1)
           .get()
         : Promise.resolve(null),
+      // 读取本次待规划区间内已有正文的章节，避免无视当前章节已写剧情
+      db
+        .select({
+          chapterNumber: chapters.chapterNumber,
+          title: chapters.title,
+          summary: chapters.summary,
+          content: chapters.content,
+          wordCount: chapters.wordCount,
+        })
+        .from(chapters)
+        .where(
+          and(
+            eq(chapters.workId, workId),
+            eq(chapters.isVolume, 0),
+            gte(chapters.chapterNumber, chapterStart),
+            lte(chapters.chapterNumber, chapterEnd)
+          )
+        )
+        .orderBy(asc(chapters.chapterNumber))
+        .all(),
       db
         .select({ name: characters.name, identity: characters.identity, personality: characters.personality, abilities: characters.abilities })
         .from(characters)
@@ -426,10 +453,13 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       ? `${nextSiblingNode.title}${nextSiblingNode.chapterRange ? `（关联第${nextSiblingNode.chapterRange}章）` : ""}：${(nextSiblingNode.note || "").slice(0, 180)}`
       : "";
 
-    // 若存在上一章（chapterStart - 1）的正文，截取最后 400 字作为场景衔接参考
-    const prevChapterTail = prevChapterContentRow?.content ? prevChapterContentRow.content.trim().slice(-400) : "";
+    // 读取上一章（chapterStart - 1）的正文：若未提取大纲，取前中段+完整结尾 1200 字；若已提取大纲，也保留完整结尾 1100 字确保精准承接
+    const prevChapterRawContent = (prevChapterContentRow?.content || "").trim();
+    const prevChapterExcerpt = prevChapterRawContent
+      ? buildContentExcerpt(prevChapterRawContent, 500, 1100)
+      : "";
 
-    // 汇总 Tab 2 已有章节大纲（优先 Tab 2 提取的大纲，补充章节表摘要）
+    // 汇总已有章节大纲（优先「3. 章节大纲」提取结果，补充章节表摘要）
     const outlineByNum = new Map<number, string>();
     for (const ch of chapterRows) {
       const n = Number(ch.chapterNumber || 0);
@@ -457,10 +487,36 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
       .slice(-5);
     const recentProgressText = recentBeforeNums.map((n) => outlineByNum.get(n)).join("\n");
 
-    const inRangeExistingNums = Array.from(outlineByNum.keys())
-      .filter((n) => n >= chapterStart && n <= chapterEnd)
-      .sort((a, b) => a - b);
-    const inRangeExistingText = inRangeExistingNums.map((n) => outlineByNum.get(n)).join("\n");
+    // 汇总本次规划区间内已有剧情（合并已有大纲 + 已写正文片段，避免规划时忽略当前章节已写内容）
+    const inRangeContentMap = new Map<number, { title: string; content: string; wordCount: number; summary: string }>();
+    for (const ch of inRangeChapterContentRows) {
+      const n = Number(ch.chapterNumber || 0);
+      const cleanContent = (ch.content || "").trim();
+      if (n > 0 && (cleanContent || ch.summary?.trim())) {
+        inRangeContentMap.set(n, {
+          title: ch.title || `第${n}章`,
+          content: cleanContent,
+          wordCount: ch.wordCount || cleanContent.replace(/\s+/g, "").length,
+          summary: (ch.summary || "").trim(),
+        });
+      }
+    }
+    const inRangeExistingParts: string[] = [];
+    for (let n = chapterStart; n <= chapterEnd; n++) {
+      const olText = outlineByNum.get(n);
+      const chInfo = inRangeContentMap.get(n);
+      if (!olText && !chInfo) continue;
+      const lines: string[] = [];
+      lines.push(`- 第${n}章《${chInfo?.title || `第${n}章`}》${chInfo?.wordCount ? `（已有正文约 ${chInfo.wordCount} 字）` : ""}`);
+      if (olText) lines.push(`  已有章节大纲：${olText}`);
+      if (chInfo?.content) {
+        const perCapHead = chapterEnd - chapterStart >= 4 ? 260 : 420;
+        const perCapTail = chapterEnd - chapterStart >= 4 ? 320 : 480;
+        lines.push(`  已有正文片段：\n${buildContentExcerpt(chInfo.content, perCapHead, perCapTail)}`);
+      }
+      inRangeExistingParts.push(lines.join("\n"));
+    }
+    const inRangeExistingText = inRangeExistingParts.join("\n\n");
 
     const chapterNumbersToPlan: number[] = [];
     for (let n = chapterStart; n <= chapterEnd; n++) {
@@ -484,9 +540,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
 【核心策划铁律】：
 1. **严格守住总纲硬锚点**：当前总纲节点及其下级子节点里已经明确写定的核心事件、人物转折与阶段目标属于**必经硬锚点**，必须在方案中完整落实；各套方案的差异体现在**切入方式、冲突引爆节奏、人物破局策略与暗线编排**上，严禁为了制造反转而把总纲设定改跑偏。
-2. **无缝衔接前后文**：第 ${chapterStart} 章必须紧承前序已写章节大纲/正文末尾（不可重复已写情节）；第 ${chapterEnd} 章收尾时要为下一阶段总纲节点自然铺好接口。
-3. **纯文本大段走向（plotText）**：必须严格覆盖从第 ${chapterStart} 章到第 ${chapterEnd} 章的每一章。每章走向写为一整段流畅充实的纯文本（${wordsRangePerChapter}），像编剧分集故事大纲一样写明「承接上文 ➔ 具体人名与场景事件 ➔ 冲突交锋与推进 ➔ 情绪落点与章末悬念钩子」，严禁空洞套话（如“剧情稳步推进”），严禁拆成零碎标签。
-4. 仅输出合法 JSON，严禁输出 Markdown 代码块或多余解释：
+2. **严密承接上一章内容与结尾**：第 ${chapterStart} 章的开头必须精准承接上一章（第 ${chapterStart - 1} 章）结尾所停驻的**时间、地点、在场人物状态与未完悬念/对话**，严禁场景莫名跳脱，也严禁重复上一章已经演完的剧情；第 ${chapterEnd} 章收尾时要为下一阶段总纲节点自然铺好接口。
+3. **尊重当前章节已有剧情**：如果待规划区间内某些章节**已经存在已写正文或章节大纲**，必须保留并顺延其已确立的关键剧情事实与人物状态，在其基础上完善、补全或衔接后续走向（除非作者在补充偏好中明确要求推翻重写），严禁无视当前章节已有剧情另起炉灶。
+4. **纯文本大段走向（plotText）**：必须严格覆盖从第 ${chapterStart} 章到第 ${chapterEnd} 章的每一章。每章走向写为一整段流畅充实的纯文本（${wordsRangePerChapter}），像编剧分集故事大纲一样写明「紧承上一章结尾 ➔ 具体人名与场景事件 ➔ 冲突交锋与推进 ➔ 情绪落点与章末悬念钩子」，严禁空洞套话（如“剧情稳步推进”），严禁拆成零碎标签。
+5. 仅输出合法 JSON，严禁输出 Markdown 代码块或多余解释：
 {
   "progressSummary": "<用2~3句话概括前序章节走到了哪一步，以及第 ${chapterStart}~${chapterEnd} 章必须完成的总纲核心任务>",
   "plans": [
@@ -509,10 +566,10 @@ export const POST = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const userPrompt = `【作品信息】：《${work.title}》（题材：${work.tag || "小说"}）
 作品简介：${work.description || "暂无"}
 
-【Tab 1 项目总纲目标节点及其下级子节点大纲（必须落实的硬锚点）】：
-${subtreeText}${nextAnchorText ? `【下一阶段总纲出口锚点（供最后一章收尾衔接，切勿提前写爆）】：\n${nextAnchorText}\n\n` : ""}【Tab 2 前序已有章节大纲与当前进度】：
-${recentProgressText || "（前序暂无已提取章节大纲，请直接基于总纲开篇或阶段起点自然展开）"}
-${prevChapterTail ? `\n【上一章（第${chapterStart - 1}章）正文末尾参考】：\n...${prevChapterTail}\n` : ""}${inRangeExistingText ? `\n【注意：本次推演区间内以下章节已有草稿/旧大纲（可在其基础上顺延完善或给出更优替代方案）】：\n${inRangeExistingText}\n` : ""}
+【1. 项目总纲目标节点及其下级子节点大纲（必须落实的硬锚点）】：
+${subtreeText}${nextAnchorText ? `【下一阶段总纲出口锚点（供最后一章收尾衔接，切勿提前写爆）】：\n${nextAnchorText}\n\n` : ""}【前序已有章节大纲与当前进度】：
+${recentProgressText || "（前序暂无已提取章节大纲，请优先依据下方上一章正文与总纲展开）"}
+${prevChapterExcerpt ? `\n【上一章（第${chapterStart - 1}章《${prevChapterContentRow?.title || ""}》）正文与完整结尾（第 ${chapterStart} 章必须紧贴此处结尾场景/时间/人物状态无缝承接）】：\n${prevChapterExcerpt}\n` : ""}${inRangeExistingText ? `\n【本次规划区间内当前章节已有剧情与正文（必须尊重并融合既有剧情脉络，切勿无视已写内容推翻重来）】：\n${inRangeExistingText}\n` : ""}
 ${charText ? `【核心角色档案】：\n${charText}\n\n` : ""}${ruleText ? `【世界观法则】：\n${ruleText}\n\n` : ""}【本次需规划的待写章节】：第 ${chapterStart} 章 至 第 ${chapterEnd} 章（共 ${chapterNumbersToPlan.length} 章）
 ${preference ? `【作者补充走向偏好】：${preference}\n` : ""}
 请直接输出包含 ${planCountTarget} 完整纯文本走向方案的合法 JSON：`;

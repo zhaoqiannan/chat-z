@@ -28,6 +28,7 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
   const [dirty, setDirty] = useState(false);
   const [viewMode, setViewMode] = useState<"mindmap" | "table">("mindmap");
   const [tree, setTree] = useState<MasterOutlineNode | null>(null);
+  const [writtenChapterNumbers, setWrittenChapterNumbers] = useState<number[]>([]);
   const [selectedId, setSelectedId] = useState<string>("root");
   const [autoEditNodeId, setAutoEditNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -48,6 +49,8 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
     return findNode(tree, deductionNodeId);
   }, [tree, deductionNodeId]);
 
+  const writtenChapterSet = useMemo(() => new Set(writtenChapterNumbers), [writtenChapterNumbers]);
+
   const fetchTree = useCallback(async () => {
     if (!workId) return;
     try {
@@ -55,6 +58,7 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
       const res = await getMasterOutline(workId);
       if (res && res.success && res.result?.tree) {
         setTree(res.result.tree);
+        setWrittenChapterNumbers(Array.isArray(res.result.writtenChapterNumbers) ? res.result.writtenChapterNumbers : []);
         setSelectedId(res.result.tree.id || "root");
         setDirty(false);
       }
@@ -338,7 +342,7 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
               添加子节点
             </Button>
             <Button size="xs" variant="light" leftSection={<FiCpu size={13} />} onClick={() => setAiModalOpened(true)}>
-              AI 生成/反推总纲
+              生成总纲
             </Button>
             <Button size="xs" leftSection={<FiSave size={13} />} loading={saving} onClick={handleSave}>
               {dirty ? "保存总纲 *" : "保存总纲"}
@@ -371,6 +375,7 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
               onJumpToAiAnalysis={handleJumpToAiAnalysis}
               onOpenLogicDeduction={handleOpenLogicDeduction}
               onJumpToPlotDeduction={onJumpToPlotDeduction}
+              writtenChapterSet={writtenChapterSet}
             />
 
             {/* 方案 C：底部居中悬浮 Dock（无突兀大 Segmented，无右侧属性栏） */}
@@ -407,7 +412,7 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
 
               <Group gap={6} wrap="nowrap">
                 <Button size="xs" radius="xl" variant="light" leftSection={<FiCpu size={13} />} onClick={() => setAiModalOpened(true)}>
-                  AI 生成
+                  生成总纲
                 </Button>
                 <Button size="xs" radius="xl" leftSection={<FiSave size={13} />} loading={saving} onClick={handleSave}>
                   {dirty ? "保存总纲 *" : "保存总纲"}
@@ -427,6 +432,7 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
             onJumpToAiAnalysis={handleJumpToAiAnalysis}
             onOpenLogicDeduction={handleOpenLogicDeduction}
             onJumpToPlotDeduction={onJumpToPlotDeduction}
+            writtenChapterSet={writtenChapterSet}
           />
         )
       ) : null}
@@ -452,10 +458,11 @@ export default function MasterOutlineWorkspace({ workId, onJumpToPlotDeduction }
           };
           mutateTree((prev) => addChildNode(prev, parentId, newNode, "end", parentId === "root" ? "right" : undefined));
         }}
+        onJumpToPlotDeduction={onJumpToPlotDeduction}
       />
 
-      {/* AI 生成/反推总纲弹窗 */}
-      <Modal opened={aiModalOpened} onClose={() => setAiModalOpened(false)} title="AI 一键生成 / 反推项目总纲" centered size="md">
+      {/* 生成总纲弹窗 */}
+      <Modal opened={aiModalOpened} onClose={() => setAiModalOpened(false)} title="智能生成 / 反推项目总纲" centered size="md">
         <Stack gap={12}>
           <Text fz={12} c="#64748b" lh={1.6}>
             AI 将自动读取作品简介、角色档案、世界观规则以及已写章节大纲，生成一棵可直接编辑的总纲树。

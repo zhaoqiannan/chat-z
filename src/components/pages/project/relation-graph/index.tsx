@@ -38,11 +38,15 @@ export default function RelationGraphPage() {
   const [hoveredRelId, setHoveredRelId] = useState<number | null>(null);
   const [hoveredCharId, setHoveredCharId] = useState<number | null>(null);
 
+  const reqIdRef = useRef(0);
+
   const fetchData = async () => {
     if (!workId) return;
+    const reqId = ++reqIdRef.current;
     try {
       setLoading(true);
       const res = await getRelationGraphData(workId);
+      if (reqId !== reqIdRef.current) return;
       if (res && res.success && res.result) {
         const chars = res.result.characters || [];
         const rels = res.result.relations || [];
@@ -51,9 +55,13 @@ export default function RelationGraphPage() {
         initNodePositions(chars);
       }
     } catch (e) {
-      console.error("获取人物关系图谱失败:", e);
+      if (reqId === reqIdRef.current) {
+        console.error("获取人物关系图谱失败:", e);
+      }
     } finally {
-      setLoading(false);
+      if (reqId === reqIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -84,7 +92,7 @@ export default function RelationGraphPage() {
 
   useEffect(() => {
     fetchData();
-  }, [workId]);
+  }, [workId, viewMode]);
 
   const handleOpenCreate = () => {
     setEditingRelation(null);
@@ -263,6 +271,7 @@ export default function RelationGraphPage() {
         <Tabs
           value={viewMode}
           onChange={(v) => setViewMode((v as "graph" | "table") || "graph")}
+          keepMounted={false}
           radius="sm"
         >
           {/* 头部 Tab 与控制栏 */}

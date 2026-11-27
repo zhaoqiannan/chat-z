@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { withAuth, CurrentUser } from "@/utils/serverAuth";
-import { getDb, outlines, works, characters, notes } from "@/db";
+import { getDb, outlines, works, characters, notes, chapters } from "@/db";
 import { eq, and, or, asc, inArray } from "drizzle-orm";
 
 async function checkWorkOwnership(db: any, workId: number, userId: string) {
@@ -564,6 +564,21 @@ export const DELETE = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const allIdsToDelete = Array.from(new Set([...idsToDelete, ...childNodes.map((c: any) => c.id)]));
 
     await db.delete(outlines).where(inArray(outlines.id, allIdsToDelete));
+
+    const affectedChapterIds = Array.from(
+      new Set(
+        targetNodes
+          .filter((n: any) => n.chapterId && (n.category === "chapter" || n.isFromChapter === 1))
+          .map((n: any) => Number(n.chapterId))
+          .filter((cid: number) => !isNaN(cid) && cid > 0)
+      )
+    );
+    if (affectedChapterIds.length > 0) {
+      await db
+        .update(chapters)
+        .set({ outlineExtracted: 0, updatedAt: new Date() })
+        .where(inArray(chapters.id, affectedChapterIds));
+    }
 
     return NextResponse.json({
       success: true,

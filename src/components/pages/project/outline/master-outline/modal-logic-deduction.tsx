@@ -17,6 +17,7 @@ interface ModalLogicDeductionProps {
   onReDeduce: () => void;
   onAdoptNodeChange: (targetNodeId: string, patch: { title: string; note: string }) => void;
   onAdoptNewChild: (parentId: string, title: string, note: string) => void;
+  onJumpToPlotDeduction?: (nodeId: string) => void;
 }
 
 function resolveMatchedNode(rootSubtree: MasterOutlineNode, step: MasterOutlineRecommendedStep, idx: number): MasterOutlineNode | null {
@@ -49,6 +50,7 @@ export default function ModalLogicDeduction({
   onReDeduce,
   onAdoptNodeChange,
   onAdoptNewChild,
+  onJumpToPlotDeduction,
 }: ModalLogicDeductionProps) {
   const deduction = node?.logicDeduction || null;
 
@@ -110,7 +112,7 @@ export default function ModalLogicDeduction({
       title={
         <Flex align="center" gap={8}>
           <FiGitMerge size={17} color="#00c9ff" />
-          <Text fz={16} fw={700} c="#0f172a">AI 大纲逻辑推算</Text>
+          <Text fz={16} fw={700} c="#0f172a">① 逻辑校验（大纲脉络体检）</Text>
           {node ? <Badge size="sm" variant="light" color="cyan">{node.title}</Badge> : null}
         </Flex>
       }
@@ -135,7 +137,7 @@ export default function ModalLogicDeduction({
                 </Group>
 
                 <Button size="xs" leftSection={<FiRefreshCw size={13} />} loading={loading} onClick={onReDeduce}>
-                  {deduction ? "重新推算" : "开始推算"}
+                  {deduction ? "重新校验" : "开始校验"}
                 </Button>
               </Flex>
             </Paper>
@@ -361,10 +363,35 @@ export default function ModalLogicDeduction({
                     <Text fz={12} c="#64748b">当前原有逻辑线即可作为最终版本，无需大幅调整。</Text>
                   )}
                 </Paper>
+
+                {node.id !== "root" && onJumpToPlotDeduction ? (
+                  <Paper p={12} radius="md" bg="#f0f9ff" bd="1px solid rgba(37, 99, 235, 0.2)">
+                    <Flex align="center" justify="space-between" gap={12} wrap="wrap">
+                      <Text fz={12} c="#334155">
+                        {node.chapterRange?.trim()
+                          ? `逻辑校验通过后，可直接进入下一步对「${node.title}」（第${node.chapterRange}章）进行章节走向规划与正文起草。`
+                          : "提示：为当前节点填写「章节范围」（如 1-20）后，即可直达「② 规划并写章」生成正文。"}
+                      </Text>
+                      <Button
+                        size="xs"
+                        color="blue"
+                        leftSection={<FiZap size={13} />}
+                        rightSection={<FiArrowRight size={13} />}
+                        disabled={!node.chapterRange?.trim()}
+                        onClick={() => {
+                          onClose();
+                          onJumpToPlotDeduction(node.id);
+                        }}
+                      >
+                        下一步：② 规划并写章
+                      </Button>
+                    </Flex>
+                  </Paper>
+                ) : null}
               </Stack>
             ) : !loading ? (
               <Flex direction="column" align="center" justify="center" py={48} gap={10}>
-                <Text fz={13} c="#64748b">该节点暂无推算记录，点击上方「开始推算」生成当前节点与子节点的剧情逻辑梳理。</Text>
+                <Text fz={13} c="#64748b">该节点暂无校验记录，点击上方「开始校验」检查当前节点与子节点的剧情逻辑脉络。</Text>
               </Flex>
             ) : null}
           </Stack>

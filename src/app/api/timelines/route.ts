@@ -12,6 +12,8 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
+    const rawTimelineId = searchParams.get("timelineId");
+    const requestedTimelineId = rawTimelineId ? Number(rawTimelineId) : null;
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "缺少合法的 workId" }, { status: 400 });
     }
@@ -45,14 +47,24 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
       if (defaultTimeline) timelineList = [defaultTimeline];
     }
 
-    const eventsList = await db
-      .select()
-      .from(timelineEvents)
-      .where(eq(timelineEvents.workId, workId))
-      .orderBy(asc(timelineEvents.sortOrder), asc(timelineEvents.id))
-      .all();
+    const activeTimelineId =
+      requestedTimelineId && !isNaN(requestedTimelineId) && timelineList.some((tl) => tl.id === requestedTimelineId)
+        ? requestedTimelineId
+        : timelineList[0]?.id ?? null;
 
-    return NextResponse.json({ success: true, result: { timelines: timelineList, events: eventsList } });
+    const eventsList = activeTimelineId
+      ? await db
+          .select()
+          .from(timelineEvents)
+          .where(and(eq(timelineEvents.workId, workId), eq(timelineEvents.timelineId, activeTimelineId)))
+          .orderBy(asc(timelineEvents.sortOrder), asc(timelineEvents.id))
+          .all()
+      : [];
+
+    return NextResponse.json({
+      success: true,
+      result: { timelines: timelineList, events: eventsList, activeTimelineId },
+    });
   } catch (err: any) {
     console.error("GET timelines error:", err);
     return NextResponse.json({ success: false, message: "获取时间线失败" }, { status: 500 });

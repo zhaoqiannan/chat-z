@@ -93,6 +93,8 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
 
     const { searchParams } = new URL(req.url);
     const workId = Number(searchParams.get("workId"));
+    const tabParam = searchParams.get("tab") || "";
+    const validTab = ["book_overview", "chapter_range", "audit"].includes(tabParam) ? tabParam : "";
     if (!workId || isNaN(workId)) {
       return NextResponse.json({ success: false, message: "无效的 workId" }, { status: 400 });
     }
@@ -103,6 +105,10 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     }
 
     await ensureAnalysisTable(env.DB);
+
+    const needCharacters = !validTab || validTab === "audit";
+    const needOutlines = !validTab || validTab === "book_overview";
+    const needMasterNodes = !validTab || validTab === "book_overview" || validTab === "chapter_range";
 
     const [allChapters, allOutlines, allChars] = await Promise.all([
       db
@@ -119,12 +125,16 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .where(eq(chapters.workId, workId))
         .orderBy(asc(chapters.chapterNumber), asc(chapters.createdAt))
         .all(),
-      db.select({ id: outlines.id }).from(outlines).where(eq(outlines.workId, workId)).all(),
-      db
-        .select({ id: characters.id, name: characters.name, identity: characters.identity, roleType: characters.roleType })
-        .from(characters)
-        .where(eq(characters.workId, workId))
-        .all(),
+      needOutlines
+        ? db.select({ id: outlines.id }).from(outlines).where(eq(outlines.workId, workId)).all()
+        : Promise.resolve([]),
+      needCharacters
+        ? db
+            .select({ id: characters.id, name: characters.name, identity: characters.identity, roleType: characters.roleType })
+            .from(characters)
+            .where(eq(characters.workId, workId))
+            .all()
+        : Promise.resolve([]),
     ]);
 
     let masterNodes: Array<{ id: string; title: string; chapterRange: string; tag?: string }> = [];
@@ -137,7 +147,9 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
         .first();
       if (masterRow?.tree_json) {
         hasMasterOutline = true;
-        masterNodes = extractMasterRangeNodes(JSON.parse(masterRow.tree_json));
+        if (needMasterNodes) {
+          masterNodes = extractMasterRangeNodes(JSON.parse(masterRow.tree_json));
+        }
       }
     } catch {}
 
@@ -158,14 +170,21 @@ export const GET = withAuth(async (req: NextRequest, user: CurrentUser) => {
     const completedChapters = normalChapters.filter((c) => c.status === "completed").length;
     const avgWordsPerChapter = normalChapters.length > 0 ? Math.round(totalWords / normalChapters.length) : 0;
 
-    const historyRows: any = await env.DB.prepare(
-      `SELECT id, work_id, analysis_type, scope_label, scope_params_json, overall_score, report_json, created_at
+    let historySql = `SELECT id, work_id, analysis_type, scope_label, scope_params_json, overall_score, report_json, created_at
        FROM ai_analysis_reports
-       WHERE work_id = ? AND user_id = ?
-       ORDER BY created_at DESC
-       LIMIT 20`
-    )
-      .bind(workId, user.userId)
+       WHERE work_id = ? AND user_id = ?`;
+    const historyBinds: any[] = [workId, user.userId];
+    if (validTab === "book_overview") {
+      historySql += ` AND analysis_type = 'book_overview'`;
+    } else if (validTab === "chapter_range") {
+      historySql += ` AND analysis_type = 'chapter_range'`;
+    } else if (validTab === "audit") {
+      historySql += ` AND analysis_type IN ('logic_audit', 'character_audit')`;
+    }
+    historySql += ` ORDER BY created_at DESC LIMIT 20`;
+
+    const historyRows: any = await env.DB.prepare(historySql)
+      .bind(...historyBinds)
       .all();
 
     const history = (historyRows?.results || [])

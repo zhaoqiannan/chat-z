@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { usePathname, useRouter, useParams, useSearchParams } from "next/navigation";
 import { Box, Menu, Tooltip } from "@mantine/core";
-import { FiGrid, FiChevronDown, FiSettings, FiBell, FiMessageSquare, FiCheck, FiLogOut, FiBook, FiArrowLeft, FiLayers, FiFileText, FiDatabase, FiEdit3, FiBox, FiCpu, FiClock, FiShare2, FiSidebar } from "react-icons/fi";
+import { FiGrid, FiChevronDown, FiSettings, FiBell, FiMessageSquare, FiCheck, FiLogOut, FiBook, FiArrowLeft, FiLayers, FiFileText, FiDatabase, FiEdit3, FiBox, FiShield, FiClock, FiShare2, FiSidebar } from "react-icons/fi";
 import { useSelector, useDispatch } from "react-redux";
 import { RootState } from "@/store";
 import { clearUser } from "@/store/userInfo";
@@ -63,83 +63,102 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
 
   const currentTab = searchParams.get("tab") || "overview";
 
-  const projectMenuItems = [
+  const projectMenuGroups = [
     {
-      key: "overview",
-      label: "项目概览",
-      icon: <FiLayers size={16} />,
-      active: currentTab === "overview",
-    },
-    {
-      key: "outline",
-      label: "故事大纲",
-      icon: <FiBook size={16} />,
-      active: currentTab === "outline",
-      disabled: false,
-    },
-    {
-      key: "chapters",
-      label: "章节",
-      icon: <FiFileText size={16} />,
-      active: currentTab === "chapters",
-      disabled: false,
-    },
-    {
-      key: "world",
-      label: "世界/知识库",
-      icon: <FiDatabase size={16} />,
-      active: currentTab === "world",
-      disabled: false,
-      hasSub: true,
-      subItems: [
-        { label: "角色", key: "characters" },
-        { label: "地点", key: "locations" },
-        { label: "阵营", key: "factions" },
-        { label: "物品", key: "items" },
-        { label: "规则", key: "rules" },
+      groupKey: "creation",
+      groupLabel: "创作主流程",
+      items: [
+        {
+          key: "overview",
+          label: "项目概览",
+          icon: <FiLayers size={16} />,
+          active: currentTab === "overview",
+          disabled: false,
+        },
+        {
+          key: "outline",
+          label: "故事大纲",
+          icon: <FiBook size={16} />,
+          active: currentTab === "outline",
+          disabled: false,
+        },
+        {
+          key: "chapters",
+          label: "章节写作",
+          icon: <FiFileText size={16} />,
+          active: currentTab === "chapters",
+          disabled: false,
+        },
+        {
+          key: "ai_analysis",
+          label: "质量诊断",
+          icon: <FiShield size={16} />,
+          active: currentTab === "ai_analysis",
+          disabled: false,
+        },
       ],
     },
     {
-      key: "notes",
-      label: "笔记",
-      icon: <FiEdit3 size={16} />,
-      active: currentTab === "notes",
-      disabled: false,
+      groupKey: "knowledge",
+      groupLabel: "设定与资料库",
+      items: [
+        {
+          key: "world",
+          label: "世界/知识库",
+          icon: <FiDatabase size={16} />,
+          active: currentTab === "world",
+          disabled: false,
+          hasSub: true,
+          subItems: [
+            { label: "角色", key: "characters" },
+            { label: "地点", key: "locations" },
+            { label: "阵营", key: "factions" },
+            { label: "物品", key: "items" },
+            { label: "规则", key: "rules" },
+          ],
+        },
+        {
+          key: "timeline",
+          label: "时间线",
+          icon: <FiClock size={16} />,
+          active: currentTab === "timeline",
+          disabled: false,
+        },
+        {
+          key: "relation_graph",
+          label: "关系图谱",
+          icon: <FiShare2 size={16} />,
+          active: currentTab === "relation_graph",
+          disabled: false,
+        },
+        {
+          key: "notes",
+          label: "笔记",
+          icon: <FiEdit3 size={16} />,
+          active: currentTab === "notes",
+          disabled: false,
+        },
+        {
+          key: "materials",
+          label: "素材",
+          icon: <FiBox size={16} />,
+          active: currentTab === "materials",
+          disabled: false,
+        },
+      ],
     },
     {
-      key: "materials",
-      label: "素材",
-      icon: <FiBox size={16} />,
-      active: currentTab === "materials",
-      disabled: false,
-    },
-    {
-      key: "ai_analysis",
-      label: "AI 分析",
-      icon: <FiCpu size={16} />,
-      active: currentTab === "ai_analysis",
-      disabled: false,
-    },
-    {
-      key: "timeline",
-      label: "时间线",
-      icon: <FiClock size={16} />,
-      active: currentTab === "timeline",
-      disabled: false,
-    },
-    {
-      key: "relation_graph",
-      label: "关系图谱",
-      icon: <FiShare2 size={16} />,
-      active: currentTab === "relation_graph",
-      disabled: false,
-    },
-    {
-      key: "settings",
-      label: "项目设置",
-      icon: <FiSettings size={16} />,
-      active: currentTab === "settings",
-      disabled: false,
+      groupKey: "system",
+      groupLabel: "",
+      items: [
+        {
+          key: "settings",
+          label: "项目设置",
+          icon: <FiSettings size={16} />,
+          active: currentTab === "settings",
+          disabled: false,
+        },
+      ],
     },
   ];
 
@@ -274,73 +293,81 @@ const MenuLayout = ({ children }: MenuLayoutProps) => {
         <div className={styles.workbenchBody}>
           <aside className={`${styles.sidebar} ${collapsed ? styles.collapsed : ""}`}>
             <div className={styles.menuList}>
-              {projectMenuItems.map((item) => {
-                const content = (
-                  <div
-                    key={item.key}
-                    className={`${styles.menuItem} ${item.active ? styles.active : ""} ${
-                      item.disabled ? styles.disabled : ""
-                    } ${collapsed ? styles.collapsed : ""}`}
-                    onClick={() => {
-                      if (item.disabled) return;
-                      if (item.hasSub && !collapsed) {
-                        setWorldExpanded(!worldExpanded);
-                      } else {
-                        router.push(`${pathname}?tab=${item.key}`);
-                      }
-                    }}
-                  >
-                    <span className={styles.menuIcon}>{item.icon}</span>
-                    {!collapsed && <span className={styles.menuLabel}>{item.label}</span>}
-                    {item.hasSub && !collapsed && (
-                      <span
-                        className={styles.menuArrow}
-                        style={{
-                          transform: worldExpanded ? "rotate(180deg)" : "none",
-                          transition: "transform 0.2s ease",
+              {projectMenuGroups.map((group, groupIdx) => (
+                <React.Fragment key={group.groupKey}>
+                  {groupIdx > 0 ? <div className={styles.menuDivider} /> : null}
+                  {!collapsed && group.groupLabel ? (
+                    <div className={styles.menuGroupLabel}>{group.groupLabel}</div>
+                  ) : null}
+                  {group.items.map((item: any) => {
+                    const content = (
+                      <div
+                        key={item.key}
+                        className={`${styles.menuItem} ${item.active ? styles.active : ""} ${
+                          item.disabled ? styles.disabled : ""
+                        } ${collapsed ? styles.collapsed : ""}`}
+                        onClick={() => {
+                          if (item.disabled) return;
+                          if (item.hasSub && !collapsed) {
+                            setWorldExpanded(!worldExpanded);
+                          } else {
+                            router.push(`${pathname}?tab=${item.key}`);
+                          }
                         }}
                       >
-                        <FiChevronDown size={14} />
-                      </span>
-                    )}
-                  </div>
-                );
-
-                return (
-                  <React.Fragment key={item.key}>
-                    {collapsed ? (
-                      <Tooltip label={item.label} position="right" withArrow>
-                        {content}
-                      </Tooltip>
-                    ) : (
-                      content
-                    )}
-
-                    {item.hasSub && !collapsed && worldExpanded && (
-                      <div className={styles.subMenuList}>
-                        {item.subItems?.map((sub: any) => {
-                          const subKey = typeof sub === "string" ? sub : sub.key;
-                          const subLabel = typeof sub === "string" ? sub : sub.label;
-                          const isSubActive = currentTab === "world" && (searchParams.get("subTab") || "characters") === subKey;
-
-                          return (
-                            <div
-                              key={subKey}
-                              className={`${styles.subMenuItem} ${isSubActive ? styles.activeSub : ""}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`${pathname}?tab=world&subTab=${subKey}`);
-                              }}
-                            >
-                              {subLabel}
-                            </div>
-                          );
-                        })}
+                        <span className={styles.menuIcon}>{item.icon}</span>
+                        {!collapsed && <span className={styles.menuLabel}>{item.label}</span>}
+                        {item.hasSub && !collapsed && (
+                          <span
+                            className={styles.menuArrow}
+                            style={{
+                              transform: worldExpanded ? "rotate(180deg)" : "none",
+                              transition: "transform 0.2s ease",
+                            }}
+                          >
+                            <FiChevronDown size={14} />
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+                    );
+
+                    return (
+                      <React.Fragment key={item.key}>
+                        {collapsed ? (
+                          <Tooltip label={item.label} position="right" withArrow>
+                            {content}
+                          </Tooltip>
+                        ) : (
+                          content
+                        )}
+
+                        {item.hasSub && !collapsed && worldExpanded && (
+                          <div className={styles.subMenuList}>
+                            {item.subItems?.map((sub: any) => {
+                              const subKey = typeof sub === "string" ? sub : sub.key;
+                              const subLabel = typeof sub === "string" ? sub : sub.label;
+                              const isSubActive = currentTab === "world" && (searchParams.get("subTab") || "characters") === subKey;
+
+                              return (
+                                <div
+                                  key={subKey}
+                                  className={`${styles.subMenuItem} ${isSubActive ? styles.activeSub : ""}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`${pathname}?tab=world&subTab=${subKey}`);
+                                  }}
+                                >
+                                  {subLabel}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </div>
 
             <div
